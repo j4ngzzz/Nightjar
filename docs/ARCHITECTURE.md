@@ -521,6 +521,7 @@ COMMANDS:
   contractd retry [--max N]        Force retry with LLM repair loop
   contractd lock                   Freeze deps into deps.lock with hashes
   contractd explain                Show last failure in human-readable form
+  contractd optimize               Run DSPy SIMBA prompt optimization [REF-T26]
 
 FLAGS:
   --contract PATH    Path to .card.md (default: ./.card/*.card.md)

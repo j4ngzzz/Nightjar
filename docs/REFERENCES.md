@@ -360,6 +360,14 @@
 - How CARD uses it: Evolution layer (month 6+). Evolve invariant generation prompts, verification workflow order, and template selection based on performance feedback.
 - Paper: https://arxiv.org/abs/2507.03616
 
+**[REF-T26]** DSPy — Framework for Programming with Foundation Models
+- URL: https://dspy.ai/
+- License: MIT
+- Install: `pip install dspy`
+- Code: https://github.com/stanfordnlp/dspy
+- What it does: Optimizes LLM prompts and pipelines automatically. SIMBA optimizer finds best prompt configurations via Bayesian optimization. 15-40% improvement on LLM pipeline tasks.
+- How CARD uses it: Self-evolution layer. Optimizes Analyst/Formalizer/Coder prompts based on verification pass rate as the metric. `contractd optimize` triggers SIMBA optimization.
+
 **[REF-T20]** OpenDP — Differential Privacy Library
 - URL: https://github.com/opendp/opendp
 - License: MIT

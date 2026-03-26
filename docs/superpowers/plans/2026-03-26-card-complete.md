@@ -19,7 +19,7 @@
 | 1 | **Coord-Setup** | Coordinator | opus | .env loading, Dafny setup, config loader, oversees all |
 | 2 | **Coord-Demo** | Coordinator | opus | Rich CLI output, demo script, README update, integration tests |
 | 3 | **Scout-Immune** | Scout | opus | Fetch [REF-T12] MonkeyType, [REF-T13] Daikon algorithm, [REF-T09] CrossHair, [REF-T10] icontract, [REF-T15] OTel, [REF-P15] Agentic PBT |
-| 4 | **Scout-Evolution** | Scout | opus | Fetch DSPy SIMBA docs, [REF-T20] OpenDP docs, [REF-T19] EvoAgentX patterns |
+| 4 | **Scout-Evolution** | Scout | opus | Fetch [REF-T26] DSPy SIMBA docs, [REF-T20] OpenDP docs. Note: [REF-T19] EvoAgentX patterns are informational reference for future evolution — NOT implemented in this swarm |
 | 5 | **Builder-MVPCore** | Builder | opus | Config loader, Dafny detect, `ship`, `lock`, cache system, audit branch |
 | 6 | **Builder-MVPAdvanced** | Builder | opus | Constitution inheritance, multi-module deps, Dafny compile targets |
 | 7 | **Builder-ImmuneCollect** | Builder | opus | Daikon reimplementation (MIT), MonkeyType integration, OTel integration, trace storage |
@@ -241,7 +241,7 @@ This code is MIT-licensed. Do NOT copy from Fuzzingbook (CC-BY-NC-SA)."""
 - [ ] TDD: test that mining from `sorted(lst)` discovers `result is sorted`
 - [ ] TDD: test that mining from `len(s)` discovers `result >= 0`
 - [ ] Implement InvariantMiner with 10+ invariant templates
-- [ ] Commit: `feat: Daikon algorithm reimplementation — MIT license [REF-T13 reference]`
+- [ ] Commit: `feat: Daikon algorithm reimplementation — MIT license [REF-T13 reference, REF-C05, REF-P18]`
 
 ### Task B2: MonkeyType Integration for Type Traces
 
@@ -268,6 +268,21 @@ Core: auto-instrument FastAPI/Flask/Django endpoints. Capture HTTP method, URL, 
 
 - [ ] TDD cycle
 - [ ] Commit: `feat: OpenTelemetry API trace collection [REF-T15, REF-P17]`
+
+### Task B3b: Sentry-Style Error Capture + Semantic Fingerprinting
+
+**Agent:** Builder-ImmuneCollect (Opus)
+**Required Reading:** ARCHITECTURE.md Section 6, Stage 1 (third signal: "Sentry-style error capture")
+**Files:**
+- Create: `src/immune/error_capture.py`
+- Test: `tests/unit/test_error_capture.py`
+
+Core: capture unhandled exceptions with: exception class, message template (PII stripped via regex), stack trace with function signatures, input type-shape at crash point. Semantic fingerprinting groups identical error classes across different stack paths (e.g., two `null.field` crashes on `UserRecord` are the same bug class regardless of call stack). This is the third collection mechanism alongside MonkeyType (types) and OTel (API spans).
+
+- [ ] TDD: test fingerprinting groups semantically similar errors
+- [ ] TDD: test PII stripping from error messages
+- [ ] Implement error_capture.py
+- [ ] Commit: `feat: Sentry-style error capture with semantic fingerprinting [ARCHITECTURE.md Section 6]`
 
 ### Task B4: Trace Storage (SQLite)
 
@@ -366,7 +381,7 @@ Core: takes verified invariants → generates icontract `@require`/`@ensure` dec
 Core: wires all immune components together. `run_immune_cycle(error_trace, function_context)` → collect → mine → enrich → verify → append → enforce. The full closed loop.
 
 - [ ] TDD cycle
-- [ ] Commit: `feat: immune system orchestrator — full closed loop [REF-C09]`
+- [ ] Commit: `feat: immune system orchestrator — full closed loop [REF-C09, REF-C05, REF-P18]`
 
 ---
 
@@ -407,7 +422,7 @@ Core: when generation + verification succeeds, store the (spec, prompt, generate
 Core: use DSPy SIMBA to optimize the Analyst/Formalizer/Coder prompts. Metric: verification pass rate on a held-out set of specs. Run optimization periodically (triggered by `contractd optimize` command or after N verification failures).
 
 - [ ] TDD cycle
-- [ ] Commit: `feat: DSPy SIMBA prompt optimization [dspy.ai]`
+- [ ] Commit: `feat: DSPy SIMBA prompt optimization [REF-T26]`
 
 ### Task C4: AutoResearch Hill Climbing
 
@@ -497,8 +512,8 @@ Core: when pattern confidence > 0.95 across 50+ tenants (DP-protected count), pr
 
 **Agent:** Coord-Demo (Opus)
 **Files:**
-- Modify: `src/contractd/cli.py`
 - Create: `src/contractd/display.py`
+- Test: `tests/unit/test_display.py`
 
 Core: use Rich library for colored output. Green "VERIFIED" badge, red "FAIL" with counterexample, progress bars for each stage, timing display, cost counter.
 
@@ -540,7 +555,8 @@ Core: update with immune system section, self-evolution section, architecture di
 
 **Agent:** Coord-Demo (Opus)
 **Files:**
-- Modify: `src/contractd/cli.py`
+- Create: `src/contractd/explain.py`
+- Test: `tests/unit/test_explain.py`
 
 Core: read .card/verify.json → format last failure as human-readable explanation with: what failed, which invariant, counterexample, suggested fix.
 
@@ -557,13 +573,13 @@ PHASE 0 — SETUP (Coord-Setup)
 
 PHASE 1 — RESEARCH (2 Scouts in parallel)
   Scout-Immune: fetch [REF-T12, T13, T15, T09, T10, P15, P17]
-  Scout-Evolution: fetch DSPy docs, [REF-T20] OpenDP, EvoAgentX patterns
+  Scout-Evolution: fetch [REF-T26] DSPy SIMBA docs, [REF-T20] OpenDP docs
 
 PHASE 2 — BUILD (6 Builders in parallel after Scouts complete)
   Builder-MVPCore:      [A3 lock] [A4 ship] [A5 cache] [A6 audit]
   Builder-MVPAdvanced:  [A7 constitution] [A8 multi-module] [A9 Dafny compile]
-  Builder-ImmuneCollect:[B1 Daikon] [B2 MonkeyType] [B3 OTel] [B4 store]
-  Builder-ImmuneVerify: [B5 LLM enrich] [B6 CrossHair] [B7 Hypothesis] [B8 append] [B9 icontract] [B10 orchestrator]
+  Builder-ImmuneCollect:[B1 Daikon] [B2 MonkeyType] [B3 OTel] [B3b ErrorCapture] [B4 store]
+  Builder-ImmuneVerify: [B6 CrossHair] [B7 Hypothesis] ──wait for B1── [B5 LLM enrich] [B8 append] [B9 icontract] ──wait for ALL B1-B9── [B10 orchestrator]
   Builder-Evolution:    [C1 tracking] [C2 replay] [C3 DSPy] [C4 hill climb] [C5 prompts] [D1 abstract] [D2 OpenDP] [D3 library] [D4 herd]
   (Builder-Evolution has the most tasks — 9 items — but they're all in the self-improvement domain)
 
@@ -578,13 +594,13 @@ PHASE 4 — INTEGRATION (Coord-Demo)
 
 | Builder | Owns |
 |---------|------|
-| Coord-Setup | `src/contractd/config.py`, `src/contractd/dafny_setup.py` |
+| Coord-Setup | `src/contractd/config.py`, `src/contractd/dafny_setup.py`, **`src/contractd/cli.py`** (sole owner — all CLI modifications go through Coord-Setup or require Coord-Setup approval) |
 | Builder-MVPCore | `src/contractd/lock.py`, `src/contractd/ship.py`, `src/contractd/cache.py`, `src/contractd/audit.py` |
 | Builder-MVPAdvanced | `src/contractd/resolver.py`, `src/contractd/compiler.py`, modifications to `parser.py` (constitution only) |
-| Builder-ImmuneCollect | `src/immune/daikon.py`, `src/immune/collector.py`, `src/immune/otel_collector.py`, `src/immune/store.py` |
+| Builder-ImmuneCollect | `src/immune/daikon.py`, `src/immune/collector.py`, `src/immune/otel_collector.py`, `src/immune/error_capture.py`, `src/immune/store.py`, `src/immune/types.py` |
 | Builder-ImmuneVerify | `src/immune/enricher.py`, `src/immune/verifier_symbolic.py`, `src/immune/verifier_pbt.py`, `src/immune/spec_updater.py`, `src/immune/enforcer.py`, `src/immune/pipeline.py` |
 | Builder-Evolution | `src/contractd/tracking.py`, `src/contractd/replay.py`, `src/contractd/optimizer.py`, `src/contractd/hill_climb.py`, `src/contractd/prompts/*`, `src/immune/abstraction.py`, `src/immune/privacy.py`, `src/immune/pattern_library.py`, `src/immune/herd.py` |
-| Coord-Demo | `src/contractd/display.py`, `demo/*`, `README.md`, `tests/integration/*` |
+| Coord-Demo | `src/contractd/display.py`, `src/contractd/explain.py`, `demo/*`, `README.md`, `tests/integration/*`, `tests/unit/test_display.py`, `tests/unit/test_explain.py` |
 | Reviewer | No file ownership — reads all |
 
 ### Critical Rules
@@ -592,11 +608,14 @@ PHASE 4 — INTEGRATION (Coord-Demo)
 1. **Scouts MUST complete before Builders start.**
 2. **Builders NEVER use WebSearch.** context7 + github MCP only.
 3. **File ownership is HARD.** See table above.
-4. **`types.py` changes require Coord-Setup approval.**
+4. **`src/contractd/types.py` changes require Coord-Setup approval.** This file was created in Swarm #1 and defines shared interfaces. If new types are needed for immune/evolution modules, add them to `src/immune/types.py` (new file, owned by Builder-ImmuneCollect) instead.
 5. **All agents: `--dangerously-skip-permissions`.**
 6. **[REF-T13] Fuzzingbook code MUST NOT be copied.** Reimplement the Daikon algorithm from the paper description. Check MIT license on output.
 7. **Reviewer checks every submission against REFERENCES.md citations.**
 8. **All new files must have reference citations in docstrings.**
+9. **`cli.py` is owned by Coord-Setup.** Other builders create their logic modules (lock.py, ship.py, display.py) and Coord-Setup wires them into cli.py. Builders do NOT modify cli.py directly.
+10. **B10 (immune orchestrator) MUST NOT start until B1-B9 are ALL complete.** It imports from all of them.
+11. **B5 (LLM enricher) MUST NOT start until B1 (Daikon) is complete.** It takes Daikon output as input.
 
 ---
 
