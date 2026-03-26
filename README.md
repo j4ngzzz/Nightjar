@@ -19,7 +19,7 @@
 <div align="center">
   <img src="demo/nightjar-demo.gif" alt="Nightjar 60-second demo" width="700" />
   <br>
-  <sub>Generate. Verify. Prove. 60 seconds.</sub>
+  <sub>Generate, verify, prove. In 60 seconds.</sub>
 </div>
 
 ---
@@ -29,19 +29,19 @@
 > *"I 'Accept All' always, I don't read the diffs anymore."*
 > -- [Andrej Karpathy](https://x.com/karpathy)
 
-84% of developers use AI coding tools. 96% don't fully trust the output ([Sonar 2025](https://www.sonarsource.com/company/press-releases/sonar-data-reveals-critical-verification-gap-in-ai-coding/)). Only 48% verify before committing. 45% of AI-generated code has security vulnerabilities ([Veracode 2025](https://www.getautonoma.com/blog/vibe-coding-security-risks)). AI-coauthored PRs have 1.7x more issues.
+84% of developers use AI coding tools. 96% don't fully trust what comes out ([Sonar 2025](https://www.sonarsource.com/company/press-releases/sonar-data-reveals-critical-verification-gap-in-ai-coding/)). Only half even bother to verify before committing.
 
-Nobody reads the diffs. The code ships anyway.
+Meanwhile, 45% of AI-generated code ships with OWASP vulnerabilities ([Veracode 2025](https://www.getautonoma.com/blog/vibe-coding-security-risks)). Georgetown CSET measured an 86% XSS failure rate. AI-coauthored PRs carry 1.7x more issues than human-only ones.
+
+There's a gap between "the AI wrote it" and "you can trust it." Nightjar closes it with math.
 
 > *"An AI that generates provably correct code is qualitatively different
 > from one that merely generates plausible code."*
 > -- [Leonardo de Moura](https://leodemoura.github.io/blog/2026/02/28/when-ai-writes-the-worlds-software.html), creator of Lean and Z3
 
-Every other tool finds bugs after the fact. Nightjar proves they can't exist.
-
 ---
 
-## What it does
+## What Nightjar does
 
 ```bash
 pip install nightjar
@@ -50,15 +50,17 @@ nightjar verify payment.py
 
 Five verification stages, cheapest first, short-circuit on failure:
 
-| Stage | What | Time | Guarantee |
+| Stage | What | Time | What you get |
 |-------|------|------|-----------|
 | 0. Preflight | Syntax, imports | <100ms | Valid Python |
 | 1. Dependencies | CVE scan, SBOM | <500ms | No known vulns |
 | 2. Schema | Type checking | <200ms | Type-correct |
-| 3. Property | Hypothesis PBT | 300ms-8s | Statistical |
+| 3. Property | Hypothesis PBT | 300ms-8s | Statistical confidence |
 | 4. Formal | Dafny/CrossHair | 1-30s | Mathematical proof |
 
-Simple functions (low cyclomatic complexity) skip Dafny and go straight to CrossHair, which is about 70% faster. Complex functions get the full treatment. Nightjar measures AST depth and decides.
+Simple functions skip Dafny and go straight to CrossHair (about 70% faster). Complex ones get the full treatment. Nightjar figures out which is which by measuring cyclomatic complexity and AST depth.
+
+The difference between finding bugs and proving they can't exist.
 
 ---
 
@@ -68,82 +70,119 @@ Simple functions (low cyclomatic complexity) skip Dafny and go straight to Cross
 # Install
 pip install nightjar
 
-# Auto-generate invariants from plain English
+# Describe what you want in plain English
 nightjar auto "payment processor that charges credit cards"
 
-# Verify generated code
+# Verify the generated code
 nightjar verify
 
-# Watch mode: verify on every save
+# Or leave it running in the background
 nightjar watch
 ```
 
-You need Python 3.11+ and optionally Dafny 4.x ([install](https://github.com/dafny-lang/dafny/releases)). If Dafny isn't installed, Stage 4 falls back to CrossHair and extended Hypothesis instead of refusing to run.
+You need Python 3.11+ and optionally [Dafny 4.x](https://github.com/dafny-lang/dafny/releases) for Stage 4. Without Dafny, verification gracefully falls back to CrossHair and Hypothesis. You still get a confidence score; it just won't hit 100.
 
 ---
 
-## What you get
-
-`nightjar auto` takes a sentence and turns it into a `.card.md` spec with typed invariants. You review them in 30 seconds. `nightjar watch` re-verifies on every save, with the first tier finishing in under 100ms. `nightjar badge` generates a shields.io badge from your last verification run.
-
-The Shadow CI GitHub Action runs verification on every PR but never blocks the build. It just posts a comment. The first time it catches something real (and it will, statistically), your team starts paying attention.
-
-The OWASP Security Pack goes further: formal proof that SQL injection and XSS can't happen. Not pattern-matching. Actual mathematical proof of absence. The Violation Explainer turns Dafny's cryptic SMT output into English, with the exact input that breaks your code.
-
-When Dafny says "UNSAT" and you have no idea why, the LP root-cause diagnosis relaxes the Boolean constraints into a continuous linear program, solves for minimum violation, and uses dual variables to rank which constraint is actually the problem. It turns "verification failed" into "line 47 is the issue."
-
-EU CRA compliance certificates come out of the box. Reporting obligations start September 2026.
-
-The confidence score (0-100) breaks down exactly what each stage proved:
-
-| Stage | Points | What it covers |
-|-------|--------|---------------|
-| pyright type check | +15 | Static types |
-| deal static analysis | +10 | Pre/post satisfiability |
-| CrossHair symbolic | +35 | Symbolic proof |
-| Hypothesis PBT | +20 | 10K+ random inputs |
-| Dafny formal proof | +20 | Full mathematical proof |
-
-The safety gate compares new code against the previous `verify.json`. If invariants are lost, regeneration is blocked. If the confidence score drops, you get a warning.
-
----
-
-## How it compares
-
-| | Nightjar | Cursor | Kiro | Tessl | Axiom | CodeRabbit |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| Generates code | Y | Y | Y | Y | Y | -- |
-| Formal proof | Y | -- | -- | -- | Y | -- |
-| Security proof | Y | -- | -- | -- | -- | -- |
-| Auto invariants | Y | -- | partial | partial | -- | -- |
-| Watch mode | Y | -- | -- | -- | -- | -- |
-| Safety gate | Y | -- | -- | -- | -- | -- |
-| Developer CLI | Y | IDE | IDE | CLI | API | GitHub |
-| Price | Free | $20/mo | Free | Beta | Enterprise | $15/seat |
-| Open source | AGPL | -- | -- | partial | -- | -- |
-
----
-
-## The 60-second demo
+## See it work
 
 ```bash
-# 1. The insecure code
+# Here's some insecure code
 $ cat demo/payment.py
 def deduct(balance, amount):
     return balance - amount   # BUG: allows negative balance
 
-# 2. Nightjar catches it
+# Nightjar catches it with a concrete counterexample
 $ nightjar verify -c demo/payment.card.md
 Stage 4 FAIL: counterexample balance=0.01, amount=50 -> -49.99
 
-# 3. Auto-generate safe spec
+# Generate a safe spec from plain English
 $ nightjar auto "payment processor with balance >= 0 invariant"
 Created spec: .card/payment.card.md (8 invariants, 6 approved)
 
-# 4. Verify the fixed code
+# Now it passes
 $ nightjar verify -c .card/payment.card.md
 VERIFIED -- all stages passed (confidence: 85/100)
 ```
+
+---
+
+## What makes it different
+
+We looked at what else exists. The short version: nobody else does formal proof + auto-invariants + watch mode in a single CLI tool.
+
+| | Nightjar | Cursor | Kiro | Tessl | Axiom | CodeRabbit |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Generates code | yes | yes | yes | yes | yes | no |
+| Formal proof | **yes** | no | no | no | yes | no |
+| Security proof | **yes** | no | no | no | no | no |
+| Auto invariants | **yes** | no | partial | partial | no | no |
+| Watch mode | **yes** | no | no | no | no | no |
+| Safety gate | **yes** | no | no | no | no | no |
+| Price | free | $20/mo | free | beta | enterprise | $15/seat |
+| Open source | AGPL | no | no | partial | no | no |
+
+---
+
+## Features worth knowing about
+
+**Shadow CI.** A GitHub Action that runs verification on every PR but never fails the build. It just leaves a comment. The first time it catches a real SQL injection that passed all your tests, it sells itself.
+
+```yaml
+- uses: nightjar/verify@v1
+  with:
+    mode: shadow
+    security-pack: owasp
+```
+
+**Zero-friction mode.** You type `nightjar auto "payment processor"` and it generates invariants from your description, classifies them (numerical, behavioral, state, formal), lets you approve each one, and writes the `.card.md`. The whole thing takes about 30 seconds of your time.
+
+**Watch mode.** Runs in the background. When you save a `.card.md` file, it runs four tiers of verification (syntax in <100ms, structural in <2s, property in <10s, formal in 1-30s). Repeat runs with no changes finish in under 50ms thanks to Salsa-style per-stage caching.
+
+**Confidence score.** Every verification produces a score from 0 to 100: pyright (+15), deal static analysis (+10), CrossHair symbolic (+35), Hypothesis PBT (+20), Dafny formal proof (+20). You always know exactly where you stand.
+
+**Safety gate.** Before regenerating code, Nightjar compares new proofs against the previous verified state. If any invariants would be lost, it blocks the regeneration. If the confidence score drops, it warns you.
+
+**OWASP security pack.** Invariant templates that formally prove the absence of SQL injection, XSS, and command injection. Not pattern-matching. Actual proof. The EU CRA compliance deadline is September 2026, and Nightjar can generate the structured compliance certificates you'll need.
+
+**Spec preprocessing.** 19 deterministic rewrite rules (from [Proven](https://github.com/melek/proven), MIT) normalize your specs before they touch the LLM. This roughly doubles Dafny success rates on local models, and pushes Claude Sonnet from 65% to 78%.
+
+**CEGIS retry.** When Dafny fails, Nightjar parses the concrete counterexample and includes it in the retry prompt. "Your spec fails on input X=5, Y=-3 because..." is a lot more useful to an LLM than a generic error message.
+
+---
+
+## The immune system
+
+Nightjar learns from your production failures. When something breaks, it gets smarter.
+
+```
+Sentry errors + runtime traces
+        |
+        v
+   Collector (sys.monitoring, PEP 669, <5% overhead)
+        |
+        v
+   Miner (19 Ernst/Daikon templates)
+        |
+        v
+   Quality gate (Wonda scoring, filters out trivial invariants)
+        |
+        v
+   Adversarial debate (a skeptic agent tries to refute each candidate)
+        |
+        v
+   Houdini filter (Z3 finds the maximal inductive subset)
+        |
+        v
+   CrossHair + Hypothesis (verify with 1000+ inputs)
+        |
+        v
+   Auto-append to .card.md (your spec evolves)
+```
+
+Old invariants decay over time if no new observations confirm them. New observations can supersede stale ones. The spec stays current with how your code actually behaves.
+
+Three tiers of mining run in parallel: semantic (LLM-based), runtime (Daikon + Houdini), and API-level (MINES, from OTel logs).
 
 ---
 
@@ -151,83 +190,57 @@ VERIFIED -- all stages passed (confidence: 85/100)
 
 ```
 nightjar init [module]       Scaffold a .card.md spec
-nightjar auto "intent"       Generate spec from natural language
+nightjar auto "intent"       Generate spec from plain English
 nightjar generate            Generate code from spec via LLM
-nightjar verify              Run 5-stage verification pipeline
+nightjar verify              Run the verification pipeline
 nightjar verify --fast       Stages 0-3 only (skip Dafny)
 nightjar build               Generate + verify + compile
 nightjar ship                Build + sign artifact
-nightjar retry               CEGIS counterexample-guided repair
+nightjar retry               Counterexample-guided repair loop
 nightjar lock                Freeze deps into deps.lock
 nightjar explain             Root-cause diagnosis (LP dual variables)
-nightjar watch               File-watching daemon, 4-tier streaming
-nightjar badge               shields.io badge from verify.json
+nightjar watch               Background daemon, 4-tier streaming
+nightjar badge               Shields.io badge from last verification
 nightjar optimize            DSPy SIMBA prompt optimization
 nightjar immune              Run immune system mining cycle
 ```
 
 ---
 
-## Watch mode
-
-```bash
-nightjar watch
-```
-
-Four tiers of verification, streaming:
-
-| Tier | What | Latency |
-|------|------|---------|
-| 0: Syntax | AST parse, YAML frontmatter | <100ms |
-| 1: Structural | Deps, schema, CrossHair quick | <2s |
-| 2: Property | Hypothesis PBT, CrossHair watch | <10s |
-| 3: Formal | Dafny with caching | 1-30s |
-
-If nothing changed, re-verification takes under 50ms (Salsa-style per-stage caching with content-addressed hashing).
-
----
-
-## Security mode
-
-```yaml
-# .github/workflows/nightjar.yml
-- uses: nightjar/verify@v1
-  with:
-    mode: shadow
-    report: full
-    security-pack: owasp
-```
-
-Shadow mode posts findings as PR comments. Never fails the build. The OWASP pack covers SQL injection, XSS, and command injection with formal proofs. The violation explainer makes Dafny's SMT output readable. EU CRA compliance certificates are generated automatically.
-
----
-
-## Immune system
-
-Nightjar watches production. When things break, it gets smarter.
+## Architecture
 
 ```
-Production errors (Sentry) -> Collector -> Miner -> Quality Filter -> Debate -> Verifier -> .card.md
-       |                                                                                      |
-       +--- runtime traces, Sentry events                             stronger specs ---------+
+Intent (.card.md)
+    |
+    +-> nightjar auto -> Generate invariants -> Approve (30s)
+    |
+    v
+Spec Preprocessing (19 rewrite rules)
+    |
+    v
+Generation (litellm -> any LLM)
+    |
+    v
+Verification Pipeline
+    +-- Stage 0: Preflight (AST + YAML)
+    +-- Stage 1: Dependencies (pip-audit + SBOM)
+    +-- Stage 2: Schema (Pydantic v2)
+    +-- Stage 2.5: Negation-Proof (catch weak specs early)
+    +-- Stage 3: Property (Hypothesis PBT)
+    +-- Stage 4: Formal (Dafny + CrossHair + fallback)
+    |
+    v
+Verified Artifact + Proof Certificate (.card/verify.json)
+    |
+    v
+Immune System (Sentry + runtime mining -> stronger specs over time)
 ```
-
-The pipeline:
-
-1. sys.monitoring (PEP 669) captures runtime traces at <5% overhead. Sentry errors feed in directly.
-2. Clean-room Daikon (19 Ernst templates) detects invariants from those traces.
-3. Wonda-based quality scoring filters out the trivial ones.
-4. An adversarial "skeptic" LLM tries to break each candidate. Only survivors proceed.
-5. Houdini fixed-point filtering (via Z3) finds the maximal inductive subset.
-6. CrossHair + Hypothesis verify the survivors with 1000+ inputs.
-7. Verified invariants append to `.card.md` specs automatically.
-8. Temporal decay removes stale invariants when behavior legitimately evolves.
-
-The mining runs across three tiers: semantic (LLM-based), runtime (Daikon + Houdini), and API-level (MINES, from OTel logs).
 
 ---
 
 ## The .card.md format
+
+You write specs. AI generates code. Nightjar proves the code matches the spec.
 
 ```yaml
 ---
@@ -254,74 +267,37 @@ invariants:
 A payment processor that charges credit cards safely.
 ```
 
-Three tiers of invariants:
-
-| Tier | Who writes it | What it generates | Tool |
-|------|--------------|-------------------|------|
-| `example` | Any developer | Unit tests from Given/When/Then | pytest |
-| `property` | Senior dev | Property-based tests | Hypothesis |
-| `formal` | Security/finance | Mathematical proof | Dafny/CrossHair |
-
-You pick the tier that matches your risk tolerance. Most teams start with `property` and add `formal` for the functions that handle money or auth.
-
----
-
-## Architecture
-
-```
-Intent (.card.md)
-    |
-    +-> nightjar auto -> Generate invariants -> Approve (30s)
-    |
-    v
-Spec Preprocessing (19 rewrite rules from Proven)
-    |
-    v
-Generation (litellm -> any LLM)
-    |
-    v
-Verification Pipeline
-    +-- Stage 0: Preflight (AST + YAML)
-    +-- Stage 1: Dependencies (pip-audit + SBOM)
-    +-- Stage 2: Schema (Pydantic v2)
-    +-- Stage 2.5: Negation-Proof (catch weak specs early)
-    +-- Stage 3: Property (Hypothesis PBT)
-    +-- Stage 4: Formal (Dafny + CrossHair + fallback ladder)
-    |
-    v
-Verified Artifact (dist/) + Proof Certificate (.card/verify.json)
-    |
-    v
-Immune System (Sentry + runtime mining -> new invariants -> spec evolves)
-```
-
-The spec preprocessing step (19 rewrite rules from [Proven](https://github.com/melek/proven)) normalizes quantifier scoping and decomposes compound postconditions before anything touches the LLM. This roughly doubles Dafny success rates on local models.
-
----
-
-## Contractual Computing
-
-Nightjar is built around an idea we call Contractual Computing:
-
-The contract is the permanent artifact. Code gets regenerated every build. Verification is what matters, not generation. Contracts are discoverable (the immune system mines them from runtime). Contracts are transferable (any agent can verify any code). And contracts compound: your codebase gets safer over time without anyone doing extra work.
+Invariants come in three tiers. `example` generates unit tests (any developer can write these). `property` generates Hypothesis property-based tests (requires some testing experience). `formal` generates Dafny proofs or CrossHair symbolic checks (for security-critical code).
 
 ---
 
 ## Model agnostic
 
-All LLM calls go through litellm. Set the model with an environment variable:
+All LLM calls go through litellm. Swap models with an environment variable:
 
 ```bash
 NIGHTJAR_MODEL=claude-sonnet-4-6       # Default
-NIGHTJAR_MODEL=deepseek/deepseek-chat  # 10x cheaper
-NIGHTJAR_MODEL=openai/o3               # When you need it
+NIGHTJAR_MODEL=deepseek/deepseek-chat  # Budget option
+NIGHTJAR_MODEL=openai/o3               # Premium option
 ```
 
 ---
 
 ## MCP server
 
-Nightjar is also an MCP server. Three tools: `verify_contract`, `get_violations`, `suggest_fix`. Works with Cursor, Windsurf, Claude Code, VS Code, or anything that speaks MCP.
+Nightjar is also an MCP server, so it works inside any IDE that supports the protocol: Cursor, Windsurf, Claude Code, VS Code.
+
+Three tools: `verify_contract` (run verification), `get_violations` (get the report), `suggest_fix` (LLM-suggested repair).
+
+---
+
+## Contractual computing
+
+The idea behind Nightjar is that the contract (the `.card.md` spec) is the permanent artifact, not the code. Code gets regenerated every build. The spec is what survives.
+
+This leads to some interesting properties: contracts are discoverable (the immune system mines them from runtime), transferable (any agent can verify any code against a spec), and they compound (your codebase gets safer the longer you run it, because more invariants accumulate).
+
+We call this "contractual computing." As far as we can tell, nobody else has claimed the term.
 
 ---
 
@@ -334,14 +310,14 @@ Nightjar is also an MCP server. Three tools: `verify_contract`, `get_violations`
 | TUI | Textual |
 | LLM | litellm |
 | Formal verification | Dafny 4.x |
-| Property testing | Hypothesis |
+| Property-based testing | Hypothesis |
 | Symbolic execution | CrossHair |
 | Runtime contracts | icontract |
 | Schema | Pydantic v2 |
 | Invariant mining | sys.monitoring (PEP 669) |
-| Invariant filtering | Z3 (Houdini algorithm) |
+| Invariant filtering | Z3 via Houdini algorithm |
 | Quality scoring | Wonda-style AST normalization |
-| Spec preprocessing | Proven (19 rules) |
+| Spec preprocessing | Proven (MIT) |
 | File watching | watchdog |
 | Error tracking | Sentry |
 | MCP | MCP SDK |
@@ -350,32 +326,81 @@ Nightjar is also an MCP server. Three tools: `verify_contract`, `get_violations`
 
 ## References
 
-Every algorithm traces to a paper. See [docs/REFERENCES.md](docs/REFERENCES.md) for the full list.
+The algorithms in Nightjar come from published papers. If you want to understand why something works the way it does, these are the places to look:
 
-- [Proven](https://github.com/melek/proven) -- 19 spec rewrite rules, ~2x Dafny success on local models
-- [DafnyPro](https://arxiv.org/abs/2601.05385) -- Diff-checker + invariant pruner + hint-augmentation
-- [VerMCTS](https://arxiv.org/abs/2402.08147) -- BFS proof search, verifier-in-the-loop
-- [SpecLoop](https://arxiv.org/abs/2603.02895) -- CEGIS counterexample-guided retry
-- [Wonda](https://arxiv.org/abs/2603.15510) -- Invariant quality scoring
-- [Ernst 2007](https://homes.cs.washington.edu/~mernst/pubs/invariants-tse2001.pdf) -- Dynamic invariant detection
-- [Houdini](https://dl.acm.org/doi/10.1145/587051.587054) -- Greatest-fixpoint invariant filter
-- [SafePilot](https://arxiv.org/abs/2603.21523) -- Complexity-discriminated routing
+- [Proven](https://github.com/melek/proven) - spec preprocessing rewrite rules
+- [DafnyPro](https://arxiv.org/abs/2601.05385) - diff-checker, invariant pruner, hint-augmentation
+- [VerMCTS](https://arxiv.org/abs/2402.08147) - BFS proof search
+- [SpecLoop](https://arxiv.org/abs/2603.02895) - CEGIS counterexample-guided retry
+- [Wonda](https://arxiv.org/abs/2603.15510) - invariant quality scoring
+- [Ernst 2007](https://homes.cs.washington.edu/~mernst/pubs/invariants-tse2001.pdf) - dynamic invariant detection
+- [Houdini](https://dl.acm.org/doi/10.1145/587051.587054) - greatest-fixpoint invariant filter
+- [SafePilot](https://arxiv.org/abs/2603.21523) - complexity-discriminated routing
+
+Full citation library: [docs/REFERENCES.md](docs/REFERENCES.md)
 
 ---
 
-## 夜鹰 -- 你的LLM写代码，夜鹰证明它
+## 夜鹰 (Nightjar)
 
-夜鹰是第一个零摩擦形式化验证平台。AI生成代码，夜鹰数学证明它是正确的。
+你的 LLM 写代码，夜鹰证明代码是正确的。
+
+### 问题
+
+84% 的开发者在使用 AI 编程工具，但 96% 的人不完全信任生成的代码。45% 的 AI 生成代码包含 OWASP 安全漏洞。我们写了越来越多的代码，却越来越少地去验证它。
+
+### 夜鹰是什么
+
+夜鹰是一个面向 AI 生成代码的形式化验证平台。你用 `.card.md` 文件描述意图和约束条件，AI 生成代码，夜鹰用数学方法证明代码满足所有约束。
+
+核心流程:
 
 ```bash
+# 安装
 pip install nightjar
-nightjar verify your_code.py
+
+# 用自然语言描述你的需求
+nightjar auto "支付处理器，余额不能为负"
+
+# 验证生成的代码
+nightjar verify
+
+# 后台持续监控
+nightjar watch
 ```
 
-不是测试。是证明。
+### 五阶段验证流水线
+
+| 阶段 | 内容 | 耗时 | 保证 |
+|------|------|------|------|
+| 0. 预检 | 语法、导入 | <100ms | 合法 Python |
+| 1. 依赖 | CVE 扫描 | <500ms | 无已知漏洞 |
+| 2. 模式 | 类型检查 | <200ms | 类型正确 |
+| 3. 属性 | Hypothesis PBT | 300ms-8s | 统计覆盖 |
+| 4. 形式化 | Dafny/CrossHair | 1-30s | 数学证明 |
+
+### 核心功能
+
+**影子 CI** - GitHub Action，只报告不阻塞构建。第一次捕获真正的 SQL 注入时，它就会成为团队标配。
+
+**零摩擦模式** - `nightjar auto "你的需求"` 自动生成所有不变式，30 秒内完成审批。
+
+**监控模式** - 保存文件时自动验证，首次反馈 <100ms。
+
+**免疫系统** - 从生产故障中学习。Sentry 错误自动进入挖掘流水线，生成新的不变式。每次失败都让下次构建更安全。
+
+**OWASP 安全包** - 形式化证明不存在 SQL 注入、XSS、命令注入。不是模式匹配，是数学证明。
+
+**安全闸门** - 如果重新生成的代码丢失了之前已证明的不变式，夜鹰会阻止部署。
+
+### 合约计算
+
+夜鹰实现了"合约计算"范式: 合约 (`.card.md`) 是唯一的永久产物，代码每次构建都重新生成。合约可以被发现 (免疫系统从运行时挖掘)、可以转移 (任何代理都能验证任何代码)、可以累积 (代码库随时间变得更安全)。
+
+不是测试。是**证明**。
 
 ---
 
 ## License
 
-AGPL-3.0. Free for open source. [Commercial license](mailto:hello@nightjar.dev) for everything else.
+AGPL-3.0. Free for open source. [Commercial license](mailto:hello@nightjar.dev) for enterprises.
