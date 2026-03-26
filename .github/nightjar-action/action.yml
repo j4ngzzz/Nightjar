@@ -1,0 +1,77 @@
+name: 'Nightjar Verify'
+description: 'Formally verify AI-generated code with Nightjar. Shadow mode never blocks your CI.'
+author: 'Nightjar'
+
+branding:
+  icon: 'shield'
+  color: 'green'
+
+inputs:
+  mode:
+    description: |
+      Verification mode:
+        shadow — NEVER fails the check. Reports violations without blocking. (default)
+        strict — Fails the check if verification fails.
+    required: false
+    default: 'shadow'
+  report:
+    description: |
+      Report verbosity: full | summary
+    required: false
+    default: 'full'
+  security-pack:
+    description: |
+      Security invariant pack: owasp | none
+    required: false
+    default: 'none'
+  nightjar-model:
+    description: |
+      LLM model for explanation generation (uses NIGHTJAR_MODEL env var if not set).
+    required: false
+    default: ''
+  card-path:
+    description: |
+      Path to the .card.md spec file to verify.
+    required: false
+    default: ''
+  verify-json:
+    description: |
+      Path to existing verify.json (skip re-running verification).
+    required: false
+    default: '.card/verify.json'
+
+outputs:
+  verified:
+    description: 'true if all invariants were formally proved, false otherwise'
+  confidence-score:
+    description: 'Verification confidence score (0-100)'
+  violation-count:
+    description: 'Number of invariant violations found'
+  badge-url:
+    description: 'shields.io badge URL for the verification result'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Nightjar
+      shell: bash
+      run: pip install nightjar
+
+    - name: Run Nightjar Shadow CI
+      shell: bash
+      env:
+        NIGHTJAR_MODEL: ${{ inputs.nightjar-model }}
+        NIGHTJAR_SECURITY_PACK: ${{ inputs.security-pack }}
+        NIGHTJAR_CI_MODE: ${{ inputs.mode }}
+        NIGHTJAR_CI_REPORT: ${{ inputs.report }}
+      run: |
+        python -m nightjar.shadow_ci_runner \
+          --mode "${{ inputs.mode }}" \
+          --report "${{ inputs.report }}" \
+          --verify-json "${{ inputs.verify-json }}" \
+          --security-pack "${{ inputs.security-pack }}"
