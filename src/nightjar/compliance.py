@@ -20,9 +20,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import nightjar
+
 
 # Nightjar tool metadata for attestation
-_NIGHTJAR_VERSION = "0.3.0"  # Matches pyproject.toml
+_NIGHTJAR_VERSION = nightjar.__version__  # Always reads from package, never hardcoded
 _TOOL_NAME = "Nightjar"
 _TOOL_URL = "https://github.com/nightjar-dev/nightjar"
 
@@ -94,7 +96,10 @@ def _classify_severity(message: str) -> str:
     return "LOW"
 
 
-def generate_compliance_cert(report: dict) -> dict:
+def generate_compliance_cert(
+    report: dict,
+    owasp_results: Optional[dict] = None,
+) -> dict:
     """Generate a structured EU CRA compliance certificate from a verification report.
 
     Produces a JSON-serializable dict containing:
@@ -102,16 +107,21 @@ def generate_compliance_cert(report: dict) -> dict:
     - Verification result and confidence score
     - SBOM reference (extracted from deps stage if available)
     - Vulnerability report list (for 24-hour reporting requirement)
+    - OWASP security pack results (if provided via F3 integration)
     - Compliance status
 
     Args:
         report: Raw verify.json dict from a nightjar verify run.
+        owasp_results: Optional dict from OWASP security pack scan.
+                       Keys: 'categories_checked', 'violations', 'passed'.
+                       Integrates F3 (OWASP Pack) results into the cert.
 
     Returns:
         Compliance certificate dict (JSON-serializable).
 
     References:
         Scout 7 S2 — EU CRA: SBOM requirements + 24h vulnerability reporting.
+        Scout 7 S10 — Nightjar Security Mode: F1+F2+F3 integration.
         EU CRA general application: September 11, 2026.
     """
     verified: bool = report.get("verified", False)
@@ -130,6 +140,27 @@ def generate_compliance_cert(report: dict) -> dict:
         compliance_status = "not_verified"  # ran but couldn't determine
     else:
         compliance_status = "non_compliant"
+
+    # Build OWASP security section (F3 integration — Scout 7 S10 Security Mode)
+    owasp_section: dict
+    if owasp_results is not None:
+        owasp_violations = owasp_results.get("violations", [])
+        owasp_section = {
+            "enabled": True,
+            "categories_checked": owasp_results.get("categories_checked", []),
+            "passed": owasp_results.get("passed", False),
+            "violation_count": len(owasp_violations),
+            "violations": owasp_violations,
+            "reference": "OWASP ASVS v5.0",
+        }
+        # OWASP failures override compliance status
+        if owasp_violations and compliance_status == "compliant":
+            compliance_status = "non_compliant"
+    else:
+        owasp_section = {
+            "enabled": False,
+            "note": "Run with security-pack:owasp to include OWASP formal proof results.",
+        }
 
     return {
         # Tool attestation
@@ -161,6 +192,8 @@ def generate_compliance_cert(report: dict) -> dict:
             ) if high_severity else "No critical/high vulnerabilities detected.",
             "vulnerabilities": vulnerabilities,
         },
+        # OWASP Security Pack results (F3 integration)
+        "owasp_security": owasp_section,
         # Regulatory context
         "regulatory": {
             "framework": "EU Cyber Resilience Act (EU CRA)",

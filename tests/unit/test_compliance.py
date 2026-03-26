@@ -168,3 +168,84 @@ class TestComplianceExport:
         assert output_path.exists()
         loaded = json.loads(output_path.read_text(encoding="utf-8"))
         assert isinstance(loaded, dict)
+
+
+class TestComplianceReviewerFixes:
+    """Tests for Reviewer 9 fixes to compliance module."""
+
+    def test_version_uses_nightjar_package_version(self):
+        """Compliance cert uses nightjar.__version__, not hardcoded string."""
+        import nightjar
+        from nightjar.compliance import generate_compliance_cert
+
+        report = {
+            "verified": True,
+            "confidence_score": 90,
+            "module": "auth",
+            "stages": [],
+            "timestamp": "2026-03-26T10:00:00Z",
+        }
+        cert = generate_compliance_cert(report)
+        # Must match package version — NOT the old hardcoded "0.3.0"
+        assert cert["tool"]["version"] == nightjar.__version__
+        assert cert["tool"]["version"] == "0.1.0"
+        assert cert["tool"]["version"] != "0.3.0"
+
+    def test_owasp_results_integrated_when_provided(self):
+        """Compliance cert includes OWASP results when provided (F3 integration)."""
+        from nightjar.compliance import generate_compliance_cert
+
+        report = {
+            "verified": True,
+            "confidence_score": 90,
+            "module": "payment",
+            "stages": [],
+            "timestamp": "2026-03-26T10:00:00Z",
+        }
+        owasp_results = {
+            "categories_checked": ["sql_injection", "xss"],
+            "passed": True,
+            "violations": [],
+        }
+        cert = generate_compliance_cert(report, owasp_results=owasp_results)
+
+        assert cert["owasp_security"]["enabled"] is True
+        assert "sql_injection" in cert["owasp_security"]["categories_checked"]
+        assert cert["owasp_security"]["passed"] is True
+        assert cert["owasp_security"]["violation_count"] == 0
+
+    def test_owasp_violations_override_compliance_status(self):
+        """OWASP violations downgrade compliance_status from compliant."""
+        from nightjar.compliance import generate_compliance_cert
+
+        report = {
+            "verified": True,  # formally verified
+            "confidence_score": 95,
+            "module": "login",
+            "stages": [],
+            "timestamp": "2026-03-26T10:00:00Z",
+        }
+        owasp_results = {
+            "categories_checked": ["sql_injection"],
+            "passed": False,
+            "violations": [{"category": "sql_injection", "input": "' OR 1=1--"}],
+        }
+        cert = generate_compliance_cert(report, owasp_results=owasp_results)
+
+        # Even though formally verified, OWASP violations make it non_compliant
+        assert cert["compliance_status"] == "non_compliant"
+        assert cert["owasp_security"]["violation_count"] == 1
+
+    def test_owasp_section_disabled_when_not_provided(self):
+        """OWASP section shows disabled when no results provided."""
+        from nightjar.compliance import generate_compliance_cert
+
+        report = {
+            "verified": True,
+            "confidence_score": 85,
+            "module": "auth",
+            "stages": [],
+            "timestamp": "2026-03-26T10:00:00Z",
+        }
+        cert = generate_compliance_cert(report)
+        assert cert["owasp_security"]["enabled"] is False
