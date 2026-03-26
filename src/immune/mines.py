@@ -286,7 +286,9 @@ def _llm_hypothesize(
     if not _LITELLM_AVAILABLE:
         return []
 
-    resolved_model = model or os.environ.get("NIGHTJAR_MODEL", "gpt-4o-mini")
+    resolved_model = model or os.environ.get("NIGHTJAR_MODEL")
+    if not resolved_model:
+        return []  # No model configured — skip LLM hypothesis
 
     # Format a representative sample (max 10 spans) as context
     sample = spans[:10]
@@ -482,8 +484,9 @@ def _check_holds_for_all(inv: MinesInvariant, spans: list[OtelSpan]) -> bool:
                     return False
         return True
 
-    # Unknown expression format: conservatively pass through
-    return True
+    # Unknown expression format: cannot validate — reject conservatively
+    # (MINES validation must confirm holds; if we can't check, we don't confirm)
+    return False
 
 
 # ---------------------------------------------------------------------------

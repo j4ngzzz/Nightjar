@@ -285,4 +285,7 @@ def _has_cti(other_constraints: list[object], candidate: object) -> bool:
     solver.add(z3.Not(candidate))
 
     result = solver.check()
-    return result == z3.sat  # SAT means CTI exists
+    # Only return True (CTI found) when Z3 definitively returns SAT.
+    # z3.unsat  → no CTI exists → retain candidate (return False)
+    # z3.unknown → Z3 timed out or inconclusive → conservatively retain (return False)
+    return result == z3.sat

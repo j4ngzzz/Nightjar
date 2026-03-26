@@ -172,8 +172,10 @@ class InvariantMiner:
         self._max_records = max_records
         self._trace_count = 0
         self._lock = threading.Lock()
-        # Pending calls: thread_id -> list of (func_name, entry_vals, param_names)
-        self._pending_calls: dict[int, list[tuple[str, dict[str, Any], list[str]]]] = (
+        # Pending calls: thread_id -> list of (func_name, callee_code|None, entry_vals, param_names)
+        # callee_code: code object for identity-matching in PY_RETURN (sys.monitoring path)
+        #              None in sys.settrace path (matches by func_name instead)
+        self._pending_calls: dict[int, list[tuple[str, Any, dict[str, Any], list[str]]]] = (
             defaultdict(list)
         )
 
@@ -323,7 +325,9 @@ class InvariantMiner:
             # Not a Python function (e.g., built-in) -- skip
             return sys.monitoring.DISABLE  # type: ignore[attr-defined]
 
-        if not self._should_trace_code(callee_code):
+        # Derive callee module for include_modules filtering
+        callee_module = getattr(callable_, "__module__", None)
+        if not self._should_trace_code(callee_code, module_name=callee_module):
             return sys.monitoring.DISABLE  # type: ignore[attr-defined]
 
         func_name = callee_code.co_name
@@ -377,10 +381,15 @@ class InvariantMiner:
     # sys.settrace callback (Python 3.11 fallback)
     # ------------------------------------------------------------------
 
-    def _should_trace_code(self, code: Any) -> bool:
+    def _should_trace_code(self, code: Any, module_name: Optional[str] = None) -> bool:
         """Decide whether to trace a given code object.
 
         Used by both sys.monitoring and sys.settrace handlers.
+
+        Args:
+            code:        The code object of the function to check.
+            module_name: Module name (__name__) of the function's module.
+                         Required for include_modules filtering in sys.monitoring path.
         """
         if not code:
             return False
@@ -403,20 +412,17 @@ class InvariantMiner:
         if func_name.startswith("__") and func_name.endswith("__"):
             return False
 
+        # Apply include_modules filter (same logic as sys.settrace path)
+        if self._include_modules is not None and module_name is not None:
+            if module_name not in self._include_modules:
+                return False
+
         return True
 
     def _should_trace(self, frame: Any) -> bool:
         """Decide whether to trace a given frame (sys.settrace path)."""
-        if not self._should_trace_code(frame.f_code):
-            return False
-
-        # Apply module filter if set
-        if self._include_modules is not None:
-            module = frame.f_globals.get("__name__", "")
-            if module not in self._include_modules:
-                return False
-
-        return True
+        module = frame.f_globals.get("__name__", "")
+        return self._should_trace_code(frame.f_code, module_name=module)
 
     def _settrace_callback(self, frame: Any, event: str, arg: Any) -> Any:
         """sys.settrace callback -- intercepts call and return events (Python 3.11 path).

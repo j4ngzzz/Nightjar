@@ -1,23 +1,22 @@
 """Tests for web application invariant templates.
 
-Validates CR-06 / W4.4: 10 web application invariant templates for common
-HTTP/API patterns discovered in production traces.
+Validates W4.4: 10 web application invariant templates from Scout 6 Section 6.
 
-Templates cover:
-  1. HTTP status code set constraint
-  2. Idempotent GET (status code 200 always)
-  3. Response time SLA (bounded latency)
-  4. Email format in attributes
-  5. UUID format in attributes
-  6. Positive integer (e.g., user.id > 0)
-  7. Foreign key referential integrity (non-null linked ID)
-  8. Sequence ordering (monotonic IDs)
-  9. Monotonic timestamps (created_at <= updated_at)
+Templates (priority-ranked):
+  1. HTTP status code patterns
+  2. Response schema consistency
+  3. Authentication invariant
+  4. Idempotency
+  5. Non-negativity
+  6. Format invariants (email, UUID)
+  7. FK integrity
+  8. Sequence ordering
+  9. Monotonic timestamps
  10. Bounded string length
 
 References:
+- Scout 6 Section 6 — priority-ranked web app templates
 - MINES arXiv 2512.06906 — web API invariant categories
-- Scout 6 Tool 5 — web_templates for Format/Common-sense/Database constraints
 - [REF-T10] icontract for runtime contract enforcement
 """
 
@@ -29,13 +28,12 @@ from immune.web_templates import (
     WebTemplate,
     apply_template,
     ALL_TEMPLATES,
-    # Individual template factory functions
     status_code_set_template,
+    response_schema_template,
+    auth_invariant_template,
     idempotent_get_template,
-    response_time_sla_template,
-    email_format_template,
-    uuid_format_template,
     positive_integer_template,
+    format_invariant_template,
     non_null_id_template,
     monotonic_sequence_template,
     monotonic_timestamp_template,
@@ -78,7 +76,7 @@ class TestWebTemplate:
         assert t.description != ""
 
     def test_all_templates_list_has_10_entries(self):
-        """ALL_TEMPLATES contains all 10 web template factories."""
+        """ALL_TEMPLATES contains exactly 10 template factories (Scout 6 S6)."""
         assert len(ALL_TEMPLATES) == 10, (
             f"Expected 10 templates, got {len(ALL_TEMPLATES)}: "
             f"{[t.__name__ for t in ALL_TEMPLATES]}"
@@ -116,7 +114,74 @@ class TestStatusCodeSetTemplate:
 
 
 # ---------------------------------------------------------------------------
-# Test: Template 2 — Idempotent GET
+# Test: Template 2 — Response schema consistency
+# ---------------------------------------------------------------------------
+
+
+class TestResponseSchemaTemplate:
+    def test_response_schema_detects_consistent_keys(self):
+        """Schema consistency: attributes present in ALL spans are required."""
+        spans = [
+            make_span("GET /users", attrs={"user.id": 1, "user.name": "Alice"}),
+            make_span("GET /users", attrs={"user.id": 2, "user.name": "Bob"}),
+        ]
+        template = response_schema_template()
+        invs = apply_template(template, spans)
+        assert len(invs) > 0
+        assert any("schema" in inv.expression.lower() or "always" in inv.expression.lower() for inv in invs)
+
+    def test_response_schema_skips_inconsistent_keys(self):
+        """Keys NOT present in ALL spans are not marked as required."""
+        spans = [
+            make_span("GET /items", attrs={"item.id": 1, "item.name": "Widget"}),
+            make_span("GET /items", attrs={"item.id": 2}),  # item.name missing
+        ]
+        template = response_schema_template()
+        invs = apply_template(template, spans)
+        # item.name is only in 1/2 spans — not a schema requirement
+        assert not any("item.name" in inv.expression for inv in invs)
+
+    def test_response_schema_category_is_common_sense(self):
+        """Schema consistency invariants are Common-sense constraints."""
+        template = response_schema_template()
+        assert template.category == MinesCategory.COMMON_SENSE
+
+
+# ---------------------------------------------------------------------------
+# Test: Template 3 — Authentication invariant
+# ---------------------------------------------------------------------------
+
+
+class TestAuthInvariantTemplate:
+    def test_auth_invariant_detects_auth_attribute(self):
+        """Auth invariant: auth attributes always present in authenticated spans."""
+        spans = [
+            make_span("POST /orders", attrs={"Authorization": "Bearer abc", "user.id": 1}),
+            make_span("POST /orders", attrs={"Authorization": "Bearer xyz", "user.id": 2}),
+        ]
+        template = auth_invariant_template()
+        invs = apply_template(template, spans)
+        assert len(invs) > 0
+        assert any(
+            "auth" in inv.expression.lower() or "Authorization" in inv.expression
+            for inv in invs
+        )
+
+    def test_auth_invariant_skips_non_auth_spans(self):
+        """Auth invariant not generated for spans without auth attributes."""
+        spans = [make_span("GET /health", attrs={"status": "ok"})]
+        template = auth_invariant_template()
+        invs = apply_template(template, spans)
+        assert len(invs) == 0
+
+    def test_auth_invariant_category_is_environment(self):
+        """Auth invariants belong to ENVIRONMENT category."""
+        template = auth_invariant_template()
+        assert template.category == MinesCategory.ENVIRONMENT
+
+
+# ---------------------------------------------------------------------------
+# Test: Template 4 — Idempotent GET
 # ---------------------------------------------------------------------------
 
 
@@ -130,7 +195,6 @@ class TestIdempotentGetTemplate:
         template = idempotent_get_template()
         invs = apply_template(template, spans)
         assert len(invs) > 0
-        # Should produce invariant asserting status_code == 200 for GET
         assert any("200" in inv.expression for inv in invs)
 
     def test_idempotent_get_skips_non_get(self):
@@ -138,83 +202,11 @@ class TestIdempotentGetTemplate:
         spans = [make_span("POST /users", status=201)]
         template = idempotent_get_template()
         invs = apply_template(template, spans)
-        # POST spans: no GET-idempotency invariants generated
         assert len(invs) == 0
 
 
 # ---------------------------------------------------------------------------
-# Test: Template 3 — Response time SLA
-# ---------------------------------------------------------------------------
-
-
-class TestResponseTimeSlaTemplate:
-    def test_response_time_sla_produces_bound(self):
-        """Response time SLA: duration_ms should be bounded."""
-        spans = [
-            make_span("GET /health", duration_ms=10.0),
-            make_span("GET /health", duration_ms=25.0),
-            make_span("GET /health", duration_ms=15.0),
-        ]
-        template = response_time_sla_template(sla_ms=1000.0)
-        invs = apply_template(template, spans)
-        assert len(invs) > 0
-        # Invariant expression should reference duration
-        assert any("duration" in inv.expression.lower() for inv in invs)
-
-    def test_response_time_sla_category_is_common_sense(self):
-        """SLA invariants are Common-sense constraints."""
-        template = response_time_sla_template(sla_ms=500.0)
-        assert template.category == MinesCategory.COMMON_SENSE
-
-
-# ---------------------------------------------------------------------------
-# Test: Template 4 — Email format
-# ---------------------------------------------------------------------------
-
-
-class TestEmailFormatTemplate:
-    def test_email_format_detects_email_attribute(self):
-        """Email format: attribute matching email pattern must be RFC 5321."""
-        spans = [
-            make_span("POST /users", attrs={"user.email": "test@example.com"}),
-            make_span("POST /users", attrs={"user.email": "jane@test.org"}),
-        ]
-        template = email_format_template()
-        invs = apply_template(template, spans)
-        assert len(invs) > 0
-        assert any("email" in inv.expression.lower() or "RFC" in inv.expression for inv in invs)
-
-    def test_email_format_category_is_format(self):
-        """Email format invariants belong to FORMAT category."""
-        template = email_format_template()
-        assert template.category == MinesCategory.FORMAT
-
-
-# ---------------------------------------------------------------------------
-# Test: Template 5 — UUID format
-# ---------------------------------------------------------------------------
-
-
-class TestUuidFormatTemplate:
-    def test_uuid_format_detects_uuid_attribute(self):
-        """UUID format: attribute matching UUID pattern must be RFC 4122."""
-        spans = [
-            make_span("GET /orders/1", attrs={"order.id": "550e8400-e29b-41d4-a716-446655440000"}),
-            make_span("GET /orders/2", attrs={"order.id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8"}),
-        ]
-        template = uuid_format_template()
-        invs = apply_template(template, spans)
-        assert len(invs) > 0
-        assert any("uuid" in inv.expression.lower() or "UUID" in inv.expression for inv in invs)
-
-    def test_uuid_format_category_is_format(self):
-        """UUID format invariants belong to FORMAT category."""
-        template = uuid_format_template()
-        assert template.category == MinesCategory.FORMAT
-
-
-# ---------------------------------------------------------------------------
-# Test: Template 6 — Positive integer
+# Test: Template 5 — Non-negativity / positive integer
 # ---------------------------------------------------------------------------
 
 
@@ -237,8 +229,41 @@ class TestPositiveIntegerTemplate:
         ]
         template = positive_integer_template()
         invs = apply_template(template, spans)
-        # "status": "ok" is a string — no positive integer invariant
         assert len(invs) == 0
+
+
+# ---------------------------------------------------------------------------
+# Test: Template 6 — Format invariants (email + UUID)
+# ---------------------------------------------------------------------------
+
+
+class TestFormatInvariantTemplate:
+    def test_format_invariant_detects_email_attribute(self):
+        """Format invariant: email attributes must match RFC 5321."""
+        spans = [
+            make_span("POST /users", attrs={"user.email": "test@example.com"}),
+            make_span("POST /users", attrs={"user.email": "jane@test.org"}),
+        ]
+        template = format_invariant_template()
+        invs = apply_template(template, spans)
+        assert len(invs) > 0
+        assert any("email" in inv.expression.lower() or "RFC" in inv.expression for inv in invs)
+
+    def test_format_invariant_detects_uuid_attribute(self):
+        """Format invariant: UUID attributes must match RFC 4122."""
+        spans = [
+            make_span("GET /orders/1", attrs={"order.id": "550e8400-e29b-41d4-a716-446655440000"}),
+            make_span("GET /orders/2", attrs={"order.id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8"}),
+        ]
+        template = format_invariant_template()
+        invs = apply_template(template, spans)
+        assert len(invs) > 0
+        assert any("uuid" in inv.expression.lower() or "UUID" in inv.expression or "RFC 4122" in inv.expression for inv in invs)
+
+    def test_format_invariant_category_is_format(self):
+        """Format invariants belong to FORMAT category."""
+        template = format_invariant_template()
+        assert template.category == MinesCategory.FORMAT
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +333,15 @@ class TestMonotonicTimestampTemplate:
             for inv in invs
         )
 
+    def test_monotonic_timestamp_decorator_uses_inf_default(self):
+        """Decorator uses float('inf') for missing updated_at to avoid false violations."""
+        spans = [make_span("GET /r", attrs={"created_at": 1000, "updated_at": 2000})]
+        template = monotonic_timestamp_template()
+        invs = apply_template(template, spans)
+        assert len(invs) > 0
+        # Decorator must not default updated_at to 0 (which causes false positives)
+        assert "float('inf')" in invs[0].icontract_decorator or "inf" in invs[0].icontract_decorator
+
     def test_monotonic_timestamp_category_is_database(self):
         """Monotonic timestamp invariants are DATABASE constraints."""
         template = monotonic_timestamp_template()
@@ -336,7 +370,6 @@ class TestBoundedStringTemplate:
         spans = [make_span("GET /users", attrs={"user.id": 42})]
         template = bounded_string_template(max_len=255)
         invs = apply_template(template, spans)
-        # Integer attribute: no bounded-string invariant
         assert len(invs) == 0
 
     def test_bounded_string_category_is_common_sense(self):
