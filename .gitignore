@@ -1,0 +1,32 @@
+# BridgeMCP credentials - NEVER commit API keys
+.mcp.json
+
+# Generated artifacts
+dist/
+.card/audit/
+.card/cache/
+.card/verify.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
