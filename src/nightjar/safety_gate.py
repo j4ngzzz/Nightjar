@@ -35,10 +35,22 @@ class SafetyGateResult:
         passed: True if no regression, False if regression detected.
         regressions: List of regression details (stage_name, statuses).
         previous_path: Path to the previous verify.json used for comparison.
+        confidence_drop: int > 0 if new confidence score < previous. Warning only.
+        confidence_warning: Human-readable warning if confidence dropped.
     """
     passed: bool
     regressions: list[dict] = field(default_factory=list)
     previous_path: str = ""
+    confidence_drop: int = 0
+    confidence_warning: str = ""
+
+
+def _get_confidence_total(result: VerifyResult) -> Optional[int]:
+    """Extract confidence score total from a VerifyResult, if available."""
+    if result.confidence is None:
+        return None
+    # ConfidenceScore has a .total attribute; use getattr for safety
+    return getattr(result.confidence, "total", None)
 
 
 def check_regression(
@@ -52,6 +64,8 @@ def check_regression(
 
     SKIP in previous → FAIL in new is NOT a regression.
     Stage absent from previous → FAIL in new is NOT a regression.
+
+    Also warns (non-blocking) when new confidence score < previous confidence.
 
     Args:
         new_result: VerifyResult from the current verification run.
@@ -85,9 +99,24 @@ def check_regression(
                 "errors": new_stage.errors,
             })
 
+    # Confidence score drop warning (non-blocking per Scout 7 S12.S1)
+    confidence_drop = 0
+    confidence_warning = ""
+    prev_confidence = _get_confidence_total(previous_result)
+    new_confidence = _get_confidence_total(new_result)
+    if prev_confidence is not None and new_confidence is not None:
+        if new_confidence < prev_confidence:
+            confidence_drop = prev_confidence - new_confidence
+            confidence_warning = (
+                f"Warning: confidence score dropped {confidence_drop} pts "
+                f"({prev_confidence}/100 → {new_confidence}/100)"
+            )
+
     return SafetyGateResult(
         passed=len(regressions) == 0,
         regressions=regressions,
+        confidence_drop=confidence_drop,
+        confidence_warning=confidence_warning,
     )
 
 
