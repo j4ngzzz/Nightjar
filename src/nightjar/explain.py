@@ -33,6 +33,9 @@ class ExplainOutput:
 
     Produced by explain_failure() and consumed by format_explanation()
     or the CLI explain command [REF-T17].
+
+    U1.3 extension: root_cause field added for LP dual diagnosis output.
+    When populated, format_explanation() includes a root-cause section.
     """
 
     failed_stage: int
@@ -42,6 +45,7 @@ class ExplainOutput:
     counterexamples: list[dict]
     suggested_fix: str
     all_stages_summary: list[dict]
+    root_cause: str = ""  # LP dual diagnosis root cause [REF-NEW-09]
 
 
 # ── Stage-specific fix suggestions ───────────────────────
@@ -316,6 +320,11 @@ def format_explanation(explanation: ExplainOutput) -> str:
         lines.append("Counterexamples:")
         for i, ce in enumerate(explanation.counterexamples, 1):
             lines.append(f"  [{i}] {ce}")
+        lines.append("")
+
+    # LP dual root-cause [U1.3, REF-NEW-09]
+    if explanation.root_cause:
+        lines.append(f"Root Cause (LP diagnosis): {explanation.root_cause}")
         lines.append("")
 
     # Suggested fix
