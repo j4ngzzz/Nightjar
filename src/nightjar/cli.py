@@ -613,37 +613,124 @@ def explain(ctx: click.Context, contract: str) -> None:
 @main.command()
 @click.argument("intent", required=False, default=None)
 @click.option("--approve-all", is_flag=True, help="Auto-approve all suggested invariants.")
+@click.option("--output", "-o", default=".card", help="Output directory for .card.md spec.")
+@click.option("--model", default=None, help="LLM model (default: NIGHTJAR_MODEL env or config).")
 @click.pass_context
-def auto(ctx: click.Context, intent: str | None, approve_all: bool) -> None:
+def auto(ctx: click.Context, intent: str | None, approve_all: bool, output: str, model: Optional[str]) -> None:
     """Generate .card.md specs from natural language intent.
 
     Takes a plain English description and auto-generates verification
     artifacts (icontract, Hypothesis, Dafny). [Scout 4 F1-F3]
     """
-    click.echo("nightjar auto: not yet implemented (Builder-Auto Phase 2)")
-    ctx.exit(1)
+    if not intent:
+        click.echo("Usage: nightjar auto \"describe your module intent\"", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
+    config = ctx.obj["config"]
+    resolved_model = _get_model(model, config)
+
+    try:
+        from nightjar.auto import run_auto
+
+        result = run_auto(
+            nl_intent=intent,
+            output_path=output,
+            model=resolved_model,
+            yes=approve_all,
+        )
+        if result.card_path:
+            click.echo(f"Created spec: {result.card_path}")
+            total = result.approved_count + result.skipped_count
+            click.echo(f"Invariants: {total} generated, {result.approved_count} approved, {result.skipped_count} skipped")
+            ctx.exit(EXIT_PASS)
+        else:
+            click.echo("No spec generated (all invariants rejected or error).")
+            ctx.exit(EXIT_FAIL)
+    except ImportError as e:
+        click.echo(f"Error: auto module not available ({e})", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+    except Exception as e:
+        click.echo(f"Auto error: {e}", err=True)
+        ctx.exit(EXIT_LLM_ERROR)
 
 
 @main.command()
 @click.option("--debounce", default=500, help="Debounce interval in ms.")
+@click.option("--card-dir", default=".card", help="Directory to watch for .card.md changes.")
 @click.pass_context
-def watch(ctx: click.Context, debounce: int) -> None:
+def watch(ctx: click.Context, debounce: int, card_dir: str) -> None:
     """Start persistent file-watching daemon with tiered verification.
 
     Monitors .card/ directory for changes and runs streaming verification
     (Tier 0-3) with sub-second first feedback. [Scout 5 architecture]
     """
-    click.echo("nightjar watch: not yet implemented (Builder-Speed Phase 2)")
-    ctx.exit(1)
+    try:
+        from nightjar.watch import start_watch, TierEvent
+
+        def _on_tier_event(event: TierEvent) -> None:
+            status = "PASS" if event.passed else "FAIL"
+            click.echo(f"[Tier {event.tier}] {event.card_path} — {status} ({event.elapsed_ms:.0f}ms)")
+            if event.message:
+                click.echo(f"  {event.message}")
+
+        click.echo(f"Watching {card_dir}/ for changes (debounce: {debounce}ms) ...")
+        click.echo("Press Ctrl+C to stop.")
+        observer = start_watch(card_dir, callback=_on_tier_event)
+        try:
+            import time
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            observer.stop()
+            observer.join()
+            click.echo("\nWatch stopped.")
+        ctx.exit(EXIT_PASS)
+    except ImportError as e:
+        click.echo(f"Error: watch module not available ({e})", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+    except Exception as e:
+        click.echo(f"Watch error: {e}", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
 
 
 @main.command()
 @click.option("--format", "fmt", type=click.Choice(["url", "markdown", "html"]), default="markdown")
+@click.option("--report", default=".card/verify.json", help="Path to verify.json report.")
 @click.pass_context
-def badge(ctx: click.Context, fmt: str) -> None:
+def badge(ctx: click.Context, fmt: str, report: str) -> None:
     """Generate a 'Nightjar Verified' badge from last verification result.
 
     Uses shields.io to create status + coverage badges. [Scout 7 N8]
     """
-    click.echo("nightjar badge: not yet implemented (Builder-Features Phase 2)")
-    ctx.exit(1)
+    try:
+        from nightjar.badge import generate_badge_url_from_report, generate_badge_markdown
+
+        badge_url = generate_badge_url_from_report(report)
+
+        if fmt == "url":
+            click.echo(badge_url)
+        elif fmt == "markdown":
+            # Extract status and score for markdown generation
+            from nightjar.badge import BadgeStatus
+            import json
+            try:
+                with open(report, encoding="utf-8") as f:
+                    data = json.load(f)
+                status = BadgeStatus.PASSED if data.get("verified") else BadgeStatus.FAILED
+                score = data.get("confidence", {}).get("score", 0) if isinstance(data.get("confidence"), dict) else 0
+                click.echo(generate_badge_markdown(status, score))
+            except (FileNotFoundError, json.JSONDecodeError):
+                click.echo(f"![Nightjar]({badge_url})")
+        elif fmt == "html":
+            click.echo(f'<img src="{badge_url}" alt="Nightjar Verified">')
+        ctx.exit(EXIT_PASS)
+    except FileNotFoundError:
+        click.echo("No verification report found. Run 'nightjar verify' first.", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+    except ImportError as e:
+        click.echo(f"Error: badge module not available ({e})", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+    except Exception as e:
+        click.echo(f"Badge error: {e}", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)

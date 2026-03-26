@@ -1,21 +1,36 @@
-# contractd
+# Nightjar
 
-**Contract-Anchored Regenerative Development** — the verification layer every vibe coding tool needs.
+**Your LLM writes code. Nightjar proves it.** Not tested. *Proved.*
 
-Developers write `.card.md` specs (intent + contracts + tiered invariants). AI generates code. `contractd` mathematically proves the code satisfies the invariants. Code is regenerated from scratch on every build — never manually edited.
+Nightjar is the verification layer for AI-generated code. Write `.card.md` specs (intent + contracts + tiered invariants). AI generates code. Nightjar mathematically proves it satisfies the invariants. Code is regenerated from scratch on every build -- never manually edited.
 
-## Why CARD?
+## The 60-Second Demo
 
-96% of developers don't fully trust AI-generated code. Only 48% verify before committing. The result: **verification debt** — the gap between AI code volume and verification coverage.
+```bash
+# See the insecure code
+$ cat demo/payment.py
+def deduct(balance, amount):
+    return balance - amount   # BUG: allows negative balance
 
-CARD closes this gap with a 5-stage verification pipeline that costs ~$0.001 per run and completes in under 60 seconds.
+# Nightjar catches it -- formal proof FAILS
+$ nightjar verify -c demo/payment.card.md
+Stage 4 FAIL: counterexample balance=0.01, amount=50 -> -49.99
 
-## Prerequisites
+# Auto-generate safe spec from plain English
+$ nightjar auto "payment processor with balance >= 0 invariant"
+Created spec: .card/payment.card.md (8 invariants, 6 approved)
 
-- Python 3.11+
-- Dafny 4.x (for formal verification): [Install Dafny](https://github.com/dafny-lang/dafny/releases)
-  - Or set `DAFNY_PATH` environment variable to your Dafny binary
-  - Stage 4 (formal) is skipped gracefully if Dafny is not installed
+# Verify the fixed code -- PROVED
+$ nightjar verify -c .card/payment.card.md
+VERIFIED -- all stages passed (confidence: 85/100)
+```
+
+## Why Nightjar?
+
+- **96%** of developers don't fully trust AI-generated code (Sonar 2025)
+- **53%** of AI-generated code contains OWASP Top 10 vulnerabilities (Veracode 2025)
+- **86%** XSS failure rate in AI-generated code (Georgetown CSET)
+- **0** tools formally prove AI code correctness -- until now
 
 ## Quick Start
 
@@ -24,60 +39,42 @@ CARD closes this gap with a 5-stage verification pipeline that costs ~$0.001 per
 pip install -e ".[dev]"
 
 # Create a module spec
-contractd init payment
+nightjar init payment
 
 # Edit .card/payment.card.md with your intent, contracts, and invariants
 
 # Generate + verify + compile
-contractd build --contract .card/payment.card.md --target py
+nightjar build --contract .card/payment.card.md --target py
 
 # Or just verify
-contractd verify --contract .card/payment.card.md
+nightjar verify --contract .card/payment.card.md
 ```
 
-## The .card.md Format
+### Prerequisites
 
-A `.card.md` file is YAML frontmatter (machine-readable) + Markdown body (human-readable):
+- Python 3.11+
+- Dafny 4.x (for formal verification): [Install Dafny](https://github.com/dafny-lang/dafny/releases)
+  - Or set `DAFNY_PATH` environment variable
+  - Stage 4 gracefully degrades to CrossHair/Hypothesis if Dafny is not installed
 
-```yaml
----
-card-version: "1.0"
-id: user-auth
-title: User Authentication
-status: draft
-module:
-  owns: [login(), logout(), validate_token()]
-contract:
-  inputs:
-    - name: email
-      type: string
-    - name: password
-      type: string
-  outputs:
-    - name: session_token
-      type: string
-invariants:
-  - id: INV-001
-    tier: property
-    statement: "A valid token corresponds to exactly one active user session"
----
+## CLI Commands
 
-## Intent
-Let users log in with email/password and get a session token.
-
-## Acceptance Criteria
-### Story 1 — Login (P1)
-1. **Given** valid credentials, **When** login(), **Then** JWT returned
-2. **Given** invalid password, **When** login(), **Then** AuthError raised
 ```
-
-### Tiered Invariants
-
-| Tier | Who Writes It | What It Generates | Tool |
-|------|--------------|-------------------|------|
-| `example` | Any developer | Unit tests from Given/When/Then | pytest |
-| `property` | Senior dev | Property-based tests auto-generated | Hypothesis |
-| `formal` | Security/finance | Dafny mathematical proof | Dafny CLI |
+nightjar init [module]       Scaffold a .card.md spec
+nightjar auto "intent"       Generate spec from natural language (zero-friction)
+nightjar generate            Generate code from spec via LLM
+nightjar verify              Run 5-stage verification pipeline
+nightjar verify --fast       Stages 0-3 only (skip Dafny)
+nightjar build               Generate + verify + compile
+nightjar ship                Build + sign artifact
+nightjar retry               Force LLM repair loop (BFS proof search)
+nightjar lock                Freeze deps into deps.lock
+nightjar explain             Show last failure in human-readable form (LLM-enhanced)
+nightjar watch               Start persistent file-watching daemon
+nightjar badge               Generate "Nightjar Verified" shields.io badge
+nightjar optimize            Run DSPy SIMBA prompt optimization
+nightjar immune              Run immune system cycle on error traces
+```
 
 ## Verification Pipeline
 
@@ -85,126 +82,159 @@ Five stages, ordered cheapest-first with short-circuit on failure:
 
 ```
 Stage 0: Pre-flight     [~0.5s]  AST parse + YAML schema validation
-Stage 1: Dependency      [~1-2s]  Sealed manifest check [REF-C08]
+Stage 1: Dependency      [~1-2s]  Sealed manifest check
 Stage 2: Schema          [~0.5s]  Pydantic v2 contract validation
 Stage 3: PBT             [~3-8s]  Hypothesis property-based testing
 Stage 4: Formal          [~5-20s] Dafny mathematical verification
 ```
 
-Stages 2 and 3 run in parallel. On failure, the Clover retry loop repairs code via structured LLM feedback.
+### Confidence Score (0-100)
 
-## Code Generation
+Every verification produces a confidence score:
 
-Three sequential LLM calls via litellm (model-agnostic):
+| Stage | Points | What it proves |
+|-------|--------|---------------|
+| pyright type check | +15 | Static type correctness |
+| deal static analysis | +10 | Pre/postcondition satisfiability |
+| CrossHair symbolic | +35 | Symbolic proof for explored paths |
+| Hypothesis PBT | +20 | Statistical coverage (10K+ examples) |
+| Dafny formal proof | +20 | Full mathematical correctness |
 
+### Graceful Degradation
+
+If Dafny times out, Nightjar doesn't stop:
 ```
-.card.md → Analyst → Formalizer → Coder → module.dfy → verified artifact
+Dafny timeout -> CrossHair symbolic verification
+CrossHair timeout -> Hypothesis PBT extended (10K examples)
+All fail -> Report partial confidence score with gap notation
 ```
 
-Swap models with an environment variable:
+### Behavioral Safety Gate
+
+Nightjar prevents regressions: new code is compared against the previous verified state. If invariants are lost, regeneration is blocked.
+
+## Zero-Friction Mode
+
 ```bash
-CARD_MODEL=claude-sonnet-4-6      # Default
-CARD_MODEL=deepseek/deepseek-chat  # Budget (10x cheaper)
-CARD_MODEL=openai/o3               # Premium
+nightjar auto "Build a payment processor that charges credit cards"
 ```
 
-## CLI Commands
+The `auto` command generates verification specs from plain English:
+1. Parse natural language intent
+2. LLM generates candidate invariants
+3. Intent router classifies: numerical / behavioral / state / formal
+4. Domain generators: icontract `@require/@ensure`, Hypothesis `@given`, Dafny `requires/ensures`
+5. Ranking + human approval (Y/n/modify)
+6. Write to `.card.md` and run verification
 
+## Watch Mode
+
+```bash
+nightjar watch
 ```
-contractd init [module]     Scaffold a .card.md spec
-contractd generate          Generate code from spec via LLM
-contractd verify            Run 5-stage verification pipeline
-contractd verify --fast     Stages 0-3 only (skip Dafny)
-contractd build             Generate + verify + compile
-contractd ship              Build + sign artifact
-contractd retry             Force LLM repair loop
-contractd lock              Freeze deps into deps.lock
-contractd explain           Show last failure in human-readable form
-contractd optimize          Run DSPy SIMBA prompt optimization
-contractd immune            Run immune system cycle on error traces
+
+4-tier streaming verification with sub-second first feedback:
+
+| Tier | Scope | Latency |
+|------|-------|---------|
+| 0: Syntax | AST parse, YAML frontmatter | <100ms |
+| 1: Structural | Deps, schema, CrossHair quick | <2s |
+| 2: Property | Hypothesis PBT, CrossHair watch | <10s |
+| 3: Formal | Dafny with caching (on demand) | 1-30s |
+
+Repeat verifications with no changes complete in <50ms (Salsa-style caching).
+
+## Security Mode
+
+Nightjar catches OWASP vulnerabilities that pass all tests:
+
+```yaml
+# .github/workflows/nightjar.yml
+- uses: nightjar/verify@v1
+  with:
+    mode: shadow     # NEVER fail the build -- just report
+    report: full
+    security-pack: owasp
+```
+
+- **Shadow CI**: Runs as a GitHub Action, reports findings as PR comments, never blocks your pipeline
+- **OWASP Pack**: SQL injection + XSS invariant templates with formal proof of absence
+- **Violation Explainer**: LLM-enhanced Dafny error translation to human-readable text
+- **EU CRA Compliance**: Generates structured compliance certificates (SBOM + verification timestamp)
+
+## Immune System
+
+Nightjar learns from production failures and automatically strengthens specifications.
+
+1. **Collect** -- sys.monitoring (PEP 669) captures runtime traces at <5% overhead
+2. **Mine** -- Clean-room Daikon algorithm (19 Ernst templates) detects dynamic invariants
+3. **Filter** -- Houdini fixed-point filter finds maximal inductive subset via Z3
+4. **Enrich** -- LLM generates candidate invariants from mined patterns
+5. **Verify** -- CrossHair + Hypothesis verify candidates
+6. **Append** -- Verified invariants auto-append to `.card.md` specs
+
+### Mining Stack (3-Tier)
+
+| Tier | Method | Tool | Overhead |
+|------|--------|------|----------|
+| 1 | Semantic | LLM-based property generation | Zero |
+| 2 | Runtime | Clean-room Daikon + Houdini | Low (sys.monitoring) |
+| 3 | API-level | MINES web API mining | None (OTel logs) |
+
+## Model Agnostic
+
+Swap models with an environment variable -- all LLM calls go through litellm:
+
+```bash
+NIGHTJAR_MODEL=claude-sonnet-4-6       # Default
+NIGHTJAR_MODEL=deepseek/deepseek-chat  # Budget (10x cheaper)
+NIGHTJAR_MODEL=openai/o3               # Premium
 ```
 
 ## MCP Server
 
-CARD ships as an MCP server for universal IDE integration:
+Nightjar ships as an MCP server for universal IDE integration:
 
-- `verify_contract` — Run verification on generated code
-- `get_violations` — Get detailed violation report
-- `suggest_fix` — LLM-suggested fix for violations
+- `verify_contract` -- Run verification on generated code
+- `get_violations` -- Get detailed violation report
+- `suggest_fix` -- LLM-suggested fix for violations
 
 Compatible with Cursor, Windsurf, Claude Code, VS Code, and any MCP-supporting tool.
 
-## Immune System
+## The .card.md Format
 
-CARD's immune system learns from production failures and automatically strengthens specifications. Every failure makes the next build safer.
+```yaml
+---
+card-version: "1.0"
+id: payment
+title: Payment Processor
+contract:
+  inputs:
+    - name: balance
+      type: float
+      constraints: ">= 0"
+  outputs:
+    - name: new_balance
+      type: float
+      constraints: ">= 0"
+invariants:
+  - tier: formal
+    rule: "deduct(balance, amount) requires amount <= balance ensures result >= 0"
+  - tier: property
+    rule: "for any balance >= 0 and amount >= 0: deposit(balance, amount) > balance"
+---
 
-### How It Works
-
-1. **Collect** -- MonkeyType [REF-T12] captures runtime type traces, OpenTelemetry [REF-T15] captures API spans, and Sentry-style error capture records failures with semantic fingerprinting
-2. **Mine** -- Daikon algorithm (MIT reimplementation, see [REF-T13] warning) mines dynamic invariants from collected traces
-3. **Enrich** -- LLM generates candidate invariants from mined patterns combined with error context, routed through litellm [REF-T16]
-4. **Verify** -- CrossHair [REF-T09] (symbolic execution) and Hypothesis [REF-T03] (property-based testing) verify candidates with 1000+ inputs
-5. **Append** -- Verified invariants auto-append to `.card.md` specs, strengthening the contract for future builds
-6. **Enforce** -- icontract [REF-T10] decorators inject runtime guards into generated code
-
-### Architecture
-
-```
-Production traces --> Collector --> Miner --> Enricher --> Verifier --> .card.md
-       |                                                                  |
-       +--- errors, types, spans                    stronger specs -------+
-```
-
-The immune cycle runs via `contractd immune` and can be triggered automatically on error ingestion or scheduled as a periodic job.
-
-## Self-Evolution
-
-CARD improves its own verification pipeline over time. Instead of static prompts, the system tracks what works and adapts.
-
-- **Verification Tracking** -- SQLite database tracks every verification run: model used, pass rate, cost, latency, and failure modes
-- **Experience Replay** -- Successful (spec, prompt, code) tuples are stored and become few-shot examples for future generation runs
-- **DSPy SIMBA** [REF-T26] -- Optimizes the Analyst/Formalizer/Coder prompts for higher pass rates using automated prompt tuning
-- **AutoResearch** -- Hill-climbing approach: try one prompt variation per run, keep it if the pass rate improves over the baseline
-- **Versioned Prompts** -- All LLM prompts are externalized files with version metadata and performance tracking, not hardcoded strings
-
-Run prompt optimization manually:
-```bash
-contractd optimize
+## Intent
+A payment processor that charges credit cards safely.
 ```
 
-## Network Effect
+### Tiered Invariants
 
-When multiple teams use CARD, failures discovered anywhere protect everyone. A single team's production bug becomes a verified invariant pattern available to all participants.
-
-- **Structural Abstraction** -- Failures are transformed into PII-free type-level signatures before sharing, preserving privacy while retaining structural insight
-- **Differential Privacy** -- OpenDP [REF-T20] applies Laplace noise to frequency metadata, ensuring no individual team's data can be reconstructed
-- **Pattern Library** -- An append-only library of verified invariant patterns, each tagged with the domain and tier where it was proven
-- **Herd Immunity** -- When a pattern holds across 50+ tenants at >95% confidence, it is promoted to a universal invariant and included in new project scaffolds automatically
-
-The network effect creates a positive feedback loop: more teams produce more traces, which mine more invariants, which catch more bugs before they reach production.
-
-## Demo
-
-```bash
-bash demo/run_demo.sh
-```
-
-See [demo/README.md](demo/README.md) for details.
-
-## Architecture
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full system design with reference citations.
-
-## References
-
-Every pattern in CARD traces to a specific academic citation. See [docs/REFERENCES.md](docs/REFERENCES.md) for the complete library of 35 papers, 25 tools, and 11 concepts.
-
-Key references:
-- [REF-P03] Clover — Closed-loop verified code generation (Stanford)
-- [REF-P06] DafnyPro — Structured error format for LLM repair
-- [REF-P07] ReDeFo — Analyst/Formalizer/Coder multi-agent pipeline
-- [REF-P12] Dafny as IL — NL to verified target language (Amazon AWS)
-- [REF-P02] Vericoding — 82-96% Dafny success rate benchmark
+| Tier | Who Writes It | What It Generates | Tool |
+|------|--------------|-------------------|------|
+| `example` | Any developer | Unit tests from Given/When/Then | pytest |
+| `property` | Senior dev | Property-based tests | Hypothesis |
+| `formal` | Security/finance | Mathematical proof | Dafny/CrossHair |
 
 ## Tech Stack
 
@@ -212,18 +242,31 @@ Key references:
 |-----------|------|-----------|
 | Language | Python 3.11+ | |
 | CLI | Click | [REF-T17] |
-| CLI formatting | Rich | -- |
 | LLM | litellm | [REF-T16] |
-| Verification | Dafny 4.x | [REF-T01] |
-| PBT | Hypothesis | [REF-T03] |
-| Schema | Pydantic v2 | [REF-T08] |
+| Formal verification | Dafny 4.x | [REF-T01] |
+| Property-based testing | Hypothesis | [REF-T03] |
+| Symbolic execution | CrossHair | [REF-T09] |
 | Runtime contracts | icontract | [REF-T10] |
-| Symbolic verification | CrossHair | [REF-T09] |
-| Type tracing | MonkeyType | [REF-T12] |
-| Telemetry | OpenTelemetry | [REF-T15] |
-| Prompt optimization | DSPy SIMBA | [REF-T26] |
-| Differential privacy | OpenDP | [REF-T20] |
+| Schema validation | Pydantic v2 | [REF-T08] |
+| Invariant mining | sys.monitoring (PEP 669) | Ernst 2007 |
+| Invariant filtering | Z3 (Houdini algorithm) | FME 2001 |
+| File watching | watchdog | Apache-2.0 |
 | MCP | MCP SDK | [REF-T18] |
+
+## Architecture
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full system design.
+
+## References
+
+Every pattern in Nightjar traces to a specific academic citation. See [docs/REFERENCES.md](docs/REFERENCES.md) for the complete library.
+
+Key references:
+- [DafnyPro](https://arxiv.org/abs/2601.05385) -- Diff-checker + invariant pruner + hint-augmentation
+- [VerMCTS](https://arxiv.org/abs/2402.08147) -- BFS proof search with verifier-in-the-loop
+- [Clover](https://arxiv.org/abs/2310.02598) -- Closed-loop verified code generation
+- [Ernst 2007](https://homes.cs.washington.edu/~mernst/pubs/invariants-tse2001.pdf) -- Dynamic invariant detection
+- [Houdini](https://dl.acm.org/doi/10.1145/587051.587054) -- Greatest-fixpoint invariant filter
 
 ## License
 
