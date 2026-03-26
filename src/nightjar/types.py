@@ -10,7 +10,7 @@ References:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 
 class InvariantTier(str, Enum):
@@ -98,3 +98,4 @@ class VerifyResult:
     stages: list[StageResult] = field(default_factory=list)
     total_duration_ms: int = 0
     retry_count: int = 0
+    confidence: Optional[Any] = None  # ConfidenceScore; Any avoids circular import
