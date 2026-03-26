@@ -65,13 +65,13 @@ runs:
     - name: Run Nightjar Shadow CI
       shell: bash
       env:
+        # Security: inputs are passed via env vars, NOT interpolated directly
+        # into the shell run: block to prevent GitHub Actions script injection.
+        # See: https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions
         NIGHTJAR_MODEL: ${{ inputs.nightjar-model }}
         NIGHTJAR_SECURITY_PACK: ${{ inputs.security-pack }}
         NIGHTJAR_CI_MODE: ${{ inputs.mode }}
         NIGHTJAR_CI_REPORT: ${{ inputs.report }}
+        NIGHTJAR_CI_VERIFY_JSON: ${{ inputs.verify-json }}
       run: |
-        python -m nightjar.shadow_ci_runner \
-          --mode "${{ inputs.mode }}" \
-          --report "${{ inputs.report }}" \
-          --verify-json "${{ inputs.verify-json }}" \
-          --security-pack "${{ inputs.security-pack }}"
+        python -m nightjar.shadow_ci_runner
