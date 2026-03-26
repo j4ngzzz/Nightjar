@@ -10,6 +10,7 @@ dependencies = [
     "hypothesis>=6.0",
     "pyyaml>=6.0",
     "rich>=13.0",
+    "textual>=0.47.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +30,8 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "integration: tests requiring external services (LLM API, Dafny binary)",
 ]
