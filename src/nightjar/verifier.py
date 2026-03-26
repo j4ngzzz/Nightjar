@@ -198,9 +198,9 @@ def _run_crosshair_fallback(spec: CardSpec, code: str) -> StageResult:
     directly on Python contracts. No translation step required.
     Average 13s per function. Score: 9/10 (covers ~80% of practical invariants).
 
-    Integration: CrossHair already in Nightjar stack [REF-T09].
-    icontract-hypothesis bridge (Scout 3 S5.6) auto-generates strategies
-    from @require/@ensure decorators: github.com/mristin/icontract-hypothesis
+    Runs: python -m crosshair check <tmp_file.py>
+    Exit 0 → PASS; exit non-0 with error lines → FAIL;
+    subprocess.TimeoutExpired → TIMEOUT; crosshair not installed → SKIP.
 
     Args:
         spec: Parsed .card.md specification.
@@ -209,24 +209,65 @@ def _run_crosshair_fallback(spec: CardSpec, code: str) -> StageResult:
     Returns:
         StageResult with stage=4, name='crosshair'.
     """
+    import subprocess
+    import sys
+    import tempfile
+    import os
     import time as _time
+
     start = _time.monotonic()
+
+    # Write code to temp file for CrossHair analysis
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+        f.write(code)
+        tmp_path = f.name
+
     try:
-        # Attempt CrossHair symbolic execution via crosshair.core
-        import crosshair.core  # type: ignore[import]
-        # For now: basic CrossHair check via subprocess (crosshair check <file>)
-        # Full integration requires writing code to temp file and calling
-        # crosshair.core.analyze_module() with the spec's contract predicates
-        # TODO: Full CrossHair integration when crosshair Python API stabilizes
+        result = subprocess.run(
+            [sys.executable, "-m", "crosshair", "check", tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=120,  # 120s CrossHair budget per Scout 3 S5.5
+        )
+        duration = int((_time.monotonic() - start) * 1000)
+
+        if result.returncode == 0:
+            return StageResult(
+                stage=4,
+                name="crosshair",
+                status=VerifyStatus.PASS,
+                duration_ms=duration,
+            )
+
+        # Parse violation lines from CrossHair output
+        output = result.stdout + result.stderr
+        violations = [
+            {"type": "crosshair_violation", "message": line.strip()}
+            for line in output.splitlines()
+            if line.strip() and ("error:" in line.lower() or "counterexample" in line.lower())
+        ]
+        if not violations and output.strip():
+            violations = [{"type": "crosshair_error", "message": output.strip()[:500]}]
+
+        return StageResult(
+            stage=4,
+            name="crosshair",
+            status=VerifyStatus.FAIL,
+            duration_ms=duration,
+            errors=violations or [{"type": "crosshair_error", "message": "CrossHair check failed"}],
+        )
+
+    except subprocess.TimeoutExpired:
         duration = int((_time.monotonic() - start) * 1000)
         return StageResult(
             stage=4,
             name="crosshair",
-            status=VerifyStatus.SKIP,  # SKIP = CrossHair not yet fully wired
+            status=VerifyStatus.TIMEOUT,
             duration_ms=duration,
-            errors=[{"message": "CrossHair fallback: API integration pending"}],
+            errors=[{"type": "timeout", "message": "CrossHair exceeded 120s budget"}],
         )
-    except ImportError:
+    except FileNotFoundError:
+        # python -m crosshair not found — module not installed
         duration = int((_time.monotonic() - start) * 1000)
         return StageResult(
             stage=4,
@@ -244,6 +285,11 @@ def _run_crosshair_fallback(spec: CardSpec, code: str) -> StageResult:
             duration_ms=duration,
             errors=[{"type": "crosshair_error", "error": str(e)}],
         )
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 def _run_hypothesis_extended(spec: CardSpec, code: str) -> StageResult:
@@ -252,7 +298,8 @@ def _run_hypothesis_extended(spec: CardSpec, code: str) -> StageResult:
     Per Scout 3 S5.5 Rank 2: 'When CrossHair hits path explosion, Hypothesis
     continues.' Combined score: 10/10 feasibility for practical invariants.
 
-    Extended PBT = 10K+ examples (vs 200 in standard Stage 3).
+    Extended PBT = 10K+ examples via run_pbt_extended() which uses
+    NIGHTJAR_PBT_EXTENDED_SETTINGS (vs dev:10/ci:200 in standard Stage 3).
     icontract-hypothesis bridge auto-generates strategies from decorators.
 
     Args:
@@ -262,9 +309,9 @@ def _run_hypothesis_extended(spec: CardSpec, code: str) -> StageResult:
     Returns:
         StageResult with stage=4, name='hypothesis_extended'.
     """
-    from nightjar.stages.pbt import run_pbt
-    # Run PBT as extended fallback (same as Stage 3 but conceptually at Stage 4)
-    result = run_pbt(spec, code)
+    from nightjar.stages.pbt import run_pbt_extended
+    # Run extended PBT (10K+ examples via NIGHTJAR_PBT_EXTENDED_SETTINGS)
+    result = run_pbt_extended(spec, code)
     # Rename to 'hypothesis_extended' for clarity in the fallback chain
     return StageResult(
         stage=result.stage,

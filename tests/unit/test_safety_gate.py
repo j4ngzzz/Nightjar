@@ -297,3 +297,147 @@ class TestSafetyGateWithFile:
         assert gate.passed is False, (
             "Regression from previous PASS → new FAIL should be blocked"
         )
+
+
+class TestConfidenceDropWarning:
+    """Tests for W1.6 confidence score drop warning (non-blocking).
+
+    Per Scout 7 S12.S1: warn when new confidence < previous, but don't block.
+    """
+
+    def test_confidence_drop_warning_when_score_decreases(self):
+        """Warning emitted when new confidence score < previous.
+
+        This is a non-blocking warning — gate.passed should still be True
+        if no stage regressions occurred.
+        """
+        from nightjar.safety_gate import check_regression
+        from nightjar.confidence import ConfidenceScore
+
+        # Previous had high confidence (all stages pass)
+        previous = VerifyResult(
+            verified=True,
+            stages=[
+                _pass_stage(0, "preflight"),
+                _pass_stage(3, "pbt"),
+                _pass_stage(4, "formal"),
+            ],
+        )
+        previous.confidence = ConfidenceScore(total=55, breakdown={"preflight": 15, "pbt": 20, "formal": 20})
+
+        # New result has lower confidence (formal now skipped)
+        new_result = VerifyResult(
+            verified=True,
+            stages=[
+                _pass_stage(0, "preflight"),
+                _pass_stage(3, "pbt"),
+                _skip_stage(4, "formal"),
+            ],
+        )
+        new_result.confidence = ConfidenceScore(total=35, breakdown={"preflight": 15, "pbt": 20})
+
+        gate = check_regression(new_result, previous)
+
+        # No stage regressions (formal SKIPPED, not FAILED)
+        assert gate.passed is True, "SKIP is not a regression"
+        assert gate.confidence_drop == 20, (
+            "Should report 20-point confidence drop (55 → 35)"
+        )
+        assert gate.confidence_warning, "Should have non-empty confidence warning"
+        assert "55" in gate.confidence_warning
+        assert "35" in gate.confidence_warning
+
+    def test_no_confidence_warning_when_score_same_or_higher(self):
+        """No confidence warning when score is maintained or improved."""
+        from nightjar.safety_gate import check_regression
+        from nightjar.confidence import ConfidenceScore
+
+        previous = VerifyResult(verified=True, stages=[_pass_stage(4, "formal")])
+        previous.confidence = ConfidenceScore(total=20)
+
+        new_result = VerifyResult(verified=True, stages=[_pass_stage(4, "formal")])
+        new_result.confidence = ConfidenceScore(total=20)
+
+        gate = check_regression(new_result, previous)
+        assert gate.confidence_drop == 0
+        assert gate.confidence_warning == ""
+
+    def test_no_confidence_warning_when_previous_has_no_score(self):
+        """No warning when previous result has no confidence score (first-time)."""
+        from nightjar.safety_gate import check_regression
+
+        previous = VerifyResult(verified=True, stages=[_pass_stage(4, "formal")])
+        # previous.confidence is None (not computed)
+
+        new_result = VerifyResult(verified=False, stages=[_skip_stage(4, "formal")])
+
+        gate = check_regression(new_result, previous)
+        assert gate.confidence_drop == 0
+        assert gate.confidence_warning == ""
+
+    def test_safety_gate_result_has_confidence_fields(self):
+        """SafetyGateResult dataclass has confidence_drop and confidence_warning fields."""
+        from nightjar.safety_gate import SafetyGateResult
+
+        gate = SafetyGateResult(passed=True, confidence_drop=5, confidence_warning="dropped")
+        assert gate.confidence_drop == 5
+        assert gate.confidence_warning == "dropped"
+
+
+class TestPBTExtended:
+    """Tests for run_pbt_extended — verifies 10K example mode is wired."""
+
+    def test_run_pbt_extended_importable(self):
+        """run_pbt_extended is importable from stages.pbt."""
+        from nightjar.stages.pbt import run_pbt_extended
+        assert callable(run_pbt_extended)
+
+    def test_extended_settings_has_10k_examples(self):
+        """NIGHTJAR_PBT_EXTENDED_SETTINGS uses 10K examples."""
+        from nightjar.stages.pbt import NIGHTJAR_PBT_EXTENDED_SETTINGS
+        assert NIGHTJAR_PBT_EXTENDED_SETTINGS.max_examples == 10000
+
+    def test_run_pbt_extended_returns_stage_result(self):
+        """run_pbt_extended returns a StageResult."""
+        from nightjar.stages.pbt import run_pbt_extended
+        from nightjar.types import (
+            CardSpec, Contract, ModuleBoundary,
+            Invariant, InvariantTier, StageResult,
+        )
+
+        spec = CardSpec(
+            card_version="1.0", id="test", title="Test", status="draft",
+            module=ModuleBoundary(owns=["f()"]),
+            contract=Contract(),
+            invariants=[
+                Invariant(id="INV-1", tier=InvariantTier.PROPERTY,
+                          statement="returns a positive integer"),
+            ],
+        )
+        code = "def f(x): return x + 1"
+        result = run_pbt_extended(spec, code)
+        assert isinstance(result, StageResult)
+
+    def test_hypothesis_extended_uses_run_pbt_extended(self):
+        """_run_hypothesis_extended calls run_pbt_extended (not run_pbt)."""
+        from unittest.mock import patch
+        from nightjar.verifier import _run_hypothesis_extended
+        from nightjar.types import (
+            CardSpec, Contract, ModuleBoundary, StageResult, VerifyStatus,
+        )
+
+        spec = CardSpec(
+            card_version="1.0", id="test", title="Test", status="draft",
+            module=ModuleBoundary(owns=["f()"]),
+            contract=Contract(),
+            invariants=[],
+        )
+
+        with patch("nightjar.stages.pbt.run_pbt_extended") as mock_ext:
+            mock_ext.return_value = StageResult(
+                stage=3, name="pbt", status=VerifyStatus.PASS,
+            )
+            result = _run_hypothesis_extended(spec, "def f(): pass")
+
+        mock_ext.assert_called_once()
+        assert result.name == "hypothesis_extended"

@@ -71,6 +71,15 @@ _load_pbt_profile()
 # database=None: generated code changes per run; stale counterexamples mislead
 NIGHTJAR_PBT_SETTINGS = settings(deadline=None, database=None)
 
+# Extended settings for graceful degradation fallback (W1.5).
+# Per Scout 3 S5.5: 10K+ examples for statistical confidence when Dafny/CrossHair fail.
+NIGHTJAR_PBT_EXTENDED_SETTINGS = settings(
+    max_examples=10000,
+    deadline=None,
+    database=None,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+
 
 def _filter_pbt_invariants(invariants: list[Invariant]) -> list[Invariant]:
     """Filter to only property and formal tier invariants [REF-C01].
@@ -100,6 +109,7 @@ def _run_single_invariant(
     invariant: Invariant,
     code: str,
     env: dict[str, Any],
+    pbt_settings: settings = NIGHTJAR_PBT_SETTINGS,
 ) -> dict[str, Any] | None:
     """Run PBT for a single invariant against the generated code.
 
@@ -113,13 +123,17 @@ def _run_single_invariant(
     1. Generates inputs matching the contract constraints
     2. Calls the code under test
     3. Asserts the invariant property holds
+
+    Args:
+        pbt_settings: Hypothesis settings to apply (default: NIGHTJAR_PBT_SETTINGS).
+                      Pass NIGHTJAR_PBT_EXTENDED_SETTINGS for 10K+ examples.
     """
     statement = invariant.statement
     error_result: dict[str, Any] | None = None
 
     # Build a Hypothesis test function dynamically from the invariant
-    # The test function is wrapped with @given and CARD settings
-    @NIGHTJAR_PBT_SETTINGS
+    # The test function is wrapped with @given and the supplied settings
+    @pbt_settings
     @given(x=st.integers(min_value=1, max_value=10_000))
     def pbt_test(x: int) -> None:
         nonlocal error_result
@@ -216,25 +230,18 @@ def _assert_invariant(statement: str, input_val: Any, result: Any) -> None:
         )
 
 
-def run_pbt(spec: CardSpec, code: str) -> StageResult:
-    """Run Stage 3 — Property-Based Testing on generated code.
+def _run_pbt_core(
+    spec: CardSpec,
+    code: str,
+    pbt_settings: settings = NIGHTJAR_PBT_SETTINGS,
+) -> StageResult:
+    """Core PBT execution shared by run_pbt and run_pbt_extended.
 
-    Per [REF-T03] and [REF-P10]:
-    1. Filter invariants to property/formal tiers [REF-C01]
-    2. For each invariant, generate a Hypothesis @given test
-    3. Execute with max_examples=200, derandomize=True [REF-T03]
-    4. Report counterexamples on failure
-
-    Args:
-        spec: Parsed .card.md specification with invariants.
-        code: Generated source code string to verify.
-
-    Returns:
-        StageResult with stage=3, status=PASS/FAIL/SKIP.
+    Accepts a custom settings object so extended mode can pass
+    NIGHTJAR_PBT_EXTENDED_SETTINGS with 10K examples.
     """
     start = time.monotonic()
 
-    # Step 1: Filter to PBT-eligible invariants [REF-C01]
     pbt_invariants = _filter_pbt_invariants(spec.invariants)
 
     if not pbt_invariants:
@@ -245,7 +252,6 @@ def run_pbt(spec: CardSpec, code: str) -> StageResult:
             duration_ms=0,
         )
 
-    # Step 2: Build execution environment from generated code
     try:
         env = _build_test_environment(code)
     except SyntaxError as e:
@@ -261,16 +267,13 @@ def run_pbt(spec: CardSpec, code: str) -> StageResult:
             }],
         )
 
-    # Step 3: Run PBT for each invariant
     errors: list[dict] = []
     for inv in pbt_invariants:
-        error = _run_single_invariant(inv, code, env)
+        error = _run_single_invariant(inv, code, env, pbt_settings=pbt_settings)
         if error is not None:
             errors.append(error)
 
     duration = int((time.monotonic() - start) * 1000)
-
-    # Step 4: Determine overall status
     status = VerifyStatus.FAIL if errors else VerifyStatus.PASS
 
     return StageResult(
@@ -281,3 +284,42 @@ def run_pbt(spec: CardSpec, code: str) -> StageResult:
         errors=errors,
         counterexample=errors[0] if errors else None,
     )
+
+
+def run_pbt_extended(spec: CardSpec, code: str) -> StageResult:
+    """Run PBT with 10K+ examples — graceful degradation fallback (W1.5).
+
+    Per Scout 3 S5.5 Rank 2: extended PBT = 10K+ examples vs 200 in standard
+    Stage 3. Used as final fallback when both Dafny and CrossHair fail/timeout.
+    icontract-hypothesis bridge auto-generates strategies from @require/@ensure.
+
+    Uses NIGHTJAR_PBT_EXTENDED_SETTINGS (10K examples, suppress too_slow)
+    instead of NIGHTJAR_PBT_SETTINGS (dev: 10, ci: 200).
+
+    Args:
+        spec: Parsed .card.md specification with invariants.
+        code: Generated source code string to verify.
+
+    Returns:
+        StageResult with stage=3, status=PASS/FAIL/SKIP.
+    """
+    return _run_pbt_core(spec, code, pbt_settings=NIGHTJAR_PBT_EXTENDED_SETTINGS)
+
+
+def run_pbt(spec: CardSpec, code: str) -> StageResult:
+    """Run Stage 3 — Property-Based Testing on generated code.
+
+    Per [REF-T03] and [REF-P10]:
+    1. Filter invariants to property/formal tiers [REF-C01]
+    2. For each invariant, generate a Hypothesis @given test
+    3. Execute with settings from active profile (dev: 10, ci: 200 examples)
+    4. Report counterexamples on failure
+
+    Args:
+        spec: Parsed .card.md specification with invariants.
+        code: Generated source code string to verify.
+
+    Returns:
+        StageResult with stage=3, status=PASS/FAIL/SKIP.
+    """
+    return _run_pbt_core(spec, code, pbt_settings=NIGHTJAR_PBT_SETTINGS)
