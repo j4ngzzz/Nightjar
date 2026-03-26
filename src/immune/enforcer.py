@@ -16,6 +16,7 @@ References:
 
 import re
 import textwrap
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -189,3 +190,209 @@ def generate_enforced_source(
     )
 
     return "\n".join(new_lines) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# U2.4 — Temporal Fact Supersession [Supermemory pattern]
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class TemporalInvariant:
+    """Invariant with temporal metadata for lifecycle management.
+
+    Implements the dynamic layer of the Supermemory temporal fact model
+    (https://github.com/supermemoryai/supermemory): runtime-observed invariants
+    carry timestamps and confidence that decays exponentially over time without
+    new observations. When system behavior legitimately evolves, old invariants
+    are superseded rather than deleted, preserving audit history.
+
+    Attributes:
+        expression: Python boolean expression (e.g., 'x >= 0').
+        explanation: Human-readable description.
+        timestamp: Unix timestamp of the most recent confirming observation.
+        observation_count: How many times this invariant has been confirmed.
+        confidence: Base confidence score [0.0, 1.0] at time of last observation.
+        superseded_by: Expression of the newer invariant that replaced this one,
+            or None if still active.
+        half_life: Seconds until confidence halves without new observations.
+            Default: 86400 (one day).
+
+    References:
+        - Supermemory temporal fact model — static+dynamic layers, conflict resolution (MIT)
+        - [REF-T10] icontract — runtime contract enforcement
+    """
+
+    expression: str
+    explanation: str = ""
+    timestamp: float = field(default_factory=time.time)
+    observation_count: int = 1
+    confidence: float = 1.0
+    superseded_by: Optional[str] = None
+    half_life: float = 86400.0  # seconds — default one day
+
+
+class InvariantStore:
+    """Manages temporal invariants with Supermemory-style supersession.
+
+    Implements the Supermemory temporal fact model with two conceptual layers:
+
+    - **Static layer**: formally verified invariants (confidence = 1.0, no decay
+      expected — they are verified by the formal pipeline).
+    - **Dynamic layer**: runtime-observed invariants that gain confidence via
+      repeated observation and lose it via exponential decay when observations stop.
+
+    New runtime observations can *supersede* old invariants when system behavior
+    legitimately evolves, preventing stale contract enforcement.
+
+    Decay formula (Supermemory exponential model):
+        confidence(t) = base_confidence * 0.5 ^ (elapsed_seconds / half_life)
+
+    After one half_life without a new observation, confidence halves.
+
+    References:
+        - Supermemory temporal fact model — https://github.com/supermemoryai/supermemory
+        - [REF-T10] icontract
+    """
+
+    def __init__(self) -> None:
+        # Keyed by expression string. Multiple entries may exist for the same
+        # logical constraint when supersession has occurred (the old entry is
+        # retained for audit, marked with superseded_by != None).
+        self._invariants: dict[str, TemporalInvariant] = {}
+
+    def add_observation(
+        self,
+        expression: str,
+        explanation: str = "",
+        timestamp: Optional[float] = None,
+        confidence: float = 1.0,
+    ) -> TemporalInvariant:
+        """Add or update an invariant based on a new observation.
+
+        If the expression already exists, increment its observation_count and
+        update the timestamp to the latest observation time (reinforcing it).
+        Otherwise, create a new TemporalInvariant.
+
+        Args:
+            expression: Python boolean expression.
+            explanation: Human-readable description.
+            timestamp: Unix time of the observation (defaults to now).
+            confidence: Base confidence of this observation [0.0, 1.0].
+
+        Returns:
+            The updated or newly created TemporalInvariant.
+        """
+        if timestamp is None:
+            timestamp = time.time()
+
+        if expression in self._invariants:
+            inv = self._invariants[expression]
+            inv.observation_count += 1
+            inv.timestamp = timestamp
+            if explanation:
+                inv.explanation = explanation
+            return inv
+
+        inv = TemporalInvariant(
+            expression=expression,
+            explanation=explanation,
+            timestamp=timestamp,
+            confidence=confidence,
+        )
+        self._invariants[expression] = inv
+        return inv
+
+    def supersede(
+        self,
+        old_expression: str,
+        new_expression: str,
+        explanation: str = "",
+        timestamp: Optional[float] = None,
+    ) -> TemporalInvariant:
+        """Mark old_expression as superseded by new_expression.
+
+        The old invariant is marked with superseded_by = new_expression so it
+        is excluded from active enforcement but retained for audit.  A new
+        TemporalInvariant is created (or updated) for new_expression.
+
+        This implements the Supermemory conflict-resolution model: when new
+        runtime observations contradict an old invariant, the old fact is
+        superseded rather than deleted, preserving a traceable history of how
+        system behaviour evolved.
+
+        Args:
+            old_expression: Expression of the invariant being replaced.
+            new_expression: Expression of the superseding invariant.
+            explanation: Why supersession occurred (stored on the new invariant).
+            timestamp: Time of supersession (defaults to now).
+
+        Returns:
+            The new (superseding) TemporalInvariant.
+        """
+        if timestamp is None:
+            timestamp = time.time()
+
+        # Mark old invariant as superseded (retain for audit, not enforcement)
+        if old_expression in self._invariants:
+            self._invariants[old_expression].superseded_by = new_expression
+
+        # Create or update the superseding invariant
+        return self.add_observation(
+            new_expression,
+            explanation=explanation,
+            timestamp=timestamp,
+        )
+
+    def get_active_invariants(
+        self,
+        current_time: Optional[float] = None,
+    ) -> list[TemporalInvariant]:
+        """Return all non-superseded invariants.
+
+        Invariants with superseded_by != None are excluded — they represent
+        stale facts that have been replaced by newer observations.
+
+        Args:
+            current_time: Reference time (unused here; provided for API
+                symmetry with get_confidence).
+
+        Returns:
+            List of active TemporalInvariant objects.
+        """
+        return [
+            inv for inv in self._invariants.values()
+            if inv.superseded_by is None
+        ]
+
+    def get_confidence(
+        self,
+        expression: str,
+        current_time: Optional[float] = None,
+    ) -> float:
+        """Return current confidence for an expression with exponential decay.
+
+        Computes:
+            confidence(t) = base_confidence * 0.5 ^ (elapsed_seconds / half_life)
+
+        After one half_life without a new observation, confidence halves.
+        After two half_lives, confidence is 0.25.  And so on.
+
+        Args:
+            expression: The invariant expression to query.
+            current_time: Reference time for computing elapsed seconds
+                (defaults to now).
+
+        Returns:
+            Decayed confidence in [0.0, 1.0], or 0.0 if expression not found.
+        """
+        if expression not in self._invariants:
+            return 0.0
+
+        inv = self._invariants[expression]
+        if current_time is None:
+            current_time = time.time()
+
+        elapsed = current_time - inv.timestamp
+        decayed = inv.confidence * (0.5 ** (elapsed / inv.half_life))
+        return max(0.0, min(1.0, decayed))
