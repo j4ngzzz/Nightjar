@@ -52,10 +52,26 @@ class MethodStep:
 
 
 # Regex to match Dafny method/function/lemma/predicate declarations.
-# Captures: (keyword, name, rest_of_signature_and_body_through_closing_brace)
-# Pattern handles single-line and multi-line methods with nested braces.
+# Captures the name that follows the keyword sequence.
+#
+# Ordering matters: multi-word keywords (e.g. "ghost function method") must be
+# listed BEFORE their prefixes ("ghost function", "function") so the alternation
+# consumes the full keyword and the captured group gets the actual name, not
+# the next keyword word.
+#
+# Dafny 3.x "function method Foo" — without the ordering fix, "function" matches
+# first and "method" is mistakenly captured as the name.
 _METHOD_HEADER_RE = re.compile(
-    r"(?:^|\n)\s*(?:method|function|lemma|predicate|ghost\s+method)\s+(\w+)",
+    r"(?:^|\n)\s*"
+    r"(?:ghost\s+function\s+method"
+    r"|ghost\s+function"
+    r"|ghost\s+method"
+    r"|function\s+method"
+    r"|function"
+    r"|method"
+    r"|lemma"
+    r"|predicate"
+    r")\s+(\w+)",
     re.MULTILINE,
 )
 

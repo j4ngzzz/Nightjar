@@ -49,6 +49,20 @@ method B(x: int) returns (r: int) { r := x + 1; }
 method C(x: int) returns (r: int) { r := x + 2; }
 """
 
+# Dafny 3.x syntax: "function method" is a two-word keyword;
+# the name follows after both words.
+DAFNY_FUNCTION_METHOD = """\
+function method Factorial(n: int): int
+{
+  if n == 0 then 1 else n * Factorial(n - 1)
+}
+"""
+
+DAFNY_MIXED_FUNCTION_METHOD = """\
+function method Double(x: int): int { x * 2 }
+method Triple(x: int) returns (r: int) { r := x * 3; }
+"""
+
 
 # ── extract_dafny_methods ──────────────────────────────────────────────────
 
@@ -86,6 +100,23 @@ class TestExtractDafnyMethods:
         """No methods in code → empty list."""
         methods = extract_dafny_methods("")
         assert methods == []
+
+    def test_extracts_function_method_name(self):
+        """'function method Foo' (Dafny 3.x) must capture 'Foo', not 'method'."""
+        methods = extract_dafny_methods(DAFNY_FUNCTION_METHOD)
+        assert len(methods) == 1
+        assert methods[0].name == "Factorial", (
+            f"Expected 'Factorial', got {methods[0].name!r} — "
+            "'function method' is a two-word keyword"
+        )
+
+    def test_extracts_mixed_function_method_and_method(self):
+        """'function method' and 'method' declarations in the same file."""
+        methods = extract_dafny_methods(DAFNY_MIXED_FUNCTION_METHOD)
+        names = {m.name for m in methods}
+        assert names == {"Double", "Triple"}, (
+            f"Expected {{'Double', 'Triple'}}, got {names!r}"
+        )
 
     def test_returns_method_step_objects(self):
         """Returns list of MethodStep instances."""
