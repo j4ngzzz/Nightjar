@@ -181,14 +181,21 @@ def _run_generate(
     Pipeline: Analyst -> Formalizer -> Coder [REF-C03, REF-P07]
     All LLM calls through litellm [REF-T16].
     """
-    try:
-        from contractd.generator import generate_from_spec
-    except ImportError:
-        # Generator not yet implemented by Builder 6 (T8)
-        click.echo("Error: generation pipeline not yet available", err=True)
-        raise SystemExit(EXIT_CONFIG_ERROR)
+    from contractd.parser import parse_card_spec
+    from contractd.generator import generate_code
 
-    return generate_from_spec(contract_path, model=model, output_dir=output_dir)
+    spec = parse_card_spec(contract_path)
+    result = generate_code(spec, model=model)
+
+    if result.dafny_code:
+        import os
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f"{spec.id}.dfy")
+        with open(output_path, "w") as f:
+            f.write(result.dafny_code)
+        click.echo(f"Generated: {output_path}")
+
+    return result
 
 
 def _run_build(
