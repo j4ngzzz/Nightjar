@@ -29,6 +29,7 @@ from typing import Optional
 import click
 
 from contractd import __version__
+from contractd.config import load_config, get_model, get_specs_dir
 
 # ── Exit codes (from ARCHITECTURE.md Section 8) ─────────
 
@@ -60,39 +61,21 @@ _DEFAULT_CONFIG = {
 
 
 def _load_config() -> dict:
-    """Load configuration from contractd.toml if present, else defaults."""
-    config_path = Path("contractd.toml")
-    if config_path.exists():
-        try:
-            import tomllib
-        except ImportError:
-            # Python < 3.11 fallback — but we require 3.11+ per pyproject.toml
-            try:
-                import tomli as tomllib
-            except ImportError:
-                return _DEFAULT_CONFIG
-        with open(config_path, "rb") as f:
-            return tomllib.load(f)
-    return _DEFAULT_CONFIG
+    """Load configuration. Delegates to contractd.config module."""
+    return load_config()
 
 
 def _get_model(model_flag: Optional[str], config: dict) -> str:
-    """Resolve model name: CLI flag > CARD_MODEL env > config default.
+    """Resolve model name. Delegates to contractd.config module.
 
-    All LLM calls go through litellm [REF-T16]. Model is configurable
-    via environment variable per ARCHITECTURE.md Section 5.
+    All LLM calls go through litellm [REF-T16].
     """
-    if model_flag:
-        return model_flag
-    env_model = os.environ.get("CARD_MODEL")
-    if env_model:
-        return env_model
-    return config.get("card", {}).get("default_model", "claude-sonnet-4-6")
+    return get_model(cli_model=model_flag, config=config)
 
 
 def _get_specs_dir(config: dict) -> str:
     """Get the specs directory from config."""
-    return config.get("paths", {}).get("specs", ".card/")
+    return get_specs_dir(config)
 
 
 # ── Spec template for init command ───────────────────────
