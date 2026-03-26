@@ -171,16 +171,8 @@ def _build_result(
     total_ms = int((time.monotonic() - start) * 1000)
     # Also sum individual stage durations for accurate accounting
     stage_sum = sum(s.duration_ms for s in stages)
-    result = VerifyResult(
+    return VerifyResult(
         verified=verified,
         stages=stages,
         total_duration_ms=max(total_ms, stage_sum),
     )
-    # Attach confidence score per Scout 3 S5.3 [W1.4]
-    # Informational — never blocks pipeline; catches ImportError in edge cases
-    try:
-        from nightjar.confidence import compute_confidence
-        result.confidence = compute_confidence(result)
-    except Exception:
-        pass
-    return result
