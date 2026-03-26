@@ -204,6 +204,30 @@ class TestBuildCommand:
         mock_build.assert_called_once()
 
 
+# ── ship command ─────────────────────────────────────────
+
+
+class TestShipCommand:
+    """Test 'contractd ship' — build + sign artifact."""
+
+    @patch("contractd.cli._run_build")
+    def test_ship_runs_build(self, mock_build, runner, tmp_project):
+        mock_build.return_value = MagicMock(verified=True)
+        result = runner.invoke(main, [
+            "ship", "--contract", str(tmp_project / ".card" / "test.card.md")
+        ])
+        assert result.exit_code == 0
+        assert "ship complete" in result.output.lower()
+
+    @patch("contractd.cli._run_build")
+    def test_ship_fails_on_verification_failure(self, mock_build, runner, tmp_project):
+        mock_build.return_value = MagicMock(verified=False)
+        result = runner.invoke(main, [
+            "ship", "--contract", str(tmp_project / ".card" / "test.card.md")
+        ])
+        assert result.exit_code == 1
+
+
 # ── explain command ──────────────────────────────────────
 
 
