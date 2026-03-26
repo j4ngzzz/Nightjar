@@ -13,10 +13,79 @@ References:
 - [REF-C02] Closed-loop verification — pipeline feeds into retry loop
 """
 
+import ast
 import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Optional
 
 from nightjar.types import CardSpec, StageResult, VerifyResult, VerifyStatus
+
+
+# ─── Complexity-Discriminated Routing (U1.5) ─────────────────────────────────
+# Per SafePilot (arxiv:2603.21523): route simple functions to CrossHair symbolic
+# only (skipping Dafny) to cut ~70% of verification wall-time on typical codebases.
+# Complexity = cyclomatic_complexity + ast_depth / 3 (empirically calibrated).
+# Threshold ≤ 5 → CrossHair; > 5 → full Dafny.
+
+_COMPLEXITY_THRESHOLD = 5
+
+# AST node types that increment cyclomatic complexity (branch count)
+_BRANCH_NODES = (
+    ast.If, ast.While, ast.For, ast.ExceptHandler,
+    ast.With, ast.AsyncWith, ast.AsyncFor,
+)
+
+
+def _ast_depth(node: ast.AST, current: int = 0) -> int:
+    """Measure maximum nesting depth of an AST node recursively."""
+    children = list(ast.iter_child_nodes(node))
+    if not children:
+        return current
+    return max(_ast_depth(child, current + 1) for child in children)
+
+
+def _compute_complexity(code: str) -> int:
+    """Compute a complexity score for a code string.
+
+    Score = cyclomatic_complexity + floor(ast_depth / 3)
+
+    Cyclomatic complexity counts branches (if/while/for/try/with) +1 base.
+    AST depth captures nesting that increases verification search space.
+    Syntax errors return a high score (route to Dafny for safety).
+
+    Args:
+        code: Python source code string.
+
+    Returns:
+        Integer complexity score (0 = trivially simple, higher = more complex).
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return _COMPLEXITY_THRESHOLD + 10  # Safety: route unknown code to Dafny
+
+    branch_count = 1  # Base cyclomatic complexity
+    for node in ast.walk(tree):
+        if isinstance(node, _BRANCH_NODES):
+            branch_count += 1
+
+    depth = _ast_depth(tree)
+    return branch_count + depth // 3
+
+
+def _route_to_crosshair(code: str) -> bool:
+    """Return True if code is simple enough to verify with CrossHair alone.
+
+    Per SafePilot: simple functions (complexity ≤ threshold) skip Dafny and
+    use CrossHair symbolic execution only. Cuts ~70% verification time.
+
+    Args:
+        code: Python source code string.
+
+    Returns:
+        True → CrossHair-only route; False → full Dafny route.
+    """
+    return _compute_complexity(code) <= _COMPLEXITY_THRESHOLD
 
 
 def _run_stage_0(spec: CardSpec, code: str, spec_path: str = "") -> StageResult:
@@ -90,9 +159,74 @@ def _run_stage_3(spec: CardSpec, code: str) -> StageResult:
 
 
 def _run_stage_4(spec: CardSpec, code: str) -> StageResult:
-    """Stage 4: Formal verification (Dafny). Delegates to stages.formal."""
+    """Stage 4: Formal verification with complexity-discriminated routing (U1.5).
+
+    Per SafePilot (arxiv:2603.21523): routes based on cyclomatic complexity + AST depth.
+    - Simple (complexity ≤ 5) → CrossHair symbolic only (~13s, saves ~70% wall-time)
+    - Complex (complexity > 5) → full Dafny formal verification
+
+    Routing is encapsulated here so existing tests that patch _run_stage_4
+    bypass routing entirely (backward-compatible contract).
+    """
+    if _route_to_crosshair(code):
+        return _run_crosshair_symbolic(spec, code)
     from nightjar.stages.formal import run_formal
     return run_formal(spec, code)
+
+
+def _run_crosshair_symbolic(spec: CardSpec, code: str) -> StageResult:
+    """Run CrossHair as Stage 4 for simple functions (complexity routing path).
+
+    Distinct from _run_crosshair_fallback (degradation ladder) — this is the
+    primary route for simple functions, not a fallback.
+    Returns SKIP with routing_note if CrossHair not installed.
+    """
+    import subprocess
+    import sys
+    import tempfile
+    import os
+    import time as _time
+
+    start = _time.monotonic()
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+        f.write(code)
+        tmp_path = f.name
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "crosshair", "check", tmp_path],
+            capture_output=True, text=True, timeout=120,
+        )
+        duration = int((_time.monotonic() - start) * 1000)
+        if result.returncode == 0:
+            return StageResult(stage=4, name="formal", status=VerifyStatus.PASS, duration_ms=duration)
+        output = result.stdout + result.stderr
+        violations = [
+            {"type": "crosshair_violation", "message": line.strip()}
+            for line in output.splitlines()
+            if line.strip() and ("error:" in line.lower() or "counterexample" in line.lower())
+        ]
+        return StageResult(
+            stage=4, name="formal", status=VerifyStatus.FAIL, duration_ms=duration,
+            errors=violations or [{"type": "crosshair_error", "message": output.strip()[:500]}],
+        )
+    except subprocess.TimeoutExpired:
+        duration = int((_time.monotonic() - start) * 1000)
+        return StageResult(stage=4, name="formal", status=VerifyStatus.TIMEOUT, duration_ms=duration,
+                           errors=[{"type": "timeout", "message": "CrossHair symbolic exceeded 120s"}])
+    except FileNotFoundError:
+        duration = int((_time.monotonic() - start) * 1000)
+        # CrossHair not installed — SKIP with routing note (not a real failure)
+        return StageResult(stage=4, name="formal", status=VerifyStatus.SKIP, duration_ms=duration,
+                           errors=[{"message": "CrossHair not installed; install for complexity routing"}])
+    except Exception as e:
+        duration = int((_time.monotonic() - start) * 1000)
+        return StageResult(stage=4, name="formal", status=VerifyStatus.FAIL, duration_ms=duration,
+                           errors=[{"type": "error", "error": str(e)}])
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 def _stage_ok(result: StageResult) -> bool:
@@ -104,7 +238,12 @@ def _stage_ok(result: StageResult) -> bool:
     return result.status in (VerifyStatus.PASS, VerifyStatus.SKIP)
 
 
-def run_pipeline(spec: CardSpec, code: str, spec_path: str = "") -> VerifyResult:
+def run_pipeline(
+    spec: CardSpec,
+    code: str,
+    spec_path: str = "",
+    display_callback: Optional[Any] = None,
+) -> VerifyResult:
     """Run the full 5-stage verification pipeline.
 
     Execution order per ARCHITECTURE.md Section 3:
@@ -119,31 +258,53 @@ def run_pipeline(spec: CardSpec, code: str, spec_path: str = "") -> VerifyResult
     Stages 2+3 are parallel — both run even if one fails, but Stage 4
     only runs if both 2 and 3 pass/skip.
 
+    Complexity routing (U1.5 — SafePilot): simple functions (complexity ≤ 5)
+    route to CrossHair symbolic only, skipping Dafny (~70% wall-time savings).
+
+    Display hooks (U1.5): optional display_callback receives stage events.
+    Implements nightjar.display.DisplayCallback protocol.
+    Defaults to NullDisplay (silent) when not provided.
+
     Args:
         spec: Parsed .card.md specification.
         code: Generated source code string to verify.
+        spec_path: Optional path to the .card.md file (for preflight).
+        display_callback: Optional DisplayCallback for streaming output.
+            Must implement on_stage_start(int, str), on_stage_complete(StageResult),
+            and on_pipeline_complete(VerifyResult). Defaults to NullDisplay.
 
     Returns:
         VerifyResult with verified=True if all stages pass/skip.
     """
+    from nightjar.display import NullDisplay
+    display = display_callback if display_callback is not None else NullDisplay()
+
     start = time.monotonic()
     stages: list[StageResult] = []
 
     # Stage 0: Pre-flight — sequential
+    display.on_stage_start(0, "preflight")
     result_0 = _run_stage_0(spec, code, spec_path=spec_path)
     stages.append(result_0)
+    display.on_stage_complete(result_0)
     if not _stage_ok(result_0):
-        return _build_result(stages, start, verified=False)
+        result = _build_result(stages, start, verified=False)
+        display.on_pipeline_complete(result)
+        return result
 
     # Stage 1: Dependency check — sequential
+    display.on_stage_start(1, "deps")
     result_1 = _run_stage_1(spec, code)
     stages.append(result_1)
+    display.on_stage_complete(result_1)
     if not _stage_ok(result_1):
-        return _build_result(stages, start, verified=False)
+        result = _build_result(stages, start, verified=False)
+        display.on_pipeline_complete(result)
+        return result
 
     # Stages 2 + 3: Schema + PBT — parallel per ARCHITECTURE.md
-    # Both run regardless of individual failures, but both must pass
-    # for Stage 4 to proceed.
+    display.on_stage_start(2, "schema")
+    display.on_stage_start(3, "pbt")
     with ThreadPoolExecutor(max_workers=2) as executor:
         future_2 = executor.submit(_run_stage_2, spec, code)
         future_3 = executor.submit(_run_stage_3, spec, code)
@@ -152,16 +313,25 @@ def run_pipeline(spec: CardSpec, code: str, spec_path: str = "") -> VerifyResult
 
     stages.append(result_2)
     stages.append(result_3)
+    display.on_stage_complete(result_2)
+    display.on_stage_complete(result_3)
 
     if not (_stage_ok(result_2) and _stage_ok(result_3)):
-        return _build_result(stages, start, verified=False)
+        result = _build_result(stages, start, verified=False)
+        display.on_pipeline_complete(result)
+        return result
 
-    # Stage 4: Formal verification — sequential (heaviest)
+    # Stage 4: Formal verification with complexity routing (U1.5 — SafePilot)
+    # Routing is encapsulated inside _run_stage_4: simple → CrossHair, complex → Dafny
+    display.on_stage_start(4, "formal")
     result_4 = _run_stage_4(spec, code)
     stages.append(result_4)
+    display.on_stage_complete(result_4)
 
     verified = _stage_ok(result_4)
-    return _build_result(stages, start, verified=verified)
+    result = _build_result(stages, start, verified=verified)
+    display.on_pipeline_complete(result)
+    return result
 
 
 def _build_result(
