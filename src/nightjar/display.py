@@ -1,14 +1,31 @@
-"""Rich CLI output formatting.
+"""Rich CLI output formatting + streaming display_callback interface.
 
 Provides colored, structured terminal output for verification results,
 progress tracking, and failure explanation.
 
+STREAMING INTERFACE (U3.3) [REF-NEW-11]:
+  DisplayCallback  — runtime-checkable Protocol; verifier.py calls these hooks
+  NullDisplay      — silent no-op (tests, --quiet mode, non-interactive)
+  RichStreamingDisplay — Rich Live streaming table; one row per pipeline stage
+
+  Usage in verifier.py (Builder-VerEngine wires this in U1.5)::
+
+      display = RichStreamingDisplay()
+      with display:
+          for stage in stages:
+              display.on_stage_start(stage.num, stage.name)
+              result = run_stage(stage)
+              display.on_stage_complete(result)
+          display.on_pipeline_complete(verify_result)
+
 References:
 - [REF-T17] Click CLI framework -- display integrates with Click commands
+- [REF-NEW-11] Rich streaming display (U3.3 nightjar-upgrade-plan.md)
+- Rich Live docs: https://rich.readthedocs.io/en/stable/live.html
 - ARCHITECTURE.md Section 8 -- CLI design
 """
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from nightjar.types import StageResult, VerifyResult, VerifyStatus
 
@@ -19,10 +36,218 @@ try:
     from rich.panel import Panel
     from rich.text import Text
     from rich.syntax import Syntax
+    from rich.live import Live
+    from rich.group import Group
     from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
     HAS_RICH = True
 except ImportError:
     HAS_RICH = False
+
+# ── Streaming display_callback interface (U3.3) [REF-NEW-11] ─────────────
+#
+# These three classes form the observer interface between verifier.py and the
+# display layer.  Builder-VerEngine wires the hooks into verifier.py (U1.5).
+# Builder-DX provides the implementations here (U3.3) and in tui.py (U3.1).
+
+try:
+    from typing import Protocol, runtime_checkable
+except ImportError:  # Python < 3.8 fallback (not expected, but safe)
+    from typing_extensions import Protocol, runtime_checkable  # type: ignore
+
+
+@runtime_checkable
+class DisplayCallback(Protocol):
+    """Observer protocol for live pipeline progress events [REF-NEW-11].
+
+    Verifier.py calls these hooks during pipeline execution so the display
+    layer receives events without coupling to a specific output format.
+
+    All implementations must define all three methods.
+    """
+
+    def on_stage_start(self, stage: int, name: str) -> None:
+        """Called when a verification stage begins execution."""
+        ...
+
+    def on_stage_complete(self, result: StageResult) -> None:
+        """Called when a stage finishes (pass, fail, or skip)."""
+        ...
+
+    def on_pipeline_complete(self, result: VerifyResult) -> None:
+        """Called once when the full pipeline finishes."""
+        ...
+
+
+class NullDisplay:
+    """Silent no-op display — for tests, --quiet mode, or non-interactive use.
+
+    Satisfies the DisplayCallback protocol without producing any output.
+    """
+
+    def on_stage_start(self, stage: int, name: str) -> None:
+        pass
+
+    def on_stage_complete(self, result: StageResult) -> None:
+        pass
+
+    def on_pipeline_complete(self, result: VerifyResult) -> None:
+        pass
+
+
+class RichStreamingDisplay:
+    """Live streaming pipeline output using Rich Live [REF-NEW-11].
+
+    Renders a live-updating table in the terminal — one row per stage.
+    Stage rows transition: (waiting) → running... → PASS / FAIL.
+    A confidence bar appears once the pipeline completes.
+
+    Usage::
+
+        with RichStreamingDisplay() as display:
+            display.on_stage_start(0, "preflight")
+            display.on_stage_complete(stage_result)
+            ...
+            display.on_pipeline_complete(verify_result)
+
+    The ``console`` parameter is injectable for tests (pass a Console backed
+    by ``io.StringIO`` to capture output without a real terminal).
+    """
+
+    # Color constants — nightjar palette
+    _COLOR_PASS = "bold green"
+    _COLOR_FAIL = "bold red"
+    _COLOR_RUNNING = "bold yellow"
+    _COLOR_WAITING = "dim"
+
+    def __init__(self, console: Optional["Console"] = None) -> None:
+        self._injected_console = console
+        self.stage_status: dict[int, "str | VerifyStatus"] = {}
+        self.stage_names: dict[int, str] = {}
+        self.stage_durations: dict[int, int] = {}
+        self.pipeline_done: bool = False
+        self.pipeline_verified: bool = False
+        self._live: Optional["Live"] = None
+
+    # ── Context manager ──────────────────────────────────────────────────
+
+    def __enter__(self) -> "RichStreamingDisplay":
+        if HAS_RICH:
+            con = self._injected_console or Console(
+                force_terminal=True, highlight=False
+            )
+            self._live = Live(
+                self._build_renderable(),
+                console=con,
+                refresh_per_second=10,
+                transient=False,
+            )
+            self._live.__enter__()
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        if self._live is not None:
+            # Final refresh with terminal state before exiting
+            self._live.update(self._build_renderable(), refresh=True)
+            self._live.__exit__(*args)
+
+    # ── DisplayCallback implementation ───────────────────────────────────
+
+    def on_stage_start(self, stage: int, name: str) -> None:
+        """Mark stage as running and refresh the live display."""
+        self.stage_status[stage] = "running"
+        self.stage_names[stage] = name
+        self._refresh()
+
+    def on_stage_complete(self, result: StageResult) -> None:
+        """Update stage row with final status/duration and refresh."""
+        self.stage_status[result.stage] = result.status
+        self.stage_names[result.stage] = result.name
+        self.stage_durations[result.stage] = result.duration_ms
+        self._refresh()
+
+    def on_pipeline_complete(self, result: VerifyResult) -> None:
+        """Render the final pass/fail banner and freeze the display."""
+        self.pipeline_done = True
+        self.pipeline_verified = result.verified
+        self._refresh()
+
+    # ── Internal rendering ───────────────────────────────────────────────
+
+    def _refresh(self) -> None:
+        """Push an updated renderable to the Live display."""
+        if self._live is not None and HAS_RICH:
+            self._live.update(self._build_renderable(), refresh=True)
+
+    def _build_renderable(self) -> object:
+        """Build the Rich renderable for the current pipeline state.
+
+        Returns a Group containing the stage table and (when done) a
+        pass/fail banner.  Falls back to a plain string when Rich is absent.
+        """
+        if not HAS_RICH:
+            return self._build_plain()
+
+        table = Table(
+            title="Nightjar Verify",
+            show_header=True,
+            show_lines=False,
+            expand=True,
+        )
+        table.add_column("Stage", justify="center", style="cyan", width=7)
+        table.add_column("Name", style="bold", width=14)
+        table.add_column("Status", justify="center", width=12)
+        table.add_column("Duration", justify="right", width=10)
+
+        for stage_num in range(5):
+            status = self.stage_status.get(stage_num)
+            name = self.stage_names.get(stage_num, f"stage{stage_num}")
+            ms = self.stage_durations.get(stage_num)
+            duration_str = _format_duration_ms(ms) if ms is not None else "—"
+
+            if status is None:
+                status_cell = Text("waiting", style=self._COLOR_WAITING)
+            elif status == "running":
+                status_cell = Text("running…", style=self._COLOR_RUNNING)
+            elif status == VerifyStatus.PASS:
+                status_cell = Text("PASS", style=self._COLOR_PASS)
+            elif status == VerifyStatus.FAIL:
+                status_cell = Text("FAIL", style=self._COLOR_FAIL)
+            elif status == VerifyStatus.SKIP:
+                status_cell = Text("SKIP", style="bold yellow")
+            else:
+                status_cell = Text(str(status), style="dim")
+
+            table.add_row(str(stage_num), name, status_cell, duration_str)
+
+        if self.pipeline_done:
+            if self.pipeline_verified:
+                banner = Panel(
+                    Text(" ✓ VERIFIED ", style="bold white on green", justify="center"),
+                    border_style="green",
+                )
+            else:
+                banner = Panel(
+                    Text(" ✗ FAIL ", style="bold white on red", justify="center"),
+                    border_style="red",
+                )
+            return Group(table, banner)
+
+        return table
+
+    def _build_plain(self) -> str:
+        """Plain-text fallback when Rich is not installed."""
+        lines = ["=== Nightjar Verify ==="]
+        for stage_num in range(5):
+            status = self.stage_status.get(stage_num, "waiting")
+            name = self.stage_names.get(stage_num, f"stage{stage_num}")
+            lines.append(f"  Stage {stage_num} ({name}): {status}")
+        if self.pipeline_done:
+            result_str = "VERIFIED" if self.pipeline_verified else "FAIL"
+            lines.append(f"\n>>> {result_str}")
+        return "\n".join(lines)
+
+
+# ── Module-level console ──────────────────────────────────────────────────
 
 # Module-level console; force_terminal=True so Rich always emits ANSI
 # (pytest capsys captures the underlying write calls).
