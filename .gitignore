@@ -7,6 +7,9 @@ dist/
 .card/cache/
 .card/verify.json
 
+# Hypothesis test cache
+.hypothesis/
+
 # Python
 __pycache__/
 *.pyc
