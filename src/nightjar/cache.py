@@ -232,6 +232,10 @@ def hash_stage_inputs(stage_name: str, *inputs: str) -> str:
     Includes the stage name in the hash so different stages with identical
     input strings produce different hashes.
 
+    Null-byte (b"\\x00") delimiters separate every field so that different
+    splits of the same characters produce different hashes — e.g.
+    ("ab", "c") != ("a", "bc").
+
     Args:
         stage_name: Name of the stage (e.g., 'stage0', 'pbt', 'formal').
         *inputs: All input strings for this stage (spec content, code, etc.).
@@ -241,8 +245,10 @@ def hash_stage_inputs(stage_name: str, *inputs: str) -> str:
     """
     hasher = hashlib.sha256()
     hasher.update(stage_name.encode("utf-8"))
+    hasher.update(b"\x00")  # delimiter after stage_name
     for inp in inputs:
         hasher.update(inp.encode("utf-8"))
+        hasher.update(b"\x00")  # delimiter after each input
     return hasher.hexdigest()
 
 
@@ -251,10 +257,47 @@ def _stage_cache_filename(stage_name: str, input_hash: str) -> str:
     return f"stage_{stage_name}_{input_hash[:16]}.json"
 
 
+def _stage_latest_result_filename(stage_name: str) -> str:
+    """Filename for the latest result hash of a stage (independent of input)."""
+    return f"stage_latest_{stage_name}.json"
+
+
+def _store_stage_latest_result(stage_name: str, result_hash: str, cache_dir: str) -> None:
+    """Persist the most-recent result hash for a stage.
+
+    Overwritten on every store_stage_cache call so early-cutoff checks
+    can compare against the last known result regardless of input_hash.
+    """
+    cache_path = Path(cache_dir)
+    cache_path.mkdir(parents=True, exist_ok=True)
+    filename = _stage_latest_result_filename(stage_name)
+    (cache_path / filename).write_text(
+        json.dumps({"stage_name": stage_name, "result_hash": result_hash}) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _get_stage_latest_result(stage_name: str, cache_dir: str) -> str | None:
+    """Retrieve the latest stored result hash for a stage.
+
+    Returns None when no prior result exists (first-ever run).
+    """
+    filename = _stage_latest_result_filename(stage_name)
+    cache_file = Path(cache_dir) / filename
+    if not cache_file.exists():
+        return None
+    try:
+        data = json.loads(cache_file.read_text(encoding="utf-8"))
+        return data.get("result_hash")
+    except (json.JSONDecodeError, KeyError, OSError):
+        return None
+
+
 def store_stage_cache(entry: StageCacheEntry, cache_dir: str) -> None:
     """Store a per-stage verification result in the cache.
 
     Writes to {cache_dir}/stage_{stage_name}_{input_hash[:16]}.json.
+    Also updates the latest-result file for early-cutoff checks.
 
     Args:
         entry: The per-stage cache entry to store.
@@ -267,6 +310,8 @@ def store_stage_cache(entry: StageCacheEntry, cache_dir: str) -> None:
         json.dumps(entry.to_dict(), indent=2) + "\n",
         encoding="utf-8",
     )
+    # Update latest result so check_early_cutoff can compare across input changes
+    _store_stage_latest_result(entry.stage_name, entry.result_hash, cache_dir)
 
 
 def get_stage_cache(
@@ -327,15 +372,20 @@ def should_skip_stage(stage_name: str, input_hash: str, cache_dir: str) -> bool:
 
 def check_early_cutoff(
     stage_name: str,
-    input_hash: str,
+    input_hash: str,  # noqa: ARG001 — kept for API compatibility; unused
     new_result_hash: str,
     cache_dir: str,
 ) -> bool:
     """Early cutoff: if result unchanged, downstream stages can skip [Scout 5 F3].
 
     This is the Salsa "early cutoff" optimization: after recomputing a stage,
-    if the result hash is identical to the cached result hash, all downstream
+    if the result hash is identical to the last stored result hash, all downstream
     stages can skip (their inputs — this stage's output — haven't changed).
+
+    Compares against the latest stored result hash for the stage (written by
+    store_stage_cache) rather than looking up by input_hash.  This means early
+    cutoff fires correctly even when inputs change but produce the same result
+    — e.g. spec intent edited but parsed AST is identical.
 
     Example:
         - Spec intent changed → Stage 0 reruns → same AST → early cutoff
@@ -343,14 +393,14 @@ def check_early_cutoff(
 
     Args:
         stage_name: Name of the stage that was just recomputed.
-        input_hash: SHA-256 of the stage inputs (to look up the prior result).
+        input_hash: Unused; retained for API compatibility.
         new_result_hash: SHA-256 of the newly computed result.
         cache_dir: Path to the cache directory.
 
     Returns:
         True if result is unchanged (downstream can skip), False otherwise.
     """
-    entry = get_stage_cache(stage_name, input_hash, cache_dir)
-    if entry is None:
+    prior_result_hash = _get_stage_latest_result(stage_name, cache_dir)
+    if prior_result_hash is None:
         return False  # No prior result to compare
-    return entry.result_hash == new_result_hash
+    return prior_result_hash == new_result_hash

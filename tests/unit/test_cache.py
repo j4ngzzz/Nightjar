@@ -247,6 +247,15 @@ class TestHashStageInputs:
         h2 = hash_stage_inputs("pbt", "input_v2")
         assert h1 != h2
 
+    def test_no_hash_boundary_confusion(self):
+        """Different input splits must produce different hashes (null-byte delimiters)."""
+        h1 = hash_stage_inputs("s", "ab", "c")
+        h2 = hash_stage_inputs("s", "a", "bc")
+        assert h1 != h2, (
+            "hash_stage_inputs('s', 'ab', 'c') must differ from "
+            "hash_stage_inputs('s', 'a', 'bc') — null-byte delimiters required"
+        )
+
 
 class TestStageCacheEntry:
     """Per-stage cache entry stores stage result + hashes [Scout 5 F3]."""
@@ -410,3 +419,28 @@ class TestEarlyCutoff:
     def test_no_early_cutoff_on_cache_miss(self, tmp_path):
         """Cache miss → no early cutoff (no prior result to compare)."""
         assert check_early_cutoff("stage0", "a" * 64, "b" * 64, str(tmp_path)) is False
+
+    def test_early_cutoff_when_input_changed_but_result_same(self, tmp_path):
+        """Early cutoff fires even when input_hash changed, as long as result is same.
+
+        This is the key Salsa early-cutoff use case: spec intent changes (new
+        input_hash) but the parsed AST is identical (same result_hash) — so
+        downstream stages can still skip.
+        """
+        stage = "stage0"
+        old_input_hash = hash_stage_inputs(stage, "spec v1")
+        new_input_hash = hash_stage_inputs(stage, "spec v2")  # input changed
+        same_result_hash = "a" * 64  # but result (e.g. parsed AST) is same
+
+        # Stage ran with old input, stored latest result
+        entry = StageCacheEntry(
+            stage_name=stage,
+            input_hash=old_input_hash,
+            result_hash=same_result_hash,
+            status="pass",
+            duration_ms=50,
+        )
+        store_stage_cache(entry, str(tmp_path))
+
+        # Input changed (new_input_hash) but result is same → early cutoff
+        assert check_early_cutoff(stage, new_input_hash, same_result_hash, str(tmp_path)) is True
