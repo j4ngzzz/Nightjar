@@ -159,8 +159,8 @@ def _run_tier_1(card_path: str, callback: Callable[[TierEvent], None]) -> bool:
     """
     start = time.monotonic()
     try:
-        from nightjar.parser import parse_spec
-        parse_spec(card_path)
+        from nightjar.parser import parse_card_spec
+        parse_card_spec(card_path)
         duration = int((time.monotonic() - start) * 1000)
         callback(TierEvent(tier=1, status="pass", duration_ms=duration))
         return True
@@ -200,11 +200,11 @@ def _run_tier_2(card_path: str, callback: Callable[[TierEvent], None]) -> bool:
 
     # Run PBT on the first generated file
     try:
-        from nightjar.parser import parse_spec
+        from nightjar.parser import parse_card_spec
         from nightjar.stages.pbt import run_pbt
         from nightjar.types import VerifyStatus
 
-        spec = parse_spec(card_path)
+        spec = parse_card_spec(card_path)
         code = code_files[0].read_text(encoding="utf-8")
         result = run_pbt(spec, code)
 
@@ -249,11 +249,11 @@ def _run_tier_3(card_path: str, callback: Callable[[TierEvent], None]) -> bool:
         return True
 
     try:
-        from nightjar.parser import parse_spec
+        from nightjar.parser import parse_card_spec
         from nightjar.stages.formal import run_formal
         from nightjar.types import VerifyStatus
 
-        spec = parse_spec(card_path)
+        spec = parse_card_spec(card_path)
         code = code_files[0].read_text(encoding="utf-8")
         result = run_formal(spec, code)
 
