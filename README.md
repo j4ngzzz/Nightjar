@@ -10,6 +10,13 @@ Developers write `.card.md` specs (intent + contracts + tiered invariants). AI g
 
 CARD closes this gap with a 5-stage verification pipeline that costs ~$0.001 per run and completes in under 60 seconds.
 
+## Prerequisites
+
+- Python 3.11+
+- Dafny 4.x (for formal verification): [Install Dafny](https://github.com/dafny-lang/dafny/releases)
+  - Or set `DAFNY_PATH` environment variable to your Dafny binary
+  - Stage 4 (formal) is skipped gracefully if Dafny is not installed
+
 ## Quick Start
 
 ```bash
@@ -113,6 +120,8 @@ contractd ship              Build + sign artifact
 contractd retry             Force LLM repair loop
 contractd lock              Freeze deps into deps.lock
 contractd explain           Show last failure in human-readable form
+contractd optimize          Run DSPy SIMBA prompt optimization
+contractd immune            Run immune system cycle on error traces
 ```
 
 ## MCP Server
@@ -124,6 +133,55 @@ CARD ships as an MCP server for universal IDE integration:
 - `suggest_fix` — LLM-suggested fix for violations
 
 Compatible with Cursor, Windsurf, Claude Code, VS Code, and any MCP-supporting tool.
+
+## Immune System
+
+CARD's immune system learns from production failures and automatically strengthens specifications. Every failure makes the next build safer.
+
+### How It Works
+
+1. **Collect** -- MonkeyType [REF-T12] captures runtime type traces, OpenTelemetry [REF-T15] captures API spans, and Sentry-style error capture records failures with semantic fingerprinting
+2. **Mine** -- Daikon algorithm (MIT reimplementation, see [REF-T13] warning) mines dynamic invariants from collected traces
+3. **Enrich** -- LLM generates candidate invariants from mined patterns combined with error context, routed through litellm [REF-T16]
+4. **Verify** -- CrossHair [REF-T09] (symbolic execution) and Hypothesis [REF-T03] (property-based testing) verify candidates with 1000+ inputs
+5. **Append** -- Verified invariants auto-append to `.card.md` specs, strengthening the contract for future builds
+6. **Enforce** -- icontract [REF-T10] decorators inject runtime guards into generated code
+
+### Architecture
+
+```
+Production traces --> Collector --> Miner --> Enricher --> Verifier --> .card.md
+       |                                                                  |
+       +--- errors, types, spans                    stronger specs -------+
+```
+
+The immune cycle runs via `contractd immune` and can be triggered automatically on error ingestion or scheduled as a periodic job.
+
+## Self-Evolution
+
+CARD improves its own verification pipeline over time. Instead of static prompts, the system tracks what works and adapts.
+
+- **Verification Tracking** -- SQLite database tracks every verification run: model used, pass rate, cost, latency, and failure modes
+- **Experience Replay** -- Successful (spec, prompt, code) tuples are stored and become few-shot examples for future generation runs
+- **DSPy SIMBA** [REF-T26] -- Optimizes the Analyst/Formalizer/Coder prompts for higher pass rates using automated prompt tuning
+- **AutoResearch** -- Hill-climbing approach: try one prompt variation per run, keep it if the pass rate improves over the baseline
+- **Versioned Prompts** -- All LLM prompts are externalized files with version metadata and performance tracking, not hardcoded strings
+
+Run prompt optimization manually:
+```bash
+contractd optimize
+```
+
+## Network Effect
+
+When multiple teams use CARD, failures discovered anywhere protect everyone. A single team's production bug becomes a verified invariant pattern available to all participants.
+
+- **Structural Abstraction** -- Failures are transformed into PII-free type-level signatures before sharing, preserving privacy while retaining structural insight
+- **Differential Privacy** -- OpenDP [REF-T20] applies Laplace noise to frequency metadata, ensuring no individual team's data can be reconstructed
+- **Pattern Library** -- An append-only library of verified invariant patterns, each tagged with the domain and tier where it was proven
+- **Herd Immunity** -- When a pattern holds across 50+ tenants at >95% confidence, it is promoted to a universal invariant and included in new project scaffolds automatically
+
+The network effect creates a positive feedback loop: more teams produce more traces, which mine more invariants, which catch more bugs before they reach production.
 
 ## Demo
 
@@ -154,10 +212,17 @@ Key references:
 |-----------|------|-----------|
 | Language | Python 3.11+ | |
 | CLI | Click | [REF-T17] |
+| CLI formatting | Rich | -- |
 | LLM | litellm | [REF-T16] |
 | Verification | Dafny 4.x | [REF-T01] |
 | PBT | Hypothesis | [REF-T03] |
 | Schema | Pydantic v2 | [REF-T08] |
+| Runtime contracts | icontract | [REF-T10] |
+| Symbolic verification | CrossHair | [REF-T09] |
+| Type tracing | MonkeyType | [REF-T12] |
+| Telemetry | OpenTelemetry | [REF-T15] |
+| Prompt optimization | DSPy SIMBA | [REF-T26] |
+| Differential privacy | OpenDP | [REF-T20] |
 | MCP | MCP SDK | [REF-T18] |
 
 ## License
