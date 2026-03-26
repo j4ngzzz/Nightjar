@@ -237,39 +237,36 @@ def _run_retry(
 def _run_lock(output_dir: str, config: dict) -> bool:
     """Freeze dependencies into deps.lock with SHA hashes.
 
-    Reference: [REF-C08] Sealed Dependency Manifest
-    Uses uv [REF-T05] for hash generation and pip-audit [REF-T06] for CVE scan.
+    Delegates to lock.py module [REF-C08, REF-P27].
     """
-    import subprocess
-
-    lock_path = Path(output_dir) / "deps.lock"
     try:
-        result = subprocess.run(
-            ["pip", "freeze"],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=30,
-        )
-        lock_path.write_text(result.stdout, encoding="utf-8")
-        click.echo(f"Dependencies frozen to {lock_path}")
-        return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
-        click.echo(f"Error freezing dependencies: {e}", err=True)
+        from contractd.lock import generate_lock_file
+
+        lock_path = str(Path(output_dir) / "deps.lock")
+        success = generate_lock_file(output_dir, lock_path)
+        if success:
+            click.echo(f"Dependencies frozen to {lock_path}")
+        return success
+    except ImportError:
+        click.echo("Error: lock module not available", err=True)
         return False
 
 
 def _load_verify_report(contract_path: str) -> Optional[dict]:
-    """Load the last verification report from .card/verify.json."""
-    spec_dir = Path(contract_path).parent
-    report_path = spec_dir / "verify.json"
-    if not report_path.exists():
-        # Also check the default location
-        report_path = Path(".card") / "verify.json"
-    if report_path.exists():
-        with open(report_path, encoding="utf-8") as f:
-            return json.load(f)
-    return None
+    """Load the last verification report. Delegates to explain module."""
+    try:
+        from contractd.explain import load_report
+        return load_report(contract_path)
+    except ImportError:
+        # Fallback: inline loading
+        spec_dir = Path(contract_path).parent
+        report_path = spec_dir / "verify.json"
+        if not report_path.exists():
+            report_path = Path(".card") / "verify.json"
+        if report_path.exists():
+            with open(report_path, encoding="utf-8") as f:
+                return json.load(f)
+        return None
 
 
 # ── CLI Group and Commands ───────────────────────────────
@@ -546,6 +543,7 @@ def explain(ctx: click.Context, contract: str) -> None:
     """Show last verification failure in human-readable form.
 
     Reads .card/verify.json and formats the failure report.
+    Delegates to explain.py + display.py for Rich formatting [REF-P06].
     """
     report = _load_verify_report(contract)
     if report is None:
@@ -558,17 +556,12 @@ def explain(ctx: click.Context, contract: str) -> None:
         ctx.exit(EXIT_PASS)
         return
 
-    click.echo("=== Last Verification Failure ===\n")
-    for stage_data in report.get("stages", []):
-        status = stage_data.get("status", "unknown")
-        if status == "fail":
-            name = stage_data.get("name", "unknown")
-            stage_num = stage_data.get("stage", "?")
-            click.echo(f"Stage {stage_num} ({name}): FAIL")
-            for error in stage_data.get("errors", []):
-                msg = error.get("message", "unknown error")
-                click.echo(f"  - {msg}")
-                if "counterexample" in error:
-                    click.echo(f"    Counterexample: {error['counterexample']}")
-            click.echo()
+    # Use Rich formatting if available, fall back to plain text
+    try:
+        from contractd.display import format_explain
+        format_explain(report)
+    except ImportError:
+        from contractd.explain import explain_failure, format_explanation
+        explanation = explain_failure(report)
+        click.echo(format_explanation(explanation))
     ctx.exit(EXIT_PASS)
