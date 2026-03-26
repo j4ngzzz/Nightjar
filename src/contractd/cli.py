@@ -537,6 +537,44 @@ def lock(ctx: click.Context, output: str) -> None:
 
 
 @main.command()
+@click.option("--target", "-t", default="analyst",
+              type=click.Choice(["analyst", "formalizer", "coder"]),
+              help="Which prompt to optimize (default: analyst).")
+@click.option("--iterations", default=10, type=int, help="Max optimization iterations.")
+@click.pass_context
+def optimize(ctx: click.Context, target: str, iterations: int) -> None:
+    """Run DSPy SIMBA prompt optimization [REF-T26].
+
+    Optimizes the Analyst/Formalizer/Coder prompts based on
+    verification pass rate as the metric.
+    """
+    try:
+        from contractd.optimizer import run_optimization, OptimizationConfig
+
+        config = OptimizationConfig(
+            tracking_db_path=".card/tracking.db",
+            prompt_registry_path="src/contractd/prompts",
+            target_prompt=target,
+            max_iterations=iterations,
+        )
+        result = run_optimization(config)
+        if result.improved:
+            click.echo(
+                f"OPTIMIZED {target}: v{result.original_version} -> v{result.best_version} "
+                f"(score: {result.original_score:.2f} -> {result.best_score:.2f})"
+            )
+        else:
+            click.echo(f"No improvement found for {target} after {result.iterations_run} iterations")
+        ctx.exit(EXIT_PASS)
+    except ImportError as e:
+        click.echo(f"Error: optimizer not available ({e})", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+    except Exception as e:
+        click.echo(f"Optimization error: {e}", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+
+
+@main.command()
 @click.option("--contract", "-c", required=True, help="Path to .card.md spec.")
 @click.pass_context
 def explain(ctx: click.Context, contract: str) -> None:
