@@ -11,6 +11,13 @@ Also implements BFS proof search (W1.3) as an upgrade to flat retry:
   - Keep best-scoring candidate for next depth
   - >30% absolute improvement over flat sampling (Scout 3 S10)
 
+U1.2 — CEGIS Counterexample-Guided Retry [REF-NEW-03]:
+  Per SpecLoop (arxiv:2603.02895), including the Dafny counterexample
+  (concrete failing input values) is MORE informative than raw error messages.
+  LLM can reason about "why does X=5, Y=-3 break my invariant?" rather than
+  decode SMT output.
+  Upgrade: formal stage FAIL → parse counterexample → CEGIS framing in prompt.
+
 References:
 - [REF-C02] Closed-loop verification (Clover pattern)
 - [REF-P03] Clover paper — 87% correct acceptance, 0% false positives.
@@ -18,6 +25,7 @@ References:
   to LLM → regenerate → re-verify. Repeat up to N times.
 - [REF-P06] DafnyPro — structured error format: file, line, message,
   assertion batch ID, resource units. Repair prompt includes all context.
+- [REF-NEW-03] SpecLoop CEGIS (arxiv:2603.02895) — counterexample-guided retry.
 - [REF-T16] litellm — all LLM calls go through litellm for model-agnosticism.
 - ARCHITECTURE.md Section 4 — retry loop design, max N=5, temperature 0.2
 - Scout 3 S3.1-3.2: VerMCTS/BFS proof search
@@ -31,6 +39,7 @@ Design per ARCHITECTURE.md Section 4 + W1.3 BFS:
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -44,6 +53,173 @@ from nightjar.verifier import run_pipeline
 DEFAULT_MAX_RETRIES = 5
 REPAIR_TEMPERATURE = 0.2  # Deterministic repair [ARCHITECTURE.md]
 REPAIR_MAX_TOKENS = 2048  # Output cap per ARCHITECTURE.md
+
+
+# ─── CEGIS Counterexample Parsing (U1.2) ─────────────────────────────────────
+# Per [REF-NEW-03] SpecLoop (arxiv:2603.02895): parse concrete failing values
+# from Dafny output. Dafny counterexample format:
+#   counterexample for 'func_name':
+#     var1 := value1
+#     var2 := value2
+
+_CE_BLOCK_PATTERN = re.compile(
+    r"counterexample for[^\n]*:\n((?:[ \t]+\w[\w.]*[ \t]*:=[ \t]*[^\n]+\n)+)",
+    re.MULTILINE,
+)
+_CE_VAR_PATTERN = re.compile(r"[ \t]+(\w[\w.]*)[ \t]*:=[ \t]*([^\n]+)")
+
+
+def parse_dafny_counterexample(output: str) -> Optional[dict[str, str]]:
+    """Extract concrete counterexample values from Dafny FAIL output.
+
+    Per [REF-NEW-03] SpecLoop: Dafny counterexample format:
+      counterexample for 'func_name':
+        var1 := value1
+        var2 := value2
+
+    Args:
+        output: Raw Dafny verification output string.
+
+    Returns:
+        Dict of {variable_name: value_string} or None if no counterexample.
+    """
+    m = _CE_BLOCK_PATTERN.search(output)
+    if not m:
+        return None
+    vals: dict[str, str] = {}
+    for line in m.group(1).splitlines():
+        kv = _CE_VAR_PATTERN.match(line)
+        if kv:
+            vals[kv.group(1).strip()] = kv.group(2).strip()
+    return vals if vals else None
+
+
+def extract_counterexample_from_stage(
+    stage: StageResult,
+) -> Optional[dict[str, str]]:
+    """Extract CEGIS counterexample from a failing formal verification stage.
+
+    Only formal stages (stage 4, name 'formal') can contain Dafny
+    counterexamples. All other stages return None.
+
+    Per [REF-NEW-03]: scans stage.errors[].message for counterexample blocks.
+
+    Args:
+        stage: A StageResult from the verification pipeline.
+
+    Returns:
+        Dict of concrete variable values, or None.
+    """
+    if stage.name != "formal":
+        return None
+    for err in stage.errors:
+        msg = err.get("message", "")
+        ce = parse_dafny_counterexample(msg)
+        if ce:
+            return ce
+    return None
+
+
+def build_cegis_repair_prompt(
+    spec: "CardSpec",
+    failed_code: str,
+    verify_result: VerifyResult,
+    attempt: int,
+    counterexample: Optional[dict[str, str]],
+) -> str:
+    """Build CEGIS-style repair prompt per [REF-NEW-03] SpecLoop.
+
+    When a counterexample is available, the prompt frames the failure as
+    "Your spec fails on input X=5, Y=-3 because..." — more actionable than
+    a raw SMT error message.
+
+    Args:
+        spec: Original .card.md specification.
+        failed_code: Code that failed verification.
+        verify_result: The failed VerifyResult with error details.
+        attempt: Current retry attempt number (1-based).
+        counterexample: Parsed {variable: value} dict from Dafny, or None.
+
+    Returns:
+        Formatted repair prompt string.
+    """
+    invariants_text = "\n".join(
+        f"  - {inv.id} ({inv.tier.value}): {inv.statement}"
+        for inv in spec.invariants
+    )
+
+    if counterexample:
+        ce_str = ", ".join(f"{k}={v}" for k, v in counterexample.items())
+        counterexample_section = (
+            f"\n### Counterexample (concrete failing inputs)\n"
+            f"Verification fails on: {ce_str}\n"
+            f"Your implementation does not satisfy the invariants for "
+            f"these specific input values. Fix the logic so it holds.\n"
+        )
+    else:
+        # Fall back: include structured error context only
+        failures = []
+        for stage in verify_result.stages:
+            if stage.status == VerifyStatus.FAIL:
+                failures.append({
+                    "stage": stage.stage,
+                    "stage_name": stage.name,
+                    "errors": stage.errors,
+                })
+        failure_block = json.dumps(failures, indent=2, default=str)
+        counterexample_section = (
+            f"\n### Verification Errors\n"
+            f"```json\n{failure_block}\n```\n"
+        )
+
+    return f"""## CEGIS Repair Request — Attempt {attempt}
+
+### Original Specification
+Module: {spec.id} — {spec.title}
+Invariants:
+{invariants_text}
+
+### Failed Code
+```
+{failed_code}
+```
+{counterexample_section}
+### Instructions
+Fix the code so it satisfies ALL invariants. Return ONLY the corrected code.
+"""
+
+
+def _call_llm_with_prompt(prompt: str) -> str:
+    """Send a pre-built prompt to the LLM via litellm [REF-T16].
+
+    Separating prompt construction from LLM dispatch allows CEGIS prompts
+    to be injected cleanly at the dispatch boundary.
+
+    Args:
+        prompt: Pre-formatted repair prompt string.
+
+    Returns:
+        LLM response content string.
+    """
+    model = os.environ.get("NIGHTJAR_MODEL", "claude-sonnet-4-6")
+    response = litellm.completion(
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a code repair agent for CARD "
+                    "(Contract-Anchored Regenerative Development). "
+                    "Fix verification failures in generated code. "
+                    "Return ONLY the corrected code."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        temperature=REPAIR_TEMPERATURE,
+        max_tokens=REPAIR_MAX_TOKENS,
+    )
+    return response.choices[0].message.content
 
 
 def _collect_failure_context(verify_result: VerifyResult) -> list[dict]:
@@ -133,7 +309,11 @@ def _call_repair_llm(
     verify_result: VerifyResult,
     attempt: int,
 ) -> str:
-    """Call LLM via litellm to repair failed code.
+    """Call LLM via litellm to repair failed code using CEGIS when possible.
+
+    Per [REF-NEW-03] SpecLoop: extracts Dafny counterexample from failing
+    formal stage (if present) and uses CEGIS-style prompt. Falls back to
+    generic error-message prompt for non-formal failures.
 
     Per [REF-T16], all LLM calls go through litellm for model-agnosticism.
     Model selected from NIGHTJAR_MODEL env var. Temperature 0.2 for
@@ -148,28 +328,19 @@ def _call_repair_llm(
     Returns:
         Repaired code string from LLM.
     """
-    model = os.environ.get("NIGHTJAR_MODEL", "claude-sonnet-4-6")
-    repair_prompt = build_repair_prompt(spec, failed_code, verify_result, attempt)
+    # CEGIS upgrade: extract counterexample from formal stage if available
+    counterexample: Optional[dict[str, str]] = None
+    for stage in verify_result.stages:
+        if stage.status == VerifyStatus.FAIL:
+            ce = extract_counterexample_from_stage(stage)
+            if ce:
+                counterexample = ce
+                break
 
-    response = litellm.completion(
-        model=model,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a code repair agent for CARD "
-                    "(Contract-Anchored Regenerative Development). "
-                    "Fix verification failures in generated code. "
-                    "Return ONLY the corrected code."
-                ),
-            },
-            {"role": "user", "content": repair_prompt},
-        ],
-        temperature=REPAIR_TEMPERATURE,
-        max_tokens=REPAIR_MAX_TOKENS,
+    prompt = build_cegis_repair_prompt(
+        spec, failed_code, verify_result, attempt, counterexample
     )
-
-    return response.choices[0].message.content
+    return _call_llm_with_prompt(prompt)
 
 
 def run_with_retry(
