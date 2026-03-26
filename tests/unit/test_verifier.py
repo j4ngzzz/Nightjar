@@ -94,7 +94,7 @@ class TestRunPipeline:
             result = run_pipeline(spec, "code_string")
 
         assert result.verified is True
-        assert len(result.stages) == 5
+        assert len(result.stages) == 6  # 0,1,2,3,negproof(5),4 — U1.4 added Stage 2.5
 
     def test_short_circuit_on_stage_0_fail(self):
         """Stage 0 fail → pipeline stops, later stages not run."""

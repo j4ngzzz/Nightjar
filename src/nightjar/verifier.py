@@ -158,6 +158,51 @@ def _run_stage_3(spec: CardSpec, code: str) -> StageResult:
     return run_pbt(spec, code)
 
 
+def _run_stage_negproof(spec: CardSpec, code: str) -> StageResult:
+    """Stage 2.5: Negation-proof spec validation [REF-NEW-07, U1.4].
+
+    For each FORMAL invariant, negates the postcondition and checks if
+    CrossHair CONFIRMS the negation (which would indicate a degenerate spec).
+    Returns SKIP when no FORMAL invariants, FAIL when weak specs detected,
+    PASS when all specs are meaningful.
+
+    Per NegProof (arxiv:2603.13414): cheaper than full Dafny for catching
+    specs that are trivially satisfied or never satisfiable.
+    """
+    import time as _time
+    from nightjar.negation_proof import run_negation_proof
+    from nightjar.types import InvariantTier
+
+    start = _time.monotonic()
+
+    # Skip if no formal invariants (nothing to check)
+    has_formal = any(inv.tier == InvariantTier.FORMAL for inv in spec.invariants)
+    if not has_formal:
+        return StageResult(stage=5, name="negation_proof", status=VerifyStatus.SKIP)
+
+    neg_result = run_negation_proof(spec, code)
+    duration = int((_time.monotonic() - start) * 1000)
+
+    if neg_result.passed:
+        return StageResult(
+            stage=5, name="negation_proof", status=VerifyStatus.PASS,
+            duration_ms=duration,
+        )
+    else:
+        return StageResult(
+            stage=5, name="negation_proof", status=VerifyStatus.FAIL,
+            duration_ms=duration,
+            errors=[{
+                "type": "weak_spec",
+                "message": (
+                    f"Degenerate spec detected — negation proof confirmed for: "
+                    + ", ".join(repr(s) for s in neg_result.weak_specs)
+                ),
+                "weak_specs": neg_result.weak_specs,
+            }],
+        )
+
+
 def _run_stage_4(spec: CardSpec, code: str) -> StageResult:
     """Stage 4: Formal verification with complexity-discriminated routing (U1.5).
 
@@ -317,6 +362,17 @@ def run_pipeline(
     display.on_stage_complete(result_3)
 
     if not (_stage_ok(result_2) and _stage_ok(result_3)):
+        result = _build_result(stages, start, verified=False)
+        display.on_pipeline_complete(result)
+        return result
+
+    # Stage 2.5: Negation-proof spec validation (U1.4 — NegProof)
+    # Checks FORMAL invariants are meaningful before expensive Dafny run.
+    display.on_stage_start(5, "negation_proof")
+    result_neg = _run_stage_negproof(spec, code)
+    stages.append(result_neg)
+    display.on_stage_complete(result_neg)
+    if not _stage_ok(result_neg):
         result = _build_result(stages, start, verified=False)
         display.on_pipeline_complete(result)
         return result
