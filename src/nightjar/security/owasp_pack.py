@@ -161,6 +161,36 @@ def _contains_sql_metachar(value: str) -> bool:
     return check_sql_injection(value)
 
 
+# ── Command injection allowlist ───────────────────────────
+# Safe allowlisted command argument patterns.
+# Production code MUST define its own domain-specific allowlist.
+# This is a conservative default that only allows alphanumerics and safe punctuation.
+
+_ALLOWLISTED_CMD_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+
+
+def _is_allowlisted(arg: str) -> bool:
+    """Check whether a command argument is on the safe allowlist.
+
+    Used in icontract template for command injection prevention.
+    Only alphanumeric characters, hyphens, underscores, and dots are allowed
+    by default. Production deployments should define a stricter domain-specific
+    allowlist.
+
+    Security note: NEVER pass raw user input as shell arguments. This function
+    is a defence-in-depth helper — use subprocess with list args, not shell=True.
+
+    Args:
+        arg: Command argument string to validate.
+
+    Returns:
+        True if the argument matches the safe allowlist pattern, False otherwise.
+    """
+    if not isinstance(arg, str):
+        return False
+    return bool(_ALLOWLISTED_CMD_PATTERN.match(arg))
+
+
 # ── XSS detection ────────────────────────────────────────
 # Detects unescaped HTML/JS patterns in output strings.
 
