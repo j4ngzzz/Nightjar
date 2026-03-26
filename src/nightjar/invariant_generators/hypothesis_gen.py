@@ -17,13 +17,11 @@ validation properties than generating implementations. This is why
 property-based testing is the right verification approach for Stage 3.
 """
 
-import os
 import re
 
 import litellm
 
 from nightjar.invariant_generators import InvariantCandidate
-from nightjar.intent_router import InvariantClass
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -94,17 +92,20 @@ def generate_hypothesis(
         "Generate the Hypothesis property test."
     )
 
-    response = litellm.completion(
-        model=model,
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=_GENERATION_TEMPERATURE,
-        max_tokens=_MAX_TOKENS,
-    )
-
-    raw = response.choices[0].message.content.strip()
+    try:
+        response = litellm.completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=_GENERATION_TEMPERATURE,
+            max_tokens=_MAX_TOKENS,
+        )
+        raw = response.choices[0].message.content.strip()
+    except Exception as e:
+        # LLM unavailable — return safe fallback test stub
+        return _fallback_test(candidate, reason=str(e))
 
     # Extract code (may be wrapped in markdown code block)
     code = _extract_code(raw)
@@ -136,15 +137,17 @@ def _is_valid_syntax(code: str) -> bool:
         return False
 
 
-def _fallback_test(candidate: InvariantCandidate) -> str:
-    """Safe fallback Hypothesis test when LLM output is invalid."""
+def _fallback_test(candidate: InvariantCandidate, reason: str = "") -> str:
+    """Safe fallback Hypothesis test when LLM output is invalid or unavailable."""
     safe_name = re.sub(r"\W+", "_", candidate.statement.lower())[:40].strip("_")
+    comment = f"    # LLM error: {reason}\n" if reason else ""
     return (
         "from hypothesis import given\n"
         "from hypothesis import strategies as st\n"
         "\n"
         f"@given(st.text())\n"
         f"def test_{safe_name}(x):\n"
+        f"{comment}"
         f"    # TODO: implement property for: {candidate.statement}\n"
         f"    pass\n"
     )

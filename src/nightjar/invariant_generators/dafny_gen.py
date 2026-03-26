@@ -23,13 +23,11 @@ License: MIT
 [REF-P06] DafnyPro: structured error format enables targeted repair.
 """
 
-import os
 import re
 
 import litellm
 
 from nightjar.invariant_generators import InvariantCandidate
-from nightjar.intent_router import InvariantClass
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -91,17 +89,23 @@ def generate_dafny(
         "Generate the Dafny specification clause."
     )
 
-    response = litellm.completion(
-        model=model,
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=_GENERATION_TEMPERATURE,
-        max_tokens=_MAX_TOKENS,
-    )
-
-    raw = response.choices[0].message.content.strip()
+    try:
+        response = litellm.completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=_GENERATION_TEMPERATURE,
+            max_tokens=_MAX_TOKENS,
+        )
+        raw = response.choices[0].message.content.strip()
+    except Exception as e:
+        # LLM unavailable — return safe commented stub (already optional tier)
+        return _mark_as_optional(
+            f"# TODO: generate Dafny clause  # LLM error: {e}",
+            candidate.statement,
+        )
 
     # Extract just the Dafny clause(s)
     clause = _extract_dafny_clause(raw)

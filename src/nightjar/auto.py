@@ -40,7 +40,6 @@ import json
 import os
 import re
 import threading
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -228,17 +227,25 @@ def _generate_candidates(intent: NLIntent, model: str) -> list[dict]:
         user_prompt += f"Behavioral context: {', '.join(intent.behaviors)}\n"
     user_prompt += "\nGenerate invariant candidates as JSON array."
 
-    response = litellm.completion(
-        model=model,
-        messages=[
-            {"role": "system", "content": _CANDIDATE_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=_GENERATION_TEMPERATURE,
-        max_tokens=_CANDIDATE_MAX_TOKENS,
-    )
+    try:
+        response = litellm.completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": _CANDIDATE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=_GENERATION_TEMPERATURE,
+            max_tokens=_CANDIDATE_MAX_TOKENS,
+        )
+        raw = response.choices[0].message.content.strip()
+    except Exception as e:
+        click.echo(
+            f"Warning: LLM candidate generation failed ({e}). "
+            "Returning empty candidate list.",
+            err=True,
+        )
+        return []
 
-    raw = response.choices[0].message.content.strip()
     return _parse_candidates_json(raw)
 
 

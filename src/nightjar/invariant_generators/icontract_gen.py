@@ -15,7 +15,6 @@ NL2Contract (CR-03, arxiv 2510.12702): Generates sound contracts
 (pre + postconditions) from natural language invariant statements.
 """
 
-import os
 import re
 
 import litellm
@@ -85,17 +84,20 @@ def generate_icontract(
         "Generate the icontract decorator line."
     )
 
-    response = litellm.completion(
-        model=model,
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=_GENERATION_TEMPERATURE,
-        max_tokens=_MAX_TOKENS,
-    )
-
-    raw = response.choices[0].message.content.strip()
+    try:
+        response = litellm.completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=_GENERATION_TEMPERATURE,
+            max_tokens=_MAX_TOKENS,
+        )
+        raw = response.choices[0].message.content.strip()
+    except Exception as e:
+        # LLM unavailable — return safe commented stub
+        return _fallback_decorator(candidate, reason=str(e))
 
     # Extract just the decorator line (may include extra text)
     decorator = _extract_decorator(raw)
@@ -151,10 +153,12 @@ def _is_valid_syntax(code: str) -> bool:
         return False
 
 
-def _fallback_decorator(candidate: InvariantCandidate) -> str:
-    """Safe fallback decorator when LLM output is invalid.
+def _fallback_decorator(candidate: InvariantCandidate, reason: str = "") -> str:
+    """Safe fallback decorator when LLM output is invalid or LLM unavailable.
 
-    Produces a commented-out stub with the original statement.
+    Produces a commented-out stub with the original statement so the
+    .card.md can still be written and reviewed by the user.
     """
     escaped = candidate.statement.replace("'", "\\'")
-    return f"# TODO: @icontract.require(lambda: True, '{escaped}')"
+    suffix = f"  # LLM error: {reason}" if reason else ""
+    return f"# TODO: @icontract.require(lambda: True, '{escaped}'){suffix}"
