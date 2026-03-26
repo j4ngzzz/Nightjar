@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from contractd.replay import (
+from nightjar.replay import (
     ReplayStore,
     store_success,
     retrieve_similar,

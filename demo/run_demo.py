@@ -490,7 +490,7 @@ def step_break_invariant(
 
 
 def step_model_swap(console, *, dry_run: bool, no_llm: bool):
-    """Step 6: Demonstrate model swapping via CARD_MODEL env var.
+    """Step 6: Demonstrate model swapping via NIGHTJAR_MODEL env var.
 
     Shows that CARD is model-agnostic -- any litellm-supported model works.
     The verification pipeline ensures outputs satisfy invariants regardless
@@ -501,7 +501,7 @@ def step_model_swap(console, *, dry_run: bool, no_llm: bool):
     """
     _print_step(console, 6, "Model Swap -- CARD is Model-Agnostic")
 
-    _print_info(console, "CARD uses litellm [REF-T16] -- swap models via CARD_MODEL env var:")
+    _print_info(console, "CARD uses litellm [REF-T16] -- swap models via NIGHTJAR_MODEL env var:")
 
     if HAS_RICH and console:
         table = Table(title="Supported Models (examples)", show_lines=False)
@@ -514,16 +514,16 @@ def step_model_swap(console, *, dry_run: bool, no_llm: bool):
         table.add_row("openai/o3", "OpenAI", "~$0.050")
         console.print(table)
     else:
-        print("  CARD_MODEL=claude-sonnet-4-6        Anthropic    ~$0.018")
-        print("  CARD_MODEL=deepseek/deepseek-chat   DeepSeek     ~$0.0003")
-        print("  CARD_MODEL=openai/gpt-4o            OpenAI       ~$0.020")
-        print("  CARD_MODEL=openai/o3                OpenAI       ~$0.050")
+        print("  NIGHTJAR_MODEL=claude-sonnet-4-6        Anthropic    ~$0.018")
+        print("  NIGHTJAR_MODEL=deepseek/deepseek-chat   DeepSeek     ~$0.0003")
+        print("  NIGHTJAR_MODEL=openai/gpt-4o            OpenAI       ~$0.020")
+        print("  NIGHTJAR_MODEL=openai/o3                OpenAI       ~$0.050")
 
     _print_info(console, "")
     _print_info(console, "Example: switch to DeepSeek for 10x cost savings:")
     _print_command(
         console,
-        'CARD_MODEL=deepseek/deepseek-chat contractd build --contract .card/payment.card.md --target py',
+        'NIGHTJAR_MODEL=deepseek/deepseek-chat contractd build --contract .card/payment.card.md --target py',
     )
     _print_info(console, "Different models produce different code, but the verification")
     _print_info(console, "pipeline ensures all outputs satisfy the same invariants.")
@@ -681,7 +681,7 @@ def main():
     3. Build -- generate + verify via LLM pipeline
     4. Show VERIFIED -- green success badge
     5. Break invariant -- inject impossible constraint, show FAIL
-    6. Model swap -- demonstrate CARD_MODEL env var
+    6. Model swap -- demonstrate NIGHTJAR_MODEL env var
     7. Explain -- human-readable failure report
     8. Cost summary -- pipeline economics
 

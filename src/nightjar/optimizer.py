@@ -21,8 +21,8 @@ from dataclasses import dataclass
 
 import litellm
 
-from contractd.tracking import TrackingDB
-from contractd.prompts import PromptTemplate, PromptRegistry
+from nightjar.tracking import TrackingDB
+from nightjar.prompts import PromptTemplate, PromptRegistry
 
 
 @dataclass
@@ -69,7 +69,7 @@ def _call_llm_for_variation(
     - [REF-T26] DSPy SIMBA — meta-prompt optimization
     - [REF-T16] litellm — model-agnostic LLM calls
     """
-    resolved_model = model or os.environ.get("CARD_MODEL", "claude-sonnet-4-6")
+    resolved_model = model or os.environ.get("NIGHTJAR_MODEL", "claude-sonnet-4-6")
 
     meta_prompt = (
         "You are a prompt optimization expert. Given the current system prompt "

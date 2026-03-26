@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from contractd.prompts import (
+from nightjar.prompts import (
     PromptTemplate,
     PromptRegistry,
     get_template,

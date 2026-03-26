@@ -20,7 +20,7 @@ from typing import Optional
 
 import yaml
 
-from contractd.types import StageResult, VerifyStatus
+from nightjar.types import StageResult, VerifyStatus
 
 # Required top-level fields in .card.md YAML frontmatter
 _REQUIRED_FIELDS = {"card-version", "id"}

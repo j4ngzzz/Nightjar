@@ -1,4 +1,4 @@
-"""Tests for contractd lock — Sealed Dependency Manifest generation.
+"""Tests for nightjar lock — Sealed Dependency Manifest generation.
 
 The lock module scans project imports, resolves installed versions,
 computes SHA-256 hashes of distribution files, and writes a deps.lock
@@ -18,7 +18,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from contractd.lock import (
+from nightjar.lock import (
     scan_project_imports,
     resolve_package_versions,
     compute_package_hash,

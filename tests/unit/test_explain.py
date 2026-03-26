@@ -1,4 +1,4 @@
-"""Tests for contractd explain module.
+"""Tests for nightjar explain module.
 
 Reference: [REF-P06] DafnyPro structured errors — error formatting approach
 Architecture: docs/ARCHITECTURE.md Section 8 (CLI Design)
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from contractd.explain import ExplainOutput, load_report, explain_failure, format_explanation
+from nightjar.explain import ExplainOutput, load_report, explain_failure, format_explanation
 
 
 # ── Fixtures ─────────────────────────────────────────────

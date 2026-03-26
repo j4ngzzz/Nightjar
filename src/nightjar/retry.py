@@ -1,8 +1,15 @@
-"""Clover-pattern retry loop for CARD verification.
+"""Clover-pattern retry loop + BFS proof search for Nightjar verification.
 
 Implements the closed-loop: generate → verify → repair → re-verify.
 On verification failure, collects structured error context, builds a
 repair prompt, calls LLM via litellm, and re-runs the full pipeline.
+
+Also implements BFS proof search (W1.3) as an upgrade to flat retry:
+  - BFS tree where each node = partial Dafny annotation candidate
+  - At each depth level, generate beam_width candidates from best node
+  - Verify each; return on first pass
+  - Keep best-scoring candidate for next depth
+  - >30% absolute improvement over flat sampling (Scout 3 S10)
 
 References:
 - [REF-C02] Closed-loop verification (Clover pattern)
@@ -13,23 +20,24 @@ References:
   assertion batch ID, resource units. Repair prompt includes all context.
 - [REF-T16] litellm — all LLM calls go through litellm for model-agnosticism.
 - ARCHITECTURE.md Section 4 — retry loop design, max N=5, temperature 0.2
+- Scout 3 S3.1-3.2: VerMCTS/BFS proof search
+- CR-12: VerMCTS arxiv:2402.08147 (NeurIPS 2024) — BFS with verifier-in-loop
+- BFS-Prover arxiv:2502.03438 (ACL 2025) — BFS matches MCTS without critic
 
-Design per ARCHITECTURE.md Section 4:
-  1. COLLECT FAILURE CONTEXT from failing stage
-  2. BUILD REPAIR PROMPT with spec + failed code + structured errors
-  3. CALL LLM (via litellm) at temperature 0.2 for deterministic repair
-  4. RE-RUN FULL PIPELINE from Stage 0
-  5. RETRY CAP: N=5 → if still failing, ESCALATE to human
+Design per ARCHITECTURE.md Section 4 + W1.3 BFS:
+  Flat retry: collect errors → LLM repair → re-verify (sequential, N=5)
+  BFS search: beam of candidates → expand best → verify → prune weaker branches
 """
 
 import json
 import os
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Optional
 
 import litellm
 
-from contractd.types import CardSpec, StageResult, VerifyResult, VerifyStatus
-from contractd.verifier import run_pipeline
+from nightjar.types import CardSpec, StageResult, VerifyResult, VerifyStatus
+from nightjar.verifier import run_pipeline
 
 
 # Default retry settings per ARCHITECTURE.md Section 4
@@ -128,7 +136,7 @@ def _call_repair_llm(
     """Call LLM via litellm to repair failed code.
 
     Per [REF-T16], all LLM calls go through litellm for model-agnosticism.
-    Model selected from CARD_MODEL env var. Temperature 0.2 for
+    Model selected from NIGHTJAR_MODEL env var. Temperature 0.2 for
     deterministic repair per ARCHITECTURE.md Section 4.
 
     Args:
@@ -140,7 +148,7 @@ def _call_repair_llm(
     Returns:
         Repaired code string from LLM.
     """
-    model = os.environ.get("CARD_MODEL", "claude-sonnet-4-6")
+    model = os.environ.get("NIGHTJAR_MODEL", "claude-sonnet-4-6")
     repair_prompt = build_repair_prompt(spec, failed_code, verify_result, attempt)
 
     response = litellm.completion(
@@ -211,3 +219,135 @@ def run_with_retry(
     # Exhausted retries — human escalation needed
     result.retry_count = max_retries
     return result
+
+
+# ─── BFS Proof Search (W1.3) ──────────────────────────────────────────────────
+# Per Scout 3 S3.1-3.2 + CR-12 (VerMCTS arxiv:2402.08147, NeurIPS 2024):
+# Best-First Search with verifier-in-the-loop. Each node = partial Dafny
+# annotation candidate. At each depth, generate beam_width candidates from
+# best node, verify each, keep best for next depth.
+# BFS-Prover (arxiv:2502.03438) shows BFS matches MCTS without a critic model.
+# >30% absolute improvement over flat sampling (Scout 3 S10).
+
+
+@dataclass
+class BFSNode:
+    """A node in the BFS proof search tree.
+
+    Per CR-12 (VerMCTS): each node represents a partial Dafny annotation
+    candidate. The score reflects how close it is to passing verification.
+
+    Attributes:
+        code: Dafny code candidate for this node.
+        score: Verification progress score in [0.0, 1.0].
+               1.0 = verified, approaches 1.0 as errors decrease.
+        depth: Tree depth (0 = initial, 1 = first repair level, etc.)
+    """
+    code: str
+    score: float
+    depth: int = 0
+
+
+def _score_verify_result(result: VerifyResult) -> float:
+    """Score a VerifyResult for BFS node ranking.
+
+    Per Scout 3 S5.3 confidence score framework (preview):
+    Score reflects verification progress. Used by BFS to rank candidates.
+
+    Scoring:
+    - Verified = 1.0
+    - Failed with N errors: 1/(N+1) — fewer errors = closer to proof
+
+    Args:
+        result: VerifyResult from run_pipeline().
+
+    Returns:
+        Score in [0.0, 1.0].
+    """
+    if result.verified:
+        return 1.0
+    # Count total errors across all failing stages
+    total_errors = sum(
+        len(stage.errors)
+        for stage in result.stages
+        if stage.status == VerifyStatus.FAIL
+    )
+    return 1.0 / (total_errors + 1)
+
+
+# Default BFS parameters per Scout 3 S3.2 recommendation
+DEFAULT_BFS_MAX_DEPTH = 3
+DEFAULT_BFS_BEAM_WIDTH = 2
+
+
+def run_bfs_search(
+    spec: CardSpec,
+    code: str,
+    max_depth: int = DEFAULT_BFS_MAX_DEPTH,
+    beam_width: int = DEFAULT_BFS_BEAM_WIDTH,
+) -> VerifyResult:
+    """Run BFS proof search — upgrade to flat Clover retry [CR-12, Scout 3 S3].
+
+    Algorithm per BFS-Prover (arxiv:2502.03438) adapted for Dafny:
+    1. Verify initial code
+    2. For each depth level (up to max_depth):
+       a. Generate beam_width repair candidates from best current node
+       b. Verify each candidate immediately (verifier-in-the-loop)
+       c. Return on first PASS
+       d. Keep best-scoring candidate as root for next depth
+    3. Return best failing result if all depths exhausted
+
+    Total pipeline calls: 1 + max_depth * beam_width (bounded)
+    Expected improvement: >30% over flat sampling (Scout 3 S10)
+
+    Args:
+        spec: Parsed .card.md specification.
+        code: Initial generated code to verify.
+        max_depth: Maximum search depth (generations), default 3.
+        beam_width: Candidates generated per depth level, default 2.
+
+    Returns:
+        VerifyResult with verified=True if BFS finds a proof.
+    """
+    # Step 0: Verify initial code
+    result = run_pipeline(spec, code)
+    if result.verified:
+        result.retry_count = 0
+        return result
+
+    # BFS: current best node (root of beam)
+    best_node = BFSNode(code=code, score=_score_verify_result(result), depth=0)
+    best_result = result
+    total_attempts = 0
+
+    # Search over max_depth levels
+    for depth in range(1, max_depth + 1):
+        depth_candidates: list[tuple[BFSNode, VerifyResult]] = []
+
+        # Generate beam_width candidates from best node at this depth
+        for candidate_idx in range(beam_width):
+            total_attempts += 1
+            # Generate repair candidate from best node's code + error context
+            candidate_code = _call_repair_llm(
+                spec, best_node.code, best_result, attempt=total_attempts
+            )
+
+            # Verify candidate (verifier-in-the-loop per CR-12)
+            candidate_result = run_pipeline(spec, candidate_code)
+
+            if candidate_result.verified:
+                candidate_result.retry_count = total_attempts
+                return candidate_result
+
+            # Score for beam ranking
+            score = _score_verify_result(candidate_result)
+            node = BFSNode(code=candidate_code, score=score, depth=depth)
+            depth_candidates.append((node, candidate_result))
+
+        # Select best candidate for next depth (highest score = fewer errors)
+        if depth_candidates:
+            best_node, best_result = max(depth_candidates, key=lambda pair: pair[0].score)
+
+    # Exhausted search — return best failing result
+    best_result.retry_count = total_attempts
+    return best_result

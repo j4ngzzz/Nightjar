@@ -10,8 +10,8 @@ Reference: docs/ARCHITECTURE.md Section 3 (Stage 0)
 """
 
 import pytest
-from contractd.stages.preflight import run_preflight
-from contractd.types import StageResult, VerifyStatus
+from nightjar.stages.preflight import run_preflight
+from nightjar.types import StageResult, VerifyStatus
 
 
 class TestPreflightValidSpec:

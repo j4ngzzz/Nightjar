@@ -12,7 +12,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from contractd.compiler import (
+from nightjar.compiler import (
     SUPPORTED_TARGETS,
     CompileResult,
     compile_dafny,
@@ -74,7 +74,7 @@ class TestCompileResult:
 class TestCompileDafny:
     """Test the compile_dafny function with mocked subprocess."""
 
-    @patch("contractd.compiler.subprocess.run")
+    @patch("nightjar.compiler.subprocess.run")
     def test_successful_compilation(self, mock_run):
         """Successful compile should return success=True with output path."""
         mock_run.return_value = MagicMock(
@@ -92,7 +92,7 @@ class TestCompileDafny:
         assert "build" in cmd
         assert "--target:py" in cmd or "--target" in cmd
 
-    @patch("contractd.compiler.subprocess.run")
+    @patch("nightjar.compiler.subprocess.run")
     def test_compilation_failure(self, mock_run):
         """Failed compile should return success=False with error."""
         mock_run.return_value = MagicMock(
@@ -104,7 +104,7 @@ class TestCompileDafny:
         assert not result.success
         assert "type mismatch" in result.stderr
 
-    @patch("contractd.compiler.subprocess.run")
+    @patch("nightjar.compiler.subprocess.run")
     def test_compile_to_javascript(self, mock_run):
         """JS target should use --target:js."""
         mock_run.return_value = MagicMock(
@@ -114,7 +114,7 @@ class TestCompileDafny:
         cmd = mock_run.call_args[0][0]
         assert "--target:js" in cmd
 
-    @patch("contractd.compiler.subprocess.run")
+    @patch("nightjar.compiler.subprocess.run")
     def test_compile_to_go(self, mock_run):
         """Go target should use --target:go."""
         mock_run.return_value = MagicMock(
@@ -129,7 +129,7 @@ class TestCompileDafny:
         with pytest.raises(UnsupportedTargetError):
             compile_dafny("module.dfy", target="ruby", output_dir="dist")
 
-    @patch("contractd.compiler.subprocess.run")
+    @patch("nightjar.compiler.subprocess.run")
     def test_timeout_handling(self, mock_run):
         """Subprocess timeout should result in failure."""
         import subprocess as sp
@@ -138,7 +138,7 @@ class TestCompileDafny:
         assert not result.success
         assert "timeout" in result.stderr.lower()
 
-    @patch("contractd.compiler.subprocess.run")
+    @patch("nightjar.compiler.subprocess.run")
     def test_dafny_binary_env_var(self, mock_run):
         """DAFNY_PATH env var should override default 'dafny' binary."""
         mock_run.return_value = MagicMock(
@@ -149,7 +149,7 @@ class TestCompileDafny:
         cmd = mock_run.call_args[0][0]
         assert cmd[0] == "/custom/dafny"
 
-    @patch("contractd.compiler.subprocess.run")
+    @patch("nightjar.compiler.subprocess.run")
     def test_output_dir_created(self, mock_run):
         """Output directory should be passed to dafny build."""
         mock_run.return_value = MagicMock(

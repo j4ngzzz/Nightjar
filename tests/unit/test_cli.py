@@ -1,4 +1,4 @@
-"""Tests for contractd CLI commands.
+"""Tests for nightjar CLI commands.
 
 Reference: [REF-T17] Click CLI framework
 Architecture: docs/ARCHITECTURE.md Section 8 (CLI Design)
@@ -13,7 +13,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 from click.testing import CliRunner
 
-from contractd.cli import main
+from nightjar.cli import main
 
 
 @pytest.fixture
@@ -37,12 +37,12 @@ def tmp_project(tmp_path):
 
 
 class TestCLIRoot:
-    """Test the root contractd command group."""
+    """Test the root nightjar command group."""
 
     def test_help_shows_description(self, runner):
         result = runner.invoke(main, ["--help"])
         assert result.exit_code == 0
-        assert "contractd" in result.output.lower() or "contract" in result.output.lower()
+        assert "nightjar" in result.output.lower() or "contract" in result.output.lower()
 
     def test_version_flag(self, runner):
         result = runner.invoke(main, ["--version"])
@@ -58,7 +58,7 @@ class TestCLIRoot:
 
 
 class TestInitCommand:
-    """Test 'contractd init' — scaffold .card.md spec."""
+    """Test 'nightjar init' — scaffold .card.md spec."""
 
     def test_init_creates_card_spec(self, runner, tmp_project):
         result = runner.invoke(main, ["init", "payment", "--output", str(tmp_project)])
@@ -90,9 +90,9 @@ class TestInitCommand:
 
 
 class TestVerifyCommand:
-    """Test 'contractd verify' — run verification pipeline."""
+    """Test 'nightjar verify' — run verification pipeline."""
 
-    @patch("contractd.cli._run_verify")
+    @patch("nightjar.cli._run_verify")
     def test_verify_default_runs_all_stages(self, mock_verify, runner, tmp_project):
         mock_verify.return_value = MagicMock(verified=True, stages=[], total_duration_ms=100)
         result = runner.invoke(main, [
@@ -100,7 +100,7 @@ class TestVerifyCommand:
         ])
         mock_verify.assert_called_once()
 
-    @patch("contractd.cli._run_verify")
+    @patch("nightjar.cli._run_verify")
     def test_verify_fast_skips_dafny(self, mock_verify, runner, tmp_project):
         mock_verify.return_value = MagicMock(verified=True, stages=[], total_duration_ms=50)
         result = runner.invoke(main, [
@@ -111,7 +111,7 @@ class TestVerifyCommand:
         # --fast should exclude stage 4
         assert call_kwargs is not None
 
-    @patch("contractd.cli._run_verify")
+    @patch("nightjar.cli._run_verify")
     def test_verify_single_stage(self, mock_verify, runner, tmp_project):
         mock_verify.return_value = MagicMock(verified=True, stages=[], total_duration_ms=10)
         result = runner.invoke(main, [
@@ -120,7 +120,7 @@ class TestVerifyCommand:
         ])
         mock_verify.assert_called_once()
 
-    @patch("contractd.cli._run_verify")
+    @patch("nightjar.cli._run_verify")
     def test_verify_fail_returns_exit_code_1(self, mock_verify, runner, tmp_project):
         mock_verify.return_value = MagicMock(verified=False, stages=[], total_duration_ms=100)
         result = runner.invoke(main, [
@@ -128,7 +128,7 @@ class TestVerifyCommand:
         ])
         assert result.exit_code == 1
 
-    @patch("contractd.cli._run_verify")
+    @patch("nightjar.cli._run_verify")
     def test_verify_pass_returns_exit_code_0(self, mock_verify, runner, tmp_project):
         mock_verify.return_value = MagicMock(verified=True, stages=[], total_duration_ms=100)
         result = runner.invoke(main, [
@@ -141,9 +141,9 @@ class TestVerifyCommand:
 
 
 class TestGenerateCommand:
-    """Test 'contractd generate' — LLM code generation."""
+    """Test 'nightjar generate' — LLM code generation."""
 
-    @patch("contractd.cli._run_generate")
+    @patch("nightjar.cli._run_generate")
     def test_generate_uses_default_model(self, mock_gen, runner, tmp_project):
         mock_gen.return_value = "generated.dfy"
         result = runner.invoke(main, [
@@ -151,7 +151,7 @@ class TestGenerateCommand:
         ])
         mock_gen.assert_called_once()
 
-    @patch("contractd.cli._run_generate")
+    @patch("nightjar.cli._run_generate")
     def test_generate_accepts_model_flag(self, mock_gen, runner, tmp_project):
         mock_gen.return_value = "generated.dfy"
         result = runner.invoke(main, [
@@ -161,12 +161,12 @@ class TestGenerateCommand:
         ])
         mock_gen.assert_called_once()
 
-    @patch("contractd.cli._run_generate")
+    @patch("nightjar.cli._run_generate")
     def test_generate_respects_card_model_env(self, mock_gen, runner, tmp_project):
         mock_gen.return_value = "generated.dfy"
         result = runner.invoke(main, [
             "generate", "--contract", str(tmp_project / ".card" / "test.card.md")
-        ], env={"CARD_MODEL": "openai/o3"})
+        ], env={"NIGHTJAR_MODEL": "openai/o3"})
         mock_gen.assert_called_once()
 
 
@@ -174,9 +174,9 @@ class TestGenerateCommand:
 
 
 class TestBuildCommand:
-    """Test 'contractd build' — generate + verify + compile."""
+    """Test 'nightjar build' — generate + verify + compile."""
 
-    @patch("contractd.cli._run_build")
+    @patch("nightjar.cli._run_build")
     def test_build_default_target_py(self, mock_build, runner, tmp_project):
         mock_build.return_value = MagicMock(verified=True)
         result = runner.invoke(main, [
@@ -184,7 +184,7 @@ class TestBuildCommand:
         ])
         mock_build.assert_called_once()
 
-    @patch("contractd.cli._run_build")
+    @patch("nightjar.cli._run_build")
     def test_build_accepts_target(self, mock_build, runner, tmp_project):
         mock_build.return_value = MagicMock(verified=True)
         result = runner.invoke(main, [
@@ -194,7 +194,7 @@ class TestBuildCommand:
         ])
         mock_build.assert_called_once()
 
-    @patch("contractd.cli._run_build")
+    @patch("nightjar.cli._run_build")
     def test_build_ci_mode(self, mock_build, runner, tmp_project):
         mock_build.return_value = MagicMock(verified=True)
         result = runner.invoke(main, [
@@ -208,9 +208,9 @@ class TestBuildCommand:
 
 
 class TestShipCommand:
-    """Test 'contractd ship' — build + sign artifact."""
+    """Test 'nightjar ship' — build + sign artifact."""
 
-    @patch("contractd.cli._run_build")
+    @patch("nightjar.cli._run_build")
     def test_ship_runs_build(self, mock_build, runner, tmp_project):
         mock_build.return_value = MagicMock(verified=True)
         result = runner.invoke(main, [
@@ -219,7 +219,7 @@ class TestShipCommand:
         assert result.exit_code == 0
         assert "ship complete" in result.output.lower()
 
-    @patch("contractd.cli._run_build")
+    @patch("nightjar.cli._run_build")
     def test_ship_fails_on_verification_failure(self, mock_build, runner, tmp_project):
         mock_build.return_value = MagicMock(verified=False)
         result = runner.invoke(main, [
@@ -232,9 +232,9 @@ class TestShipCommand:
 
 
 class TestExplainCommand:
-    """Test 'contractd explain' — show last failure in human-readable form."""
+    """Test 'nightjar explain' — show last failure in human-readable form."""
 
-    @patch("contractd.cli._load_verify_report")
+    @patch("nightjar.cli._load_verify_report")
     def test_explain_shows_last_failure(self, mock_report, runner, tmp_project):
         mock_report.return_value = {
             "verified": False,
@@ -246,7 +246,7 @@ class TestExplainCommand:
         ])
         assert result.exit_code == 0
 
-    @patch("contractd.cli._load_verify_report")
+    @patch("nightjar.cli._load_verify_report")
     def test_explain_no_report(self, mock_report, runner, tmp_project):
         mock_report.return_value = None
         result = runner.invoke(main, [
@@ -259,9 +259,9 @@ class TestExplainCommand:
 
 
 class TestLockCommand:
-    """Test 'contractd lock' — freeze deps into deps.lock with hashes."""
+    """Test 'nightjar lock' — freeze deps into deps.lock with hashes."""
 
-    @patch("contractd.cli._run_lock")
+    @patch("nightjar.cli._run_lock")
     def test_lock_creates_deps_lock(self, mock_lock, runner, tmp_project):
         mock_lock.return_value = True
         result = runner.invoke(main, [
@@ -274,9 +274,9 @@ class TestLockCommand:
 
 
 class TestRetryCommand:
-    """Test 'contractd retry' — force retry with LLM repair loop."""
+    """Test 'nightjar retry' — force retry with LLM repair loop."""
 
-    @patch("contractd.cli._run_retry")
+    @patch("nightjar.cli._run_retry")
     def test_retry_default_max(self, mock_retry, runner, tmp_project):
         mock_retry.return_value = MagicMock(verified=True)
         result = runner.invoke(main, [
@@ -284,7 +284,7 @@ class TestRetryCommand:
         ])
         mock_retry.assert_called_once()
 
-    @patch("contractd.cli._run_retry")
+    @patch("nightjar.cli._run_retry")
     def test_retry_custom_max(self, mock_retry, runner, tmp_project):
         mock_retry.return_value = MagicMock(verified=True)
         result = runner.invoke(main, [
@@ -300,7 +300,7 @@ class TestRetryCommand:
 class TestExitCodes:
     """Test that exit codes follow the spec from ARCHITECTURE.md Section 8."""
 
-    @patch("contractd.cli._run_verify")
+    @patch("nightjar.cli._run_verify")
     def test_exit_0_on_pass(self, mock_verify, runner, tmp_project):
         mock_verify.return_value = MagicMock(verified=True, stages=[], total_duration_ms=100)
         result = runner.invoke(main, [
@@ -308,7 +308,7 @@ class TestExitCodes:
         ])
         assert result.exit_code == 0
 
-    @patch("contractd.cli._run_verify")
+    @patch("nightjar.cli._run_verify")
     def test_exit_1_on_fail(self, mock_verify, runner, tmp_project):
         mock_verify.return_value = MagicMock(verified=False, stages=[], total_duration_ms=100)
         result = runner.invoke(main, [

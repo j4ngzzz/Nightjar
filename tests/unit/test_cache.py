@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from contractd.cache import (
+from nightjar.cache import (
     compute_cache_key,
     get_cached_result,
     store_result,

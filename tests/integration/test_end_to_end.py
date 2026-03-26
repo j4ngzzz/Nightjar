@@ -1,7 +1,7 @@
 """End-to-end integration tests for the CARD pipeline.
 
-Tests the full contractd workflow: init -> generate -> verify -> build -> explain.
-Mock-based tests run in CI; live tests require CARD_MODEL + API key + Dafny.
+Tests the full nightjar workflow: init -> generate -> verify -> build -> explain.
+Mock-based tests run in CI; live tests require NIGHTJAR_MODEL + API key + Dafny.
 
 References:
 - ARCHITECTURE.md Section 9 -- Data Flow
@@ -18,9 +18,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from contractd.cli import main
-from contractd.parser import parse_card_spec
-from contractd.types import (
+from nightjar.cli import main
+from nightjar.parser import parse_card_spec
+from nightjar.types import (
     CardSpec,
     Contract,
     ContractInput,
@@ -184,7 +184,7 @@ def _make_verify_result(verified: bool = True) -> VerifyResult:
 
 
 class TestInitCreatesSpec:
-    """Test that 'contractd init <module>' creates .card/<module>.card.md."""
+    """Test that 'nightjar init <module>' creates .card/<module>.card.md."""
 
     def test_init_creates_spec(self, runner: CliRunner, tmp_project: Path) -> None:
         """The init command should create a .card.md spec file in the .card/ dir."""
@@ -256,7 +256,7 @@ class TestVerifyWithValidSpec:
 
         Directly calls run_pipeline to bypass CLI wiring.
         """
-        from contractd.verifier import run_pipeline
+        from nightjar.verifier import run_pipeline
 
         result = run_pipeline(sample_card_spec, valid_code, spec_path=str(spec_file))
         # Stage 0 (preflight) should pass; later stages may skip
@@ -266,7 +266,7 @@ class TestVerifyWithValidSpec:
         self, spec_file: Path, valid_code: str, sample_card_spec: CardSpec
     ) -> None:
         """run_pipeline must return a VerifyResult dataclass."""
-        from contractd.verifier import run_pipeline
+        from nightjar.verifier import run_pipeline
 
         result = run_pipeline(sample_card_spec, valid_code, spec_path=str(spec_file))
         assert isinstance(result, VerifyResult)
@@ -289,7 +289,7 @@ class TestVerifyFailsOnBadCode:
         Stage 0 checks the spec file (passes), but PBT (Stage 3) or later
         should fail when code has syntax errors.
         """
-        from contractd.verifier import run_pipeline
+        from nightjar.verifier import run_pipeline
 
         # The verifier writes code to a temp file for AST checks; bad syntax
         # should propagate to a stage failure.
@@ -304,7 +304,7 @@ class TestVerifyFailsOnBadCode:
         self, spec_file: Path, bad_code: str
     ) -> None:
         """Code with syntax errors should fail PBT when property invariants exist."""
-        from contractd.verifier import run_pipeline
+        from nightjar.verifier import run_pipeline
 
         spec_with_property = CardSpec(
             card_version="1.0",
@@ -345,8 +345,8 @@ class TestBuildCommandWithMockLLM:
         mock_verify_result = _make_verify_result(verified=True)
 
         with (
-            patch("contractd.cli._run_generate", return_value=mock_gen_result),
-            patch("contractd.cli._run_verify", return_value=mock_verify_result),
+            patch("nightjar.cli._run_generate", return_value=mock_gen_result),
+            patch("nightjar.cli._run_verify", return_value=mock_verify_result),
         ):
             result = runner.invoke(
                 main,
@@ -469,7 +469,7 @@ class TestLockCommand:
         if lock_path.exists():
             content = lock_path.read_text(encoding="utf-8")
             # Should have the header
-            assert "deps.lock" in content or "contractd" in content
+            assert "deps.lock" in content or "nightjar" in content
 
 
 # ---------------------------------------------------------------------------
@@ -517,9 +517,9 @@ class TestCLIVersion:
         assert "0.1.0" in result.output
 
     def test_version_contains_prog_name(self, runner: CliRunner) -> None:
-        """--version should include the program name 'contractd'."""
+        """--version should include the program name 'nightjar'."""
         result = runner.invoke(main, ["--version"])
-        assert "contractd" in result.output.lower()
+        assert "nightjar" in result.output.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -564,15 +564,15 @@ class TestFullPipelineMock:
         mock_gen_result.spec_id = "payment"
 
         with patch(
-            "contractd.generator.generate_code", return_value=mock_gen_result
+            "nightjar.generator.generate_code", return_value=mock_gen_result
         ):
-            from contractd.generator import generate_code
+            from nightjar.generator import generate_code
 
             result = generate_code(spec, model="mock-model")
             assert result.dafny_code is not None
 
         # Step 4: verify -- run the real pipeline with valid code
-        from contractd.verifier import run_pipeline
+        from nightjar.verifier import run_pipeline
 
         verify_result = run_pipeline(spec, "def pay(x): return x\n", spec_path=str(spec_path))
         assert isinstance(verify_result, VerifyResult)
@@ -608,7 +608,7 @@ class TestFullPipelineMock:
         spec_path = tmp_project / ".card" / "auth.card.md"
         spec = parse_card_spec(str(spec_path))
 
-        from contractd.verifier import run_pipeline
+        from nightjar.verifier import run_pipeline
 
         result = run_pipeline(spec, "x = 1\n", spec_path=str(spec_path))
         assert isinstance(result, VerifyResult)

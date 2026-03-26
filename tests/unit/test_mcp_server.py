@@ -12,14 +12,14 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from contractd.mcp_server import (
+from nightjar.mcp_server import (
     create_mcp_server,
     handle_verify_contract,
     handle_get_violations,
     handle_suggest_fix,
     _violation_store,
 )
-from contractd.types import (
+from nightjar.types import (
     VerifyResult, StageResult, VerifyStatus,
 )
 
@@ -77,7 +77,7 @@ class TestCreateMcpServer:
     def test_server_has_name(self):
         """MCP server has the correct name."""
         server = create_mcp_server()
-        assert server.name == "contractd"
+        assert server.name == "nightjar"
 
     def test_server_has_tools(self):
         """Server registers all 3 tools."""
@@ -96,7 +96,7 @@ class TestVerifyContract:
     async def test_verify_contract_pass(self):
         """verify_contract returns verified=true on passing verification."""
         result = make_pass_result()
-        with patch("contractd.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
+        with patch("nightjar.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
             response = await handle_verify_contract(
                 spec_path=".card/payment.card.md",
                 code_path="dist/payment.py",
@@ -110,7 +110,7 @@ class TestVerifyContract:
     async def test_verify_contract_fail(self):
         """verify_contract returns verified=false with errors on failure."""
         result = make_fail_result()
-        with patch("contractd.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
+        with patch("nightjar.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
             response = await handle_verify_contract(
                 spec_path=".card/payment.card.md",
                 code_path="dist/payment.py",
@@ -132,7 +132,7 @@ class TestVerifyContract:
             ],
             total_duration_ms=3250,
         )
-        with patch("contractd.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
+        with patch("nightjar.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
             response = await handle_verify_contract(
                 spec_path=".card/payment.card.md",
                 code_path="dist/payment.py",
@@ -145,7 +145,7 @@ class TestVerifyContract:
     async def test_verify_contract_stores_violations(self):
         """verify_contract stores violations for get_violations to retrieve."""
         result = make_fail_result()
-        with patch("contractd.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
+        with patch("nightjar.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
             await handle_verify_contract(
                 spec_path=".card/payment.card.md",
                 code_path="dist/payment.py",
@@ -164,7 +164,7 @@ class TestGetViolations:
     async def test_get_violations_returns_details(self):
         """get_violations returns detailed violation report."""
         result = make_fail_result()
-        with patch("contractd.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
+        with patch("nightjar.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
             await handle_verify_contract(
                 spec_path=".card/payment.card.md",
                 code_path="dist/payment.py",
@@ -197,7 +197,7 @@ class TestSuggestFix:
         """suggest_fix returns LLM-generated fix suggestion."""
         # Store a violation first
         result = make_fail_result()
-        with patch("contractd.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
+        with patch("nightjar.mcp_server._run_verification", new_callable=AsyncMock, return_value=result):
             await handle_verify_contract(
                 spec_path=".card/payment.card.md",
                 code_path="dist/payment.py",
@@ -207,7 +207,7 @@ class TestSuggestFix:
         mock_response.choices[0].message.content = (
             "Add a precondition check: if amount <= 0, raise ValueError"
         )
-        with patch("contractd.mcp_server.litellm.completion", return_value=mock_response):
+        with patch("nightjar.mcp_server.litellm.completion", return_value=mock_response):
             response = await handle_suggest_fix(
                 spec_path=".card/payment.card.md",
                 violation_id="0",

@@ -12,8 +12,8 @@ References:
 """
 
 import pytest
-from contractd.stages.deps import run_deps_check, parse_deps_lock
-from contractd.types import StageResult, VerifyStatus
+from nightjar.stages.deps import run_deps_check, parse_deps_lock
+from nightjar.types import StageResult, VerifyStatus
 
 
 class TestDepsLockParsing:

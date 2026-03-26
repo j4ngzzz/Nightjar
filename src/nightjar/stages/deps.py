@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from contractd.types import StageResult, VerifyStatus
+from nightjar.types import StageResult, VerifyStatus
 
 # Known import-name → package-name mappings where they differ
 _IMPORT_TO_PACKAGE = {
@@ -101,7 +101,7 @@ def run_deps_check(
     if not lock_file.exists():
         return _fail(start, [{
             "message": f"Sealed dependency manifest not found: {deps_lock_path}. "
-                       "Run `contractd lock` to create it [REF-C08]."
+                       "Run `nightjar lock` to create it [REF-C08]."
         }])
 
     # 3. Parse deps.lock

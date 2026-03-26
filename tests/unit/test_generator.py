@@ -9,11 +9,11 @@ BEFORE MODIFYING: Read docs/ARCHITECTURE.md Section 5.
 import os
 import pytest
 from unittest.mock import patch, MagicMock
-from contractd.types import (
+from nightjar.types import (
     CardSpec, Contract, ContractInput, ContractOutput,
     ModuleBoundary, Invariant, InvariantTier,
 )
-from contractd.generator import (
+from nightjar.generator import (
     generate_code,
     run_analyst,
     run_formalizer,
@@ -75,25 +75,25 @@ def mock_llm_response(content: str) -> MagicMock:
 
 
 class TestGetModel:
-    """Test model selection from CARD_MODEL env var [REF-T16]."""
+    """Test model selection from NIGHTJAR_MODEL env var [REF-T16]."""
 
     def test_default_model(self):
-        """Default model when CARD_MODEL is not set."""
+        """Default model when NIGHTJAR_MODEL is not set."""
         with patch.dict(os.environ, {}, clear=True):
-            # Remove CARD_MODEL if present
-            os.environ.pop("CARD_MODEL", None)
+            # Remove NIGHTJAR_MODEL if present
+            os.environ.pop("NIGHTJAR_MODEL", None)
             model = get_model()
             assert model == "claude-sonnet-4-6"
 
     def test_custom_model_from_env(self):
-        """Model from CARD_MODEL env var."""
-        with patch.dict(os.environ, {"CARD_MODEL": "deepseek/deepseek-chat"}):
+        """Model from NIGHTJAR_MODEL env var."""
+        with patch.dict(os.environ, {"NIGHTJAR_MODEL": "deepseek/deepseek-chat"}):
             model = get_model()
             assert model == "deepseek/deepseek-chat"
 
     def test_model_override_parameter(self):
         """Explicit model parameter overrides env var."""
-        with patch.dict(os.environ, {"CARD_MODEL": "deepseek/deepseek-chat"}):
+        with patch.dict(os.environ, {"NIGHTJAR_MODEL": "deepseek/deepseek-chat"}):
             model = get_model(override="openai/o3")
             assert model == "openai/o3"
 
@@ -104,7 +104,7 @@ class TestGetModel:
 class TestAnalyst:
     """Test the Analyst agent — LLM call 1 [REF-C03, REF-P07]."""
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_analyst_returns_analysis(self, mock_completion):
         """Analyst reads spec and produces structured requirements analysis."""
         mock_completion.return_value = mock_llm_response(
@@ -125,7 +125,7 @@ class TestAnalyst:
         assert any(m["role"] == "system" for m in messages)
         assert any(m["role"] == "user" for m in messages)
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_analyst_includes_intent_and_criteria(self, mock_completion):
         """Analyst prompt includes spec intent and acceptance criteria."""
         mock_completion.return_value = mock_llm_response("Analysis output")
@@ -143,7 +143,7 @@ class TestAnalyst:
 class TestFormalizer:
     """Test the Formalizer agent — LLM call 2 [REF-C03, REF-P07]."""
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_formalizer_returns_dafny_skeleton(self, mock_completion):
         """Formalizer produces Dafny module with requires/ensures."""
         dafny_skeleton = (
@@ -165,7 +165,7 @@ class TestFormalizer:
         assert len(result) > 0
         mock_completion.assert_called_once()
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_formalizer_receives_analyst_output(self, mock_completion):
         """Formalizer prompt includes the analyst's analysis."""
         mock_completion.return_value = mock_llm_response("Dafny skeleton")
@@ -184,7 +184,7 @@ class TestFormalizer:
 class TestCoder:
     """Test the Coder agent — LLM call 3 [REF-C03, REF-P07]."""
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_coder_returns_complete_dafny(self, mock_completion):
         """Coder produces complete Dafny implementation."""
         complete_dafny = (
@@ -206,7 +206,7 @@ class TestCoder:
         assert len(result) > 0
         mock_completion.assert_called_once()
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_coder_receives_formalizer_output(self, mock_completion):
         """Coder prompt includes the formalizer's Dafny skeleton."""
         mock_completion.return_value = mock_llm_response("Complete Dafny")
@@ -225,7 +225,7 @@ class TestCoder:
 class TestGenerateCode:
     """Test the full generation pipeline [REF-C03]."""
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_full_pipeline_produces_result(self, mock_completion):
         """Full pipeline: Analyst → Formalizer → Coder produces GenerationResult."""
         mock_completion.side_effect = [
@@ -252,22 +252,22 @@ class TestGenerateCode:
         # Three LLM calls: analyst, formalizer, coder
         assert mock_completion.call_count == 3
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_pipeline_uses_correct_model(self, mock_completion):
-        """Pipeline uses model from CARD_MODEL env var [REF-T16]."""
+        """Pipeline uses model from NIGHTJAR_MODEL env var [REF-T16]."""
         mock_completion.side_effect = [
             mock_llm_response("Analysis"),
             mock_llm_response("Skeleton"),
             mock_llm_response("Complete Dafny"),
         ]
         spec = make_spec()
-        with patch.dict(os.environ, {"CARD_MODEL": "deepseek/deepseek-chat"}):
+        with patch.dict(os.environ, {"NIGHTJAR_MODEL": "deepseek/deepseek-chat"}):
             generate_code(spec)
         # All three calls should use the same model
         for call in mock_completion.call_args_list:
             assert call.kwargs.get("model") == "deepseek/deepseek-chat"
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_pipeline_with_model_override(self, mock_completion):
         """Pipeline accepts explicit model override."""
         mock_completion.side_effect = [
@@ -280,7 +280,7 @@ class TestGenerateCode:
         for call in mock_completion.call_args_list:
             assert call.kwargs.get("model") == "openai/o3"
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_pipeline_sequential_data_flow(self, mock_completion):
         """Each stage receives output from the previous stage."""
         analyst_text = "ANALYST_OUTPUT_12345"
@@ -311,7 +311,7 @@ class TestGenerateCode:
 class TestEdgeCases:
     """Test error handling in the generation pipeline."""
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_llm_returns_empty_content(self, mock_completion):
         """Handle LLM returning empty content gracefully."""
         mock_completion.return_value = mock_llm_response("")
@@ -324,7 +324,7 @@ class TestEdgeCases:
         with pytest.raises(TypeError):
             generate_code(None)  # type: ignore
 
-    @patch("contractd.generator.litellm.completion")
+    @patch("nightjar.generator.litellm.completion")
     def test_temperature_for_generation(self, mock_completion):
         """Generation uses appropriate temperature settings."""
         mock_completion.side_effect = [

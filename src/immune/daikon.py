@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Generator, Optional
 
-from contractd.types import Invariant as CardInvariant, InvariantTier
+from nightjar.types import Invariant as CardInvariant, InvariantTier
 
 
 class InvariantKind(str, Enum):
@@ -483,7 +483,7 @@ class InvariantMiner:
             function_name: The function to export invariants for.
 
         Returns:
-            List of contractd.types.Invariant objects.
+            List of nightjar.types.Invariant objects.
         """
         invariants = self.get_invariants(function_name)
         card_invariants = []

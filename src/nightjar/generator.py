@@ -9,7 +9,7 @@ Pipeline stages:
   2. Formalizer: reads analysis + contract + invariants → Dafny module with specs
   3. Coder: reads Dafny skeleton → complete Dafny implementation
 
-All LLM calls use litellm.completion(). Model selected via CARD_MODEL env var.
+All LLM calls use litellm.completion(). Model selected via NIGHTJAR_MODEL env var.
 
 BEFORE MODIFYING: Read docs/ARCHITECTURE.md Section 5 and docs/REFERENCES.md
 entries [REF-C03], [REF-P07], [REF-C04], [REF-P12], [REF-T16].
@@ -53,7 +53,7 @@ class GenerationResult:
 def get_model(override: str | None = None) -> str:
     """Get the LLM model to use for generation.
 
-    Priority: explicit override > CARD_MODEL env var > default.
+    Priority: explicit override > NIGHTJAR_MODEL env var > default.
     All models go through litellm [REF-T16] for provider-agnosticism.
 
     Args:
@@ -64,7 +64,7 @@ def get_model(override: str | None = None) -> str:
     """
     if override:
         return override
-    return os.environ.get("CARD_MODEL", DEFAULT_MODEL)
+    return os.environ.get("NIGHTJAR_MODEL", DEFAULT_MODEL)
 
 
 # -- Prompt builders --
@@ -328,7 +328,7 @@ def generate_code(spec: CardSpec, model: str | None = None) -> GenerationResult:
 
     Args:
         spec: Parsed .card.md specification.
-        model: Optional model override. If None, uses CARD_MODEL env var
+        model: Optional model override. If None, uses NIGHTJAR_MODEL env var
                or falls back to default model.
 
     Returns:
@@ -341,7 +341,7 @@ def generate_code(spec: CardSpec, model: str | None = None) -> GenerationResult:
     if not isinstance(spec, CardSpec):
         raise TypeError(
             f"Expected CardSpec, got {type(spec).__name__}. "
-            "Parse a .card.md file first using contractd.parser.parse_card_spec()."
+            "Parse a .card.md file first using nightjar.parser.parse_card_spec()."
         )
 
     resolved_model = get_model(model)

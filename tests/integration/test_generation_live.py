@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from contractd.types import (
+from nightjar.types import (
     CardSpec,
     Contract,
     ContractInput,
@@ -33,7 +33,7 @@ from contractd.types import (
 # Skip conditions
 # ---------------------------------------------------------------------------
 
-_HAS_LLM = bool(os.environ.get("CARD_MODEL")) and (
+_HAS_LLM = bool(os.environ.get("NIGHTJAR_MODEL")) and (
     bool(os.environ.get("OPENAI_API_KEY"))
     or bool(os.environ.get("ANTHROPIC_API_KEY"))
     or bool(os.environ.get("DEEPSEEK_API_KEY"))
@@ -44,7 +44,7 @@ _HAS_DAFNY = shutil.which(os.environ.get("DAFNY_PATH", "dafny")) is not None
 _SKIP_NO_LLM = pytest.mark.skipif(
     not _HAS_LLM,
     reason=(
-        "Requires CARD_MODEL env var and a valid API key "
+        "Requires NIGHTJAR_MODEL env var and a valid API key "
         "(OPENAI_API_KEY, ANTHROPIC_API_KEY, or DEEPSEEK_API_KEY)"
     ),
 )
@@ -186,13 +186,13 @@ Add two non-negative integers and return their sum.
 class TestGenerateWithRealLLM:
     """Test code generation using a real LLM API.
 
-    Requires CARD_MODEL env var and a valid provider API key.
+    Requires NIGHTJAR_MODEL env var and a valid provider API key.
     These tests are expensive (LLM API calls) and slow.
     """
 
     def test_generate_returns_dafny_code(self, sample_spec: CardSpec) -> None:
         """The full generation pipeline should produce non-empty Dafny code."""
-        from contractd.generator import generate_code
+        from nightjar.generator import generate_code
 
         result = generate_code(sample_spec)
         assert result.dafny_code, "Expected non-empty Dafny code from generation"
@@ -200,16 +200,16 @@ class TestGenerateWithRealLLM:
         assert result.formalizer_output, "Expected non-empty formalizer output"
 
     def test_generate_uses_model_from_env(self, sample_spec: CardSpec) -> None:
-        """The generator should use the model specified in CARD_MODEL."""
-        from contractd.generator import generate_code
+        """The generator should use the model specified in NIGHTJAR_MODEL."""
+        from nightjar.generator import generate_code
 
         result = generate_code(sample_spec)
-        expected_model = os.environ.get("CARD_MODEL", "")
+        expected_model = os.environ.get("NIGHTJAR_MODEL", "")
         assert result.model_used == expected_model or result.model_used
 
     def test_generate_analyst_stage(self, sample_spec: CardSpec) -> None:
         """The analyst stage alone should return structured requirements."""
-        from contractd.generator import run_analyst
+        from nightjar.generator import run_analyst
 
         output = run_analyst(sample_spec)
         assert isinstance(output, str)
@@ -233,7 +233,7 @@ class TestVerifyWithRealDafny:
         self, sample_spec_with_formal: CardSpec, spec_file_on_disk: Path
     ) -> None:
         """A trivially correct Dafny program should pass formal verification."""
-        from contractd.stages.formal import run_formal
+        from nightjar.stages.formal import run_formal
 
         trivial_dafny = (
             "method Add(a: int, b: int) returns (r: int)\n"
@@ -251,7 +251,7 @@ class TestVerifyWithRealDafny:
         self, sample_spec_with_formal: CardSpec
     ) -> None:
         """An incorrect Dafny program should fail formal verification."""
-        from contractd.stages.formal import run_formal
+        from nightjar.stages.formal import run_formal
 
         wrong_dafny = (
             "method Add(a: int, b: int) returns (r: int)\n"
@@ -287,8 +287,8 @@ class TestFullPipelineReal:
         This exercises the complete CARD data flow:
           parse -> generate (LLM) -> verify (stages 0-4) [ARCHITECTURE.md Section 9]
         """
-        from contractd.generator import generate_code
-        from contractd.verifier import run_pipeline
+        from nightjar.generator import generate_code
+        from nightjar.verifier import run_pipeline
 
         # Generate
         gen_result = generate_code(sample_spec)
@@ -308,8 +308,8 @@ class TestFullPipelineReal:
         self, sample_spec: CardSpec, spec_file_on_disk: Path
     ) -> None:
         """The pipeline should report results for each stage that ran."""
-        from contractd.generator import generate_code
-        from contractd.verifier import run_pipeline
+        from nightjar.generator import generate_code
+        from nightjar.verifier import run_pipeline
 
         gen_result = generate_code(sample_spec)
         verify_result = run_pipeline(

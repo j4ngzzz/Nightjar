@@ -1,4 +1,4 @@
-"""Tests for contractd ship — Artifact signing with provenance.
+"""Tests for nightjar ship — Artifact signing with provenance.
 
 The ship module runs the full build pipeline (generate + verify + compile),
 then hashes the resulting artifact and writes provenance metadata to
@@ -19,7 +19,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from contractd.ship import (
+from nightjar.ship import (
     hash_artifact,
     build_provenance,
     write_provenance,

@@ -15,8 +15,8 @@ import random
 import time
 from dataclasses import dataclass, field
 
-from contractd.tracking import TrackingDB
-from contractd.prompts import PromptTemplate, PromptRegistry
+from nightjar.tracking import TrackingDB
+from nightjar.prompts import PromptTemplate, PromptRegistry
 
 
 VARIATION_KINDS = ("prompt_tweak", "temperature", "few_shot")

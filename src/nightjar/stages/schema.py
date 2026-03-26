@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ValidationError, create_model
 
-from contractd.types import CardSpec, ContractOutput, StageResult, VerifyStatus
+from nightjar.types import CardSpec, ContractOutput, StageResult, VerifyStatus
 
 # Mapping from .card.md type names to Python types for Pydantic
 _TYPE_MAP: dict[str, type] = {

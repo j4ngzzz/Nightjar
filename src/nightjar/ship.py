@@ -1,4 +1,4 @@
-"""Artifact signing with provenance — contractd ship.
+"""Artifact signing with provenance — nightjar ship.
 
 After a successful build (generate + verify + compile), computes the
 SHA-256 hash of the output artifact and writes provenance metadata

@@ -10,7 +10,7 @@ References:
 
 from typing import Optional
 
-from contractd.types import StageResult, VerifyResult, VerifyStatus
+from nightjar.types import StageResult, VerifyResult, VerifyStatus
 
 # Graceful Rich import -- fall back to plain text if Rich is not installed.
 try:

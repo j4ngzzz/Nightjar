@@ -1,4 +1,4 @@
-"""Tests for contractd Rich CLI output formatting.
+"""Tests for nightjar Rich CLI output formatting.
 
 Reference: [REF-T17] Click CLI framework — display integrates with Click commands
 Architecture: docs/ARCHITECTURE.md Section 8 — CLI design
@@ -11,7 +11,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from contractd.types import VerifyResult, StageResult, VerifyStatus
+from nightjar.types import VerifyResult, StageResult, VerifyStatus
 
 
 # ── Fixtures ────────────────────────────────────────────
@@ -104,26 +104,26 @@ class TestDisplayImport:
 
     def test_module_imports(self):
         """display.py can be imported."""
-        import contractd.display  # noqa: F401
+        import nightjar.display  # noqa: F401
 
     def test_has_format_verify_result(self):
         """Module exposes format_verify_result function."""
-        from contractd.display import format_verify_result
+        from nightjar.display import format_verify_result
         assert callable(format_verify_result)
 
     def test_has_format_stage_result(self):
         """Module exposes format_stage_result function."""
-        from contractd.display import format_stage_result
+        from nightjar.display import format_stage_result
         assert callable(format_stage_result)
 
     def test_has_create_progress(self):
         """Module exposes create_progress function."""
-        from contractd.display import create_progress
+        from nightjar.display import create_progress
         assert callable(create_progress)
 
     def test_has_format_explain(self):
         """Module exposes format_explain function."""
-        from contractd.display import format_explain
+        from nightjar.display import format_explain
         assert callable(format_explain)
 
 
@@ -135,21 +135,21 @@ class TestFormatVerifyResult:
 
     def test_passing_result_shows_verified(self, passing_result, capsys):
         """Passing result prints VERIFIED badge."""
-        from contractd.display import format_verify_result
+        from nightjar.display import format_verify_result
         format_verify_result(passing_result)
         captured = capsys.readouterr().out
         assert "VERIFIED" in captured.upper()
 
     def test_failing_result_shows_fail(self, failing_result, capsys):
         """Failing result prints FAIL badge."""
-        from contractd.display import format_verify_result
+        from nightjar.display import format_verify_result
         format_verify_result(failing_result)
         captured = capsys.readouterr().out
         assert "FAIL" in captured.upper()
 
     def test_shows_stage_names(self, passing_result, capsys):
         """Output includes all stage names."""
-        from contractd.display import format_verify_result
+        from nightjar.display import format_verify_result
         format_verify_result(passing_result)
         captured = capsys.readouterr().out
         assert "preflight" in captured.lower()
@@ -160,7 +160,7 @@ class TestFormatVerifyResult:
 
     def test_shows_duration(self, passing_result, capsys):
         """Output includes total duration."""
-        from contractd.display import format_verify_result
+        from nightjar.display import format_verify_result
         format_verify_result(passing_result)
         captured = capsys.readouterr().out
         # Should show duration in some form (ms or seconds)
@@ -168,35 +168,35 @@ class TestFormatVerifyResult:
 
     def test_shows_errors_for_failed_stages(self, failing_result, capsys):
         """Failing stages show error messages."""
-        from contractd.display import format_verify_result
+        from nightjar.display import format_verify_result
         format_verify_result(failing_result)
         captured = capsys.readouterr().out
         assert "amount must be positive" in captured
 
     def test_shows_counterexample(self, failing_result, capsys):
         """Failing stages with counterexamples show them."""
-        from contractd.display import format_verify_result
+        from nightjar.display import format_verify_result
         format_verify_result(failing_result)
         captured = capsys.readouterr().out
         assert "-1" in captured
 
     def test_shows_retry_count(self, failing_result, capsys):
         """Output shows retry count when > 0."""
-        from contractd.display import format_verify_result
+        from nightjar.display import format_verify_result
         format_verify_result(failing_result)
         captured = capsys.readouterr().out
         assert "2" in captured  # retry_count=2
 
     def test_timeout_stage_displayed(self, timeout_result, capsys):
         """Timeout stages show TIMEOUT status."""
-        from contractd.display import format_verify_result
+        from nightjar.display import format_verify_result
         format_verify_result(timeout_result)
         captured = capsys.readouterr().out
         assert "TIMEOUT" in captured.upper()
 
     def test_empty_stages(self, capsys):
         """Result with no stages still shows header."""
-        from contractd.display import format_verify_result
+        from nightjar.display import format_verify_result
         result = VerifyResult(verified=True, stages=[], total_duration_ms=0, retry_count=0)
         format_verify_result(result)
         captured = capsys.readouterr().out
@@ -211,7 +211,7 @@ class TestFormatStageResult:
 
     def test_pass_stage_returns_string(self):
         """Passing stage returns a non-empty string."""
-        from contractd.display import format_stage_result
+        from nightjar.display import format_stage_result
         stage = StageResult(stage=0, name="preflight", status=VerifyStatus.PASS, duration_ms=12)
         result = format_stage_result(stage)
         assert isinstance(result, str)
@@ -219,42 +219,42 @@ class TestFormatStageResult:
 
     def test_pass_stage_contains_name(self):
         """Formatted stage includes the stage name."""
-        from contractd.display import format_stage_result
+        from nightjar.display import format_stage_result
         stage = StageResult(stage=2, name="schema", status=VerifyStatus.PASS, duration_ms=100)
         result = format_stage_result(stage)
         assert "schema" in result.lower()
 
     def test_pass_stage_contains_status(self):
         """Formatted stage includes status text."""
-        from contractd.display import format_stage_result
+        from nightjar.display import format_stage_result
         stage = StageResult(stage=0, name="preflight", status=VerifyStatus.PASS, duration_ms=12)
         result = format_stage_result(stage)
         assert "PASS" in result.upper()
 
     def test_fail_stage_contains_status(self):
         """Failing stage shows FAIL."""
-        from contractd.display import format_stage_result
+        from nightjar.display import format_stage_result
         stage = StageResult(stage=3, name="pbt", status=VerifyStatus.FAIL, duration_ms=800)
         result = format_stage_result(stage)
         assert "FAIL" in result.upper()
 
     def test_skip_stage_contains_status(self):
         """Skipped stage shows SKIP."""
-        from contractd.display import format_stage_result
+        from nightjar.display import format_stage_result
         stage = StageResult(stage=4, name="formal", status=VerifyStatus.SKIP, duration_ms=0)
         result = format_stage_result(stage)
         assert "SKIP" in result.upper()
 
     def test_timeout_stage_contains_status(self):
         """Timeout stage shows TIMEOUT."""
-        from contractd.display import format_stage_result
+        from nightjar.display import format_stage_result
         stage = StageResult(stage=4, name="formal", status=VerifyStatus.TIMEOUT, duration_ms=30000)
         result = format_stage_result(stage)
         assert "TIMEOUT" in result.upper()
 
     def test_stage_contains_duration(self):
         """Formatted stage includes duration."""
-        from contractd.display import format_stage_result
+        from nightjar.display import format_stage_result
         stage = StageResult(stage=1, name="deps", status=VerifyStatus.PASS, duration_ms=250)
         result = format_stage_result(stage)
         assert "250" in result or "0.25" in result
@@ -268,7 +268,7 @@ class TestCreateProgress:
 
     def test_returns_progress_object(self):
         """create_progress returns a Rich Progress instance."""
-        from contractd.display import create_progress
+        from nightjar.display import create_progress
         progress = create_progress()
         # Should be a Rich Progress or a compatible fallback
         assert progress is not None
@@ -277,14 +277,14 @@ class TestCreateProgress:
 
     def test_progress_is_context_manager(self):
         """Progress can be used as context manager."""
-        from contractd.display import create_progress
+        from nightjar.display import create_progress
         progress = create_progress()
         with progress:
             pass  # Just test it doesn't crash
 
     def test_progress_has_add_task(self):
         """Progress object has add_task method."""
-        from contractd.display import create_progress
+        from nightjar.display import create_progress
         progress = create_progress()
         assert hasattr(progress, "add_task")
 
@@ -297,7 +297,7 @@ class TestFormatExplain:
 
     def test_explain_shows_failure_title(self, explain_report, capsys):
         """Explain output has a clear failure header."""
-        from contractd.display import format_explain
+        from nightjar.display import format_explain
         format_explain(explain_report)
         captured = capsys.readouterr().out
         # Should have some kind of failure header
@@ -305,21 +305,21 @@ class TestFormatExplain:
 
     def test_explain_shows_error_messages(self, explain_report, capsys):
         """Explain output shows individual error messages."""
-        from contractd.display import format_explain
+        from nightjar.display import format_explain
         format_explain(explain_report)
         captured = capsys.readouterr().out
         assert "amount must be positive" in captured
 
     def test_explain_shows_stage_info(self, explain_report, capsys):
         """Explain output identifies which stage failed."""
-        from contractd.display import format_explain
+        from nightjar.display import format_explain
         format_explain(explain_report)
         captured = capsys.readouterr().out
         assert "pbt" in captured.lower() or "3" in captured
 
     def test_explain_verified_shows_no_failures(self, capsys):
         """Explain on a passing report shows success message."""
-        from contractd.display import format_explain
+        from nightjar.display import format_explain
         report = {"verified": True, "stages": [], "total_duration_ms": 100}
         format_explain(report)
         captured = capsys.readouterr().out
@@ -327,7 +327,7 @@ class TestFormatExplain:
 
     def test_explain_empty_errors(self, capsys):
         """Explain handles stages with empty error lists."""
-        from contractd.display import format_explain
+        from nightjar.display import format_explain
         report = {
             "verified": False,
             "stages": [{"stage": 1, "name": "deps", "status": "fail", "errors": []}],
@@ -339,7 +339,7 @@ class TestFormatExplain:
 
     def test_explain_with_counterexample(self, capsys):
         """Explain shows counterexample data when present."""
-        from contractd.display import format_explain
+        from nightjar.display import format_explain
         report = {
             "verified": False,
             "stages": [
@@ -370,7 +370,7 @@ class TestGracefulFallback:
 
     def test_format_verify_result_no_crash(self, passing_result, capsys):
         """format_verify_result does not crash even without Rich console."""
-        from contractd.display import format_verify_result
+        from nightjar.display import format_verify_result
         # This should work regardless — function should not raise
         format_verify_result(passing_result)
         captured = capsys.readouterr().out
@@ -378,7 +378,7 @@ class TestGracefulFallback:
 
     def test_format_explain_no_crash(self, explain_report, capsys):
         """format_explain does not crash."""
-        from contractd.display import format_explain
+        from nightjar.display import format_explain
         format_explain(explain_report)
         captured = capsys.readouterr().out
         assert len(captured) > 0

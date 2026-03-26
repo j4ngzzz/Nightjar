@@ -31,13 +31,13 @@ _TARGET_EXTENSIONS: dict[str, str] = {
 
 # Header comment templates by language
 _HEADER_TEMPLATES: dict[str, str] = {
-    ".py": "# GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n# Regenerate with: contractd build\n",
-    ".js": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: contractd build\n",
-    ".ts": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: contractd build\n",
-    ".go": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: contractd build\n",
-    ".java": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: contractd build\n",
-    ".cs": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: contractd build\n",
-    ".dfy": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: contractd build\n",
+    ".py": "# GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n# Regenerate with: nightjar build\n",
+    ".js": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: nightjar build\n",
+    ".ts": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: nightjar build\n",
+    ".go": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: nightjar build\n",
+    ".java": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: nightjar build\n",
+    ".cs": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: nightjar build\n",
+    ".dfy": "// GENERATED FROM SPEC — DO NOT EDIT [REF-C07]\n// Regenerate with: nightjar build\n",
 }
 
 

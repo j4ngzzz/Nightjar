@@ -12,8 +12,8 @@ References:
 import pytest
 from pathlib import Path
 
-from contractd.parser import parse_card_spec, load_constitution, parse_with_constitution
-from contractd.types import CardSpec, InvariantTier
+from nightjar.parser import parse_card_spec, load_constitution, parse_with_constitution
+from nightjar.types import CardSpec, InvariantTier
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 

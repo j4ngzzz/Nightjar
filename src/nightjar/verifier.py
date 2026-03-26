@@ -16,7 +16,7 @@ References:
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from contractd.types import CardSpec, StageResult, VerifyResult, VerifyStatus
+from nightjar.types import CardSpec, StageResult, VerifyResult, VerifyStatus
 
 
 def _run_stage_0(spec: CardSpec, code: str, spec_path: str = "") -> StageResult:
@@ -25,7 +25,7 @@ def _run_stage_0(spec: CardSpec, code: str, spec_path: str = "") -> StageResult:
     In pipeline mode, preflight validates the spec file and optionally the code AST.
     If spec_path is empty, we skip file-level checks and only validate the code AST.
     """
-    from contractd.stages.preflight import run_preflight
+    from nightjar.stages.preflight import run_preflight
     import tempfile, os
     if spec_path and os.path.exists(spec_path):
         return run_preflight(spec_path)
@@ -48,7 +48,7 @@ def _run_stage_1(spec: CardSpec, code: str) -> StageResult:
     In pipeline mode we pass the code string; deps check extracts imports from it.
     Falls back to SKIP if no deps.lock exists (common during development).
     """
-    from contractd.stages.deps import run_deps_check
+    from nightjar.stages.deps import run_deps_check
     import tempfile, os
     # Write code to temp file for import analysis
     with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
@@ -72,7 +72,7 @@ def _run_stage_2(spec: CardSpec, code: str) -> StageResult:
     type annotations against the contract schema structurally.
     Skips if no outputs are defined in the contract.
     """
-    from contractd.stages.schema import run_schema_check
+    from nightjar.stages.schema import run_schema_check
     if not spec.contract.outputs:
         return StageResult(stage=2, name="schema", status=VerifyStatus.SKIP,
                          errors=[{"message": "No contract outputs defined — skipping schema check"}])
@@ -85,13 +85,13 @@ def _run_stage_2(spec: CardSpec, code: str) -> StageResult:
 
 def _run_stage_3(spec: CardSpec, code: str) -> StageResult:
     """Stage 3: Property-based testing. Delegates to stages.pbt."""
-    from contractd.stages.pbt import run_pbt
+    from nightjar.stages.pbt import run_pbt
     return run_pbt(spec, code)
 
 
 def _run_stage_4(spec: CardSpec, code: str) -> StageResult:
     """Stage 4: Formal verification (Dafny). Delegates to stages.formal."""
-    from contractd.stages.formal import run_formal
+    from nightjar.stages.formal import run_formal
     return run_formal(spec, code)
 
 

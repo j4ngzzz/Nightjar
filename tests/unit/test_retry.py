@@ -13,12 +13,12 @@ References:
 from unittest.mock import patch, MagicMock, call
 import pytest
 
-from contractd.types import (
+from nightjar.types import (
     CardSpec, Contract, ContractInput, ContractOutput,
     Invariant, InvariantTier, ModuleBoundary,
     StageResult, VerifyResult, VerifyStatus,
 )
-from contractd.retry import run_with_retry, build_repair_prompt
+from nightjar.retry import run_with_retry, build_repair_prompt
 
 
 def _make_spec() -> CardSpec:
@@ -67,8 +67,8 @@ class TestRunWithRetry:
     def test_pass_on_first_attempt(self):
         """If verification passes on first try, no retries needed."""
         spec = _make_spec()
-        with patch("contractd.retry.run_pipeline") as mock_pipeline, \
-             patch("contractd.retry._call_repair_llm") as mock_llm:
+        with patch("nightjar.retry.run_pipeline") as mock_pipeline, \
+             patch("nightjar.retry._call_repair_llm") as mock_llm:
             mock_pipeline.return_value = _pass_verify()
 
             result = run_with_retry(spec, "initial_code", max_retries=5)
@@ -80,8 +80,8 @@ class TestRunWithRetry:
     def test_retry_on_failure_then_pass(self):
         """Fails first, LLM repairs, second attempt passes."""
         spec = _make_spec()
-        with patch("contractd.retry.run_pipeline") as mock_pipeline, \
-             patch("contractd.retry._call_repair_llm") as mock_llm:
+        with patch("nightjar.retry.run_pipeline") as mock_pipeline, \
+             patch("nightjar.retry._call_repair_llm") as mock_llm:
             mock_pipeline.side_effect = [_fail_verify(), _pass_verify()]
             mock_llm.return_value = "repaired_code"
 
@@ -94,8 +94,8 @@ class TestRunWithRetry:
     def test_exhaust_retries(self):
         """Exceeds max_retries → verified=False with retry_count."""
         spec = _make_spec()
-        with patch("contractd.retry.run_pipeline") as mock_pipeline, \
-             patch("contractd.retry._call_repair_llm") as mock_llm:
+        with patch("nightjar.retry.run_pipeline") as mock_pipeline, \
+             patch("nightjar.retry._call_repair_llm") as mock_llm:
             mock_pipeline.return_value = _fail_verify()
             mock_llm.return_value = "still_buggy_code"
 
@@ -108,8 +108,8 @@ class TestRunWithRetry:
     def test_default_max_retries_is_5(self):
         """Default max_retries is 5 per ARCHITECTURE.md Section 4."""
         spec = _make_spec()
-        with patch("contractd.retry.run_pipeline") as mock_pipeline, \
-             patch("contractd.retry._call_repair_llm") as mock_llm:
+        with patch("nightjar.retry.run_pipeline") as mock_pipeline, \
+             patch("nightjar.retry._call_repair_llm") as mock_llm:
             mock_pipeline.return_value = _fail_verify()
             mock_llm.return_value = "still_buggy"
 
@@ -122,8 +122,8 @@ class TestRunWithRetry:
         """LLM repair call receives structured error context [REF-P06]."""
         spec = _make_spec()
         fail_result = _fail_verify()
-        with patch("contractd.retry.run_pipeline") as mock_pipeline, \
-             patch("contractd.retry._call_repair_llm") as mock_llm:
+        with patch("nightjar.retry.run_pipeline") as mock_pipeline, \
+             patch("nightjar.retry._call_repair_llm") as mock_llm:
             mock_pipeline.side_effect = [fail_result, _pass_verify()]
             mock_llm.return_value = "repaired_code"
 
@@ -137,8 +137,8 @@ class TestRunWithRetry:
     def test_zero_retries_means_no_repair(self):
         """max_retries=0 means no repair attempts."""
         spec = _make_spec()
-        with patch("contractd.retry.run_pipeline") as mock_pipeline, \
-             patch("contractd.retry._call_repair_llm") as mock_llm:
+        with patch("nightjar.retry.run_pipeline") as mock_pipeline, \
+             patch("nightjar.retry._call_repair_llm") as mock_llm:
             mock_pipeline.return_value = _fail_verify()
 
             result = run_with_retry(spec, "buggy_code", max_retries=0)

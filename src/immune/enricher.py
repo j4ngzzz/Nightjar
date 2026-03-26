@@ -176,10 +176,10 @@ def _parse_assert_statements(
 def _call_llm(prompt: str) -> str:
     """Call the LLM via litellm. [REF-T16]
 
-    Uses CARD_MODEL env var for model selection, falling back to a default.
+    Uses NIGHTJAR_MODEL env var for model selection, falling back to a default.
     All LLM calls MUST go through litellm — never call provider APIs directly.
     """
-    model = os.environ.get("CARD_MODEL", "deepseek/deepseek-chat")
+    model = os.environ.get("NIGHTJAR_MODEL", "deepseek/deepseek-chat")
 
     response = litellm.completion(
         model=model,

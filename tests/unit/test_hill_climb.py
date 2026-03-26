@@ -15,7 +15,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from contractd.hill_climb import (
+from nightjar.hill_climb import (
     HillClimbConfig,
     Variation,
     HillClimbResult,
@@ -23,8 +23,8 @@ from contractd.hill_climb import (
     run_hill_climb,
     generate_variation,
 )
-from contractd.tracking import TrackingDB
-from contractd.prompts import PromptTemplate, PromptRegistry
+from nightjar.tracking import TrackingDB
+from nightjar.prompts import PromptTemplate, PromptRegistry
 
 
 @pytest.fixture

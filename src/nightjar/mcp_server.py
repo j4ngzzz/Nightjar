@@ -39,7 +39,7 @@ async def _run_verification(
     """Run the verification pipeline.
 
     This is a placeholder that will be replaced with the actual verifier
-    once src/contractd/verifier.py is implemented by Builder 5 (T7).
+    once src/nightjar/verifier.py is implemented by Builder 5 (T7).
 
     Args:
         spec_path: Path to .card.md spec file.
@@ -189,7 +189,7 @@ async def handle_suggest_fix(
                      else f"No violations stored for '{spec_path}'."
         })
 
-    model = os.environ.get("CARD_MODEL", "claude-sonnet-4-6")
+    model = os.environ.get("NIGHTJAR_MODEL", "claude-sonnet-4-6")
 
     prompt = (
         f"A verification violation was found:\n\n"
@@ -239,7 +239,7 @@ def create_mcp_server() -> FastMCP:
     Returns:
         Configured FastMCP server instance ready to run.
     """
-    mcp = FastMCP("contractd")
+    mcp = FastMCP("nightjar")
 
     @mcp.tool()
     async def verify_contract(

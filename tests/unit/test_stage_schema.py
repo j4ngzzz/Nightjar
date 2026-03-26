@@ -12,8 +12,8 @@ Reference:
 """
 
 import pytest
-from contractd.stages.schema import run_schema_check, build_pydantic_model
-from contractd.types import (
+from nightjar.stages.schema import run_schema_check, build_pydantic_model
+from nightjar.types import (
     CardSpec, Contract, ContractInput, ContractOutput,
     ModuleBoundary, Invariant, InvariantTier,
     StageResult, VerifyStatus,

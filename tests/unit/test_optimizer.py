@@ -16,15 +16,15 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from contractd.optimizer import (
+from nightjar.optimizer import (
     OptimizationConfig,
     OptimizationResult,
     PromptOptimizer,
     run_optimization,
     evaluate_prompt,
 )
-from contractd.tracking import TrackingDB
-from contractd.prompts import PromptTemplate, PromptRegistry
+from nightjar.tracking import TrackingDB
+from nightjar.prompts import PromptTemplate, PromptRegistry
 
 
 @pytest.fixture
@@ -107,7 +107,7 @@ class TestPromptOptimizer:
         assert isinstance(score, float)
         assert 0.0 <= score <= 1.0
 
-    @patch("contractd.optimizer._call_llm_for_variation")
+    @patch("nightjar.optimizer._call_llm_for_variation")
     def test_optimize_creates_new_version(self, mock_llm, config, prompt_registry):
         """Optimization should create a new version of the template."""
         mock_llm.return_value = "You are an improved analyst. Be more precise."
@@ -118,7 +118,7 @@ class TestPromptOptimizer:
         assert result.original_version == 1
         assert result.iterations_run >= 0
 
-    @patch("contractd.optimizer._call_llm_for_variation")
+    @patch("nightjar.optimizer._call_llm_for_variation")
     def test_optimize_returns_result_with_scores(self, mock_llm, config):
         mock_llm.return_value = "Improved system prompt."
         optimizer = PromptOptimizer(config)
@@ -129,7 +129,7 @@ class TestPromptOptimizer:
         assert isinstance(result.original_score, float)
         assert isinstance(result.best_score, float)
 
-    @patch("contractd.optimizer._call_llm_for_variation")
+    @patch("nightjar.optimizer._call_llm_for_variation")
     def test_optimize_respects_max_iterations(self, mock_llm, config):
         mock_llm.return_value = "Try this."
         config.max_iterations = 2
@@ -151,7 +151,7 @@ class TestEvaluatePrompt:
 class TestRunOptimization:
     """Tests for the module-level run_optimization function."""
 
-    @patch("contractd.optimizer._call_llm_for_variation")
+    @patch("nightjar.optimizer._call_llm_for_variation")
     def test_run_optimization_function(self, mock_llm, config):
         mock_llm.return_value = "Better prompt."
         result = run_optimization(config)

@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from contractd.tracking import (
+from nightjar.tracking import (
     TrackingDB,
     record_run,
     get_pass_rate,

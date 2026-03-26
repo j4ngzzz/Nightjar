@@ -1,8 +1,8 @@
 """Configuration loader for CARD.
 
-Loads .env for API keys (via python-dotenv) and contractd.toml for
+Loads .env for API keys (via python-dotenv) and nightjar.toml for
 project settings. Provides model resolution with precedence:
-CLI flag > CARD_MODEL env var > contractd.toml > hardcoded default.
+CLI flag > NIGHTJAR_MODEL env var > nightjar.toml > hardcoded default.
 
 Reference: [REF-T16] litellm — all LLM calls are model-agnostic
 Architecture: docs/ARCHITECTURE.md Section 5 (Model Selection)
@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 
-# Default config matching contractd.toml schema
+# Default config matching nightjar.toml schema
 DEFAULT_CONFIG: dict = {
     "card": {
         "version": "1.0",
@@ -32,21 +32,21 @@ DEFAULT_CONFIG: dict = {
 
 
 def load_config(project_root: str = ".") -> dict:
-    """Load .env + contractd.toml. Returns merged config dict.
+    """Load .env + nightjar.toml. Returns merged config dict.
 
     1. Loads .env file (if present) into os.environ for API keys
-    2. Loads contractd.toml (if present) for project settings
+    2. Loads nightjar.toml (if present) for project settings
     3. Falls back to DEFAULT_CONFIG if no toml file found
     """
     root = Path(project_root)
 
-    # Load .env for API keys (CARD_MODEL, provider keys, etc.)
+    # Load .env for API keys (NIGHTJAR_MODEL, provider keys, etc.)
     env_path = root / ".env"
     if env_path.exists():
         _load_dotenv_simple(env_path)
 
-    # Load contractd.toml for project settings
-    toml_path = root / "contractd.toml"
+    # Load nightjar.toml for project settings
+    toml_path = root / "nightjar.toml"
     if toml_path.exists():
         import tomllib
 
@@ -86,13 +86,13 @@ def get_model(
 ) -> str:
     """Resolve LLM model name with precedence.
 
-    Priority: cli_model > CARD_MODEL env var > config default > hardcoded default.
+    Priority: cli_model > NIGHTJAR_MODEL env var > config default > hardcoded default.
     All LLM calls go through litellm [REF-T16] — never call provider APIs directly.
     """
     if cli_model:
         return cli_model
 
-    env_model = os.environ.get("CARD_MODEL")
+    env_model = os.environ.get("NIGHTJAR_MODEL")
     if env_model:
         return env_model
 

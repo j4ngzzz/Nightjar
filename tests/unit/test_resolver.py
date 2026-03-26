@@ -11,12 +11,12 @@ References:
 import pytest
 from pathlib import Path
 
-from contractd.resolver import (
+from nightjar.resolver import (
     build_dependency_graph,
     resolve_build_order,
     CyclicDependencyError,
 )
-from contractd.types import CardSpec, ModuleBoundary, Contract
+from nightjar.types import CardSpec, ModuleBoundary, Contract
 
 
 def _make_spec(

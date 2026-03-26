@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from contractd.audit import (
+from nightjar.audit import (
     archive_artifact,
     list_audited_modules,
     get_audit_path,

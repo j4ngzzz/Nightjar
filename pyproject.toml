@@ -1,7 +1,7 @@
 [project]
-name = "contractd"
+name = "nightjar"
 version = "0.1.0"
-description = "Contract-Anchored Regenerative Development — verification layer for AI-generated code"
+description = "Nightjar — verified spec-as-source platform for AI-generated code"
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.0",
@@ -19,7 +19,7 @@ dev = [
 ]
 
 [project.scripts]
-contractd = "contractd.cli:main"
+nightjar = "nightjar.cli:main"
 
 [build-system]
 requires = ["setuptools>=68.0"]

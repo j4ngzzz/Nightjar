@@ -1,0 +1,15 @@
+# nightjar.toml — CLI configuration for Nightjar verified spec-as-source platform
+# Reference: [REF-T17] Click CLI framework
+
+[card]
+version = "1.0"
+default_target = "py"
+default_model = "claude-sonnet-4-6"
+max_retries = 5
+verification_timeout = 30
+
+[paths]
+specs = ".card/"
+dist = "dist/"
+audit = ".card/audit/"
+cache = ".card/cache/"

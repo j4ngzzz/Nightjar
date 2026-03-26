@@ -1,4 +1,4 @@
-"""contractd CLI — Contract-Anchored Regenerative Development.
+"""nightjar CLI — Contract-Anchored Regenerative Development.
 
 Reference: [REF-T17] Click CLI framework
 Architecture: docs/ARCHITECTURE.md Section 8
@@ -28,8 +28,8 @@ from typing import Optional
 
 import click
 
-from contractd import __version__
-from contractd.config import load_config, get_model, get_specs_dir
+from nightjar import __version__
+from nightjar.config import load_config, get_model, get_specs_dir
 
 # ── Exit codes (from ARCHITECTURE.md Section 8) ─────────
 
@@ -42,7 +42,7 @@ EXIT_MAX_RETRIES = 5
 
 # ── Config loading ───────────────────────────────────────
 
-# Default config values matching contractd.toml schema
+# Default config values matching nightjar.toml schema
 _DEFAULT_CONFIG = {
     "card": {
         "version": "1.0",
@@ -61,12 +61,12 @@ _DEFAULT_CONFIG = {
 
 
 def _load_config() -> dict:
-    """Load configuration. Delegates to contractd.config module."""
+    """Load configuration. Delegates to nightjar.config module."""
     return load_config()
 
 
 def _get_model(model_flag: Optional[str], config: dict) -> str:
-    """Resolve model name. Delegates to contractd.config module.
+    """Resolve model name. Delegates to nightjar.config module.
 
     All LLM calls go through litellm [REF-T16].
     """
@@ -136,7 +136,7 @@ def _run_verify(
     """
     # Import verifier lazily so CLI can load even if verifier isn't built yet
     try:
-        from contractd.verifier import run_pipeline
+        from nightjar.verifier import run_pipeline
     except ImportError:
         # Verifier not yet implemented by Builder 5 (T7)
         click.echo("Error: verification pipeline not yet available", err=True)
@@ -164,8 +164,8 @@ def _run_generate(
     Pipeline: Analyst -> Formalizer -> Coder [REF-C03, REF-P07]
     All LLM calls through litellm [REF-T16].
     """
-    from contractd.parser import parse_card_spec
-    from contractd.generator import generate_code
+    from nightjar.parser import parse_card_spec
+    from nightjar.generator import generate_code
 
     spec = parse_card_spec(contract_path)
     result = generate_code(spec, model=model)
@@ -226,7 +226,7 @@ def _run_retry(
     and feeds them back to LLM for repair.
     """
     try:
-        from contractd.retry import retry_loop
+        from nightjar.retry import retry_loop
     except ImportError:
         click.echo("Error: retry loop not yet available", err=True)
         raise SystemExit(EXIT_CONFIG_ERROR)
@@ -240,7 +240,7 @@ def _run_lock(output_dir: str, config: dict) -> bool:
     Delegates to lock.py module [REF-C08, REF-P27].
     """
     try:
-        from contractd.lock import generate_lock_file
+        from nightjar.lock import generate_lock_file
 
         lock_path = str(Path(output_dir) / "deps.lock")
         success = generate_lock_file(output_dir, lock_path)
@@ -255,7 +255,7 @@ def _run_lock(output_dir: str, config: dict) -> bool:
 def _load_verify_report(contract_path: str) -> Optional[dict]:
     """Load the last verification report. Delegates to explain module."""
     try:
-        from contractd.explain import load_report
+        from nightjar.explain import load_report
         return load_report(contract_path)
     except ImportError:
         # Fallback: inline loading
@@ -273,10 +273,10 @@ def _load_verify_report(contract_path: str) -> Optional[dict]:
 
 
 @click.group(invoke_without_command=True)
-@click.version_option(version=__version__, prog_name="contractd")
+@click.version_option(version=__version__, prog_name="nightjar")
 @click.pass_context
 def main(ctx: click.Context) -> None:
-    """contractd -- Contract-Anchored Regenerative Development CLI.
+    """nightjar -- Contract-Anchored Regenerative Development CLI.
 
     Verification layer for AI-generated code. Parse .card.md specs,
     generate verified code via LLM + Dafny, and run a 5-stage
@@ -355,7 +355,7 @@ def verify(
 
 @main.command()
 @click.option("--contract", "-c", required=True, help="Path to .card.md spec.")
-@click.option("--model", default=None, help="LLM model (default: CARD_MODEL env or config).")
+@click.option("--model", default=None, help="LLM model (default: NIGHTJAR_MODEL env or config).")
 @click.option("--output", "-o", default=".", help="Output directory for generated code.")
 @click.pass_context
 def generate(ctx: click.Context, contract: str, model: Optional[str], output: str) -> None:
@@ -549,11 +549,11 @@ def optimize(ctx: click.Context, target: str, iterations: int) -> None:
     verification pass rate as the metric.
     """
     try:
-        from contractd.optimizer import run_optimization, OptimizationConfig
+        from nightjar.optimizer import run_optimization, OptimizationConfig
 
         config = OptimizationConfig(
             tracking_db_path=".card/tracking.db",
-            prompt_registry_path="src/contractd/prompts",
+            prompt_registry_path="src/nightjar/prompts",
             target_prompt=target,
             max_iterations=iterations,
         )
@@ -585,7 +585,7 @@ def explain(ctx: click.Context, contract: str) -> None:
     """
     report = _load_verify_report(contract)
     if report is None:
-        click.echo("No verification report found. Run 'contractd verify' first.")
+        click.echo("No verification report found. Run 'nightjar verify' first.")
         ctx.exit(EXIT_PASS)
         return
 
@@ -596,10 +596,54 @@ def explain(ctx: click.Context, contract: str) -> None:
 
     # Use Rich formatting if available, fall back to plain text
     try:
-        from contractd.display import format_explain
+        from nightjar.display import format_explain
         format_explain(report)
     except ImportError:
-        from contractd.explain import explain_failure, format_explanation
+        from nightjar.explain import explain_failure, format_explanation
         explanation = explain_failure(report)
         click.echo(format_explanation(explanation))
     ctx.exit(EXIT_PASS)
+
+
+# ── Phase 2 Command Stubs ────────────────────────────────
+# These stubs will be implemented by builders in Phase 2.
+# Coord-Integration wires final integration in Phase 3.
+
+
+@main.command()
+@click.argument("intent", required=False, default=None)
+@click.option("--approve-all", is_flag=True, help="Auto-approve all suggested invariants.")
+@click.pass_context
+def auto(ctx: click.Context, intent: str | None, approve_all: bool) -> None:
+    """Generate .card.md specs from natural language intent.
+
+    Takes a plain English description and auto-generates verification
+    artifacts (icontract, Hypothesis, Dafny). [Scout 4 F1-F3]
+    """
+    click.echo("nightjar auto: not yet implemented (Builder-Auto Phase 2)")
+    ctx.exit(1)
+
+
+@main.command()
+@click.option("--debounce", default=500, help="Debounce interval in ms.")
+@click.pass_context
+def watch(ctx: click.Context, debounce: int) -> None:
+    """Start persistent file-watching daemon with tiered verification.
+
+    Monitors .card/ directory for changes and runs streaming verification
+    (Tier 0-3) with sub-second first feedback. [Scout 5 architecture]
+    """
+    click.echo("nightjar watch: not yet implemented (Builder-Speed Phase 2)")
+    ctx.exit(1)
+
+
+@main.command()
+@click.option("--format", "fmt", type=click.Choice(["url", "markdown", "html"]), default="markdown")
+@click.pass_context
+def badge(ctx: click.Context, fmt: str) -> None:
+    """Generate a 'Nightjar Verified' badge from last verification result.
+
+    Uses shields.io to create status + coverage badges. [Scout 7 N8]
+    """
+    click.echo("nightjar badge: not yet implemented (Builder-Features Phase 2)")
+    ctx.exit(1)
