@@ -95,7 +95,12 @@ class TestAutoCreateCardSpecFromNLIntent:
     """
 
     def _setup_llm_mocks(self, mock_llm):
-        """Configure mock to return appropriate responses per call sequence."""
+        """Configure mock to return appropriate responses per call sequence.
+
+        Pipeline makes: 1 candidate call + N×3 generator calls per approved invariant.
+        With 3 candidates approved (yes=True) = 1 + 9 = 10 total calls.
+        We provide enough responses to cover all calls.
+        """
         candidate_json = json.dumps([
             {"type": "behavioral", "statement": "charge amount must be positive", "confidence": 0.95},
             {"type": "behavioral", "statement": "returns receipt on success", "confidence": 0.90},
@@ -111,14 +116,18 @@ class TestAutoCreateCardSpecFromNLIntent:
         )
         dafny_code = "# optional: requires amount > 0"
 
-        # First call: generate candidates
-        # Subsequent calls: generate code for each approved invariant
-        mock_llm.side_effect = [
-            MagicMock(**{"choices": [MagicMock(**{"message": MagicMock(content=candidate_json)})]}),
-            MagicMock(**{"choices": [MagicMock(**{"message": MagicMock(content=icontract_code)})]}),
-            MagicMock(**{"choices": [MagicMock(**{"message": MagicMock(content=hypothesis_code)})]}),
-            MagicMock(**{"choices": [MagicMock(**{"message": MagicMock(content=dafny_code)})]}),
-        ]
+        def _make_mock(content):
+            return MagicMock(**{"choices": [MagicMock(**{"message": MagicMock(content=content)})]})
+
+        # First call: candidates. Then each approved invariant gets 3 generator calls.
+        # 3 candidates × 3 generators = 9 + 1 = 10 calls total
+        responses = [_make_mock(candidate_json)]
+        for _ in range(3):  # for each approved invariant
+            responses.append(_make_mock(icontract_code))
+            responses.append(_make_mock(hypothesis_code))
+            responses.append(_make_mock(dafny_code))
+
+        mock_llm.side_effect = responses
 
     def test_auto_creates_card_spec_from_nl_intent(self):
         """run_auto writes a .card.md file from NL intent (all LLM mocked, yes=True)."""
@@ -184,14 +193,11 @@ class TestAutoCreateCardSpecFromNLIntent:
                         model=None,  # use env var
                         yes=True,
                     )
-            # Verify litellm was called with the env var model
-            for call_args in mock_llm.call_args_list:
-                model_used = call_args[1].get("model") or (
-                    call_args[0][0] if call_args[0] else None
-                )
-                if model_used:
-                    assert model_used == "my-custom-model"
-                    break
+            # Verify litellm was called with the env var model (check at least one call)
+            assert mock_llm.call_count >= 1
+            first_call = mock_llm.call_args_list[0]
+            model_used = first_call[1].get("model")
+            assert model_used == "my-custom-model"
 
     def test_auto_empty_intent_raises(self):
         """Empty NL intent must raise ValueError before calling LLM."""

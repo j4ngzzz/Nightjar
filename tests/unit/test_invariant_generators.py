@@ -237,15 +237,20 @@ class TestIcontractGen:
         assert "icontract" in result
 
     def test_icontract_gen_produces_valid_python_syntax(self):
-        """Generated icontract decorator must be syntactically valid Python."""
+        """Generated icontract decorator must be syntactically valid Python.
+
+        A decorator line is only valid syntax when followed by a function def.
+        We wrap it in a stub to check syntax validity.
+        """
         with patch("litellm.completion") as mock_llm:
             mock_llm.return_value = self._mock_litellm(
                 "@icontract.require(lambda amount: amount > 0, 'amount must be positive')"
             )
             result = generate_icontract(make_numerical_candidate(), model="test-model")
-        # Must be parseable Python
+        # Wrap in function stub — decorator lines need a def to be valid
+        wrapped = f"{result}\ndef _stub(): pass"
         try:
-            compile(result, "<string>", "exec")
+            compile(wrapped, "<string>", "exec")
         except SyntaxError as e:
             pytest.fail(f"Generated icontract code has syntax error: {e}\nCode: {result}")
 
