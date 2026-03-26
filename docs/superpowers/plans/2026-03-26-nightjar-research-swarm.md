@@ -6,7 +6,11 @@
 
 ## Current State: What Nightjar IS
 
-Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code. Built in Swarm #1:
+Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code.
+
+**NOTE FOR ALL AGENTS:** "MiroFish" referenced in this plan = a viral open-source multi-agent prediction engine (github.com/666ghj/MiroFish, 42K+ GitHub stars). Built by an undergrad in 10 days via vibe coding. Got $4.1M funding in 24 hours. We reference it as the benchmark for viral developer tool launches.
+
+Built in Swarm #1:
 - `.card.md` spec parser (YAML frontmatter + Markdown body)
 - 5-stage verification pipeline (preflight → deps → schema → PBT → Dafny)
 - Clover-pattern retry loop
@@ -58,8 +62,8 @@ Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code
 | `sequential-thinking` | Yes | Yes | Yes |
 | `context7` | Yes | Yes | Yes |
 | `github` | Yes | Yes | Yes |
-| `WebSearch` | Yes | No | **Yes** |
-| `WebFetch` | Yes | No | **Yes** |
+| `WebSearch` | **No** (synthesizes scout reports only) | No | **Yes** |
+| `WebFetch` | **No** (synthesizes scout reports only) | No | **Yes** |
 | `bridgemind` | Yes | No | No |
 
 **EXCLUDED:** brave, exa, coingecko, ccxt, duckdb
@@ -88,7 +92,7 @@ Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code
 2. Search in BOTH English AND Chinese (use proper language for each query)
 3. For every finding: provide URL, evidence, honest assessment
 4. Check GitHub repos with github MCP — examine actual code, not just READMEs
-5. Use context7 MCP to query library documentation for technical details
+5. Use context7 MCP for library/tool documentation (Dafny, Hypothesis, CrossHair, litellm, etc.) — skip context7 for strategy/branding/paradigm queries where it won't return useful results
 6. DO NOT HALLUCINATE — if you can't find something, say "not found"
 7. Score every finding honestly (1-10) on: relevance, maturity, clean-room feasibility
 8. Look for tools with ANY license — we will clean-room reimplement, not copy code
@@ -130,6 +134,8 @@ Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code
 3. What's the fastest possible formal verification loop? Can it be sub-5-seconds?
 4. If Dafny fails, what's the best fallback that's still better than "just run tests"?
 5. Are there probabilistic/statistical verification methods that are "good enough" for most code?
+6. What are Dafny's built-in speed flags? (`--vcsCores`, `--verification-time-limit`, `--isolate-assertions`, assertion batching, Boogie parallelism) — what's the verified fastest configuration?
+7. Can Dafny do INCREMENTAL verification (only re-prove changed assertions)? Snapshot-based proof caching?
 
 **Deliverables:**
 - Every alternative verification tool (name, URL, approach, speed, accuracy, license)
@@ -251,6 +257,9 @@ Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code
 3. What invariant templates are most useful for WEB applications specifically?
 4. Is there a Python library that does runtime tracing BETTER than sys.settrace?
 5. What's the state of the art for JavaScript/TypeScript invariant mining?
+6. Is the Fuzzingbook DynamicInvariants algorithm (Daikon 1999 templates) still best-in-class for Python, or has something better emerged?
+7. If we reimplement Daikon, what are the ~10-15 specific invariant template types needed? (List them from the Ernst et al. 1999 paper, NOT from Fuzzingbook code)
+8. Cross-reference with Scout 10: what's the clean-room implementation effort for the winning algorithm?
 
 **Deliverables:**
 - Every mining tool across all languages (name, URL, algorithm, license)
@@ -261,9 +270,9 @@ Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code
 
 ---
 
-### Scout 7: Features Nobody Has
+### Scout 7: Features Nobody Has (NEAR-TERM, BUILDABLE)
 
-**Mission:** Find capabilities that would make Nightjar the ONLY tool anyone considers. Things Tessl ($125M), Kiro (AWS), Axiom ($200M), and every other competitor CANNOT easily replicate.
+**Mission:** Find NEAR-TERM, BUILDABLE capabilities that would make Nightjar the ONLY tool anyone considers. Things Tessl ($125M), Kiro (AWS), Axiom ($200M), and every other competitor CANNOT easily replicate. Focus on features that can be built in WEEKS, not paradigm-level visions (that's Scout 8's territory).
 
 **Search (English):**
 - "unique AI code verification feature 2026"
@@ -289,8 +298,8 @@ Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code
 1. What's the ONE feature that would make a developer switch from Cursor to Nightjar?
 2. What's the "immune system for code" equivalent in a feature nobody has built?
 3. Is there a way to make verification itself VALUABLE (not just a gate but a feature)?
-4. What would make a CTO mandate Nightjar across their entire organization?
-5. What's the "MiroFish moment" — the demo feature that makes people say "holy shit"?
+4. What TACTICAL feature (buildable in weeks) would make a CTO mandate Nightjar?
+5. What's the single most impressive DEMO MOMENT — the 10-second clip that makes someone share it?
 
 **Deliverables:**
 - Top 10 unmet needs in the AI coding space with evidence
@@ -321,6 +330,11 @@ Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code
 - "临时性软件 运行时"
 - "无源代码 软件未来"
 
+**GitHub searches:**
+- Repos: "ephemeral software runtime", "latent space agent communication", "software without source code", "ADAS automated agent design", "post-swarm framework"
+- Examine: any projects implementing Karpathy's "Software 3.0" vision
+- Look for: frameworks that go BEYOND multi-agent orchestration
+
 **Key questions:**
 1. If code becomes ephemeral (regenerated every build), what's the PERMANENT artifact?
 2. How does Nightjar's "spec is truth, code is exhaust" position it for Software 3.0?
@@ -347,7 +361,7 @@ Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code
 - "Cloudflare Workers AI verification API deploy"
 - "Stripe usage-based billing developer tool"
 - "developer tool branding psychology memorable name"
-- "open source developer tool revenue model AGPL dual license"
+- "open source developer tool revenue model MIT vs AGPL vs BSL dual license comparison"
 - "MiroFish demo why it went viral"
 - "how to make technical demo visually compelling"
 
@@ -373,7 +387,7 @@ Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code
 - Revenue stack: payment provider + pricing model + billing integration
 - Branding analysis: "Nightjar" strengths/weaknesses, logo direction, color psychology
 - The demo script: exactly what to show in 60 seconds for maximum viral impact
-- AGPL monetization playbook with specific revenue numbers from real companies
+- License comparison playbook: MIT+commercial vs AGPL dual-license vs BSL — with specific revenue numbers from real companies for EACH model
 - Honest assessment: what's the realistic revenue in month 1, 3, 6?
 
 ---
@@ -408,12 +422,16 @@ Nightjar (formerly contractd/CARD) is a verification layer for AI-generated code
 4. What academic codebases have the best invariant mining implementations?
 5. What algorithms from HARDWARE verification could we bring to software?
 
+**Additional task — RENAME AUDIT:**
+Scout 10 also produces a COMPLETE rename manifest: every file in the project that references "contractd" or "CARD" and needs updating to "nightjar". Search the entire repo. Include: source files, docs, config, tests, CLI entry points, package name, import paths.
+
 **Deliverables:**
 - Top 10 algorithms to clean-room (name, source, license, what it does, why it's brilliant)
 - The legal playbook: clean-room implementation dos and don'ts with precedents
 - Patent landscape: any algorithms we must avoid?
 - Hardware → software transfer opportunities
 - Honest assessment: how much effort is each clean-room implementation?
+- **RENAME MANIFEST**: every file/line containing "contractd" that must change to "nightjar"
 
 ---
 
@@ -463,6 +481,7 @@ SECTION 5: BUILD SWARM PLAN
   - All tasks with file ownership
   - Reference-first development gates
   - Scout findings as required reading per task
+  - Model assignment per agent (Opus for coordination/review, Sonnet for execution — justify any exceptions with evidence. Note: Sonnet achieves 97.8% on microservice generation)
   - Full bypass permissions
   - MCP tool assignments
   - Swarm mission brief
@@ -497,6 +516,8 @@ SECTION 6: CLEAN-ROOM REGISTER
 4. Every revenue projection — is it grounded in comparable data?
 5. The build swarm plan — are file ownerships non-overlapping? Are dependencies correct?
 6. Any finding that seems too good to be true — verify independently
+7. For any finding from Chinese-language sources (Zhihu, CSDN, Baidu Scholar) — verify the URL resolves and the claim accurately represents the source. Chinese web sources have different reliability profiles.
+8. The rename manifest from Scout 10 — is it complete? Any files missed?
 
 **Output:** APPROVED with issues list, or REJECTED with specific fixes required.
 
@@ -507,56 +528,23 @@ SECTION 6: CLEAN-ROOM REGISTER
 ```
 RESEARCH SWARM: Discover how to make Nightjar revolutionary.
 
-Nightjar is a verification layer for AI-generated code (formerly contractd/CARD).
-Built: parser, 5-stage verification, retry loop, generation pipeline, CLI, MCP server.
-159 tests passing. Live-tested with DeepSeek.
+Nightjar = verification layer for AI-generated code. Built: parser, 5-stage verification, generation pipeline, CLI, MCP server. 159 tests. Live with DeepSeek.
 
-THIS SWARM DISCOVERS — it does NOT build.
+THIS SWARM DISCOVERS — does NOT build. 8 Sonnet scouts → 1 Opus coordinator → 1 Opus reviewer. Output: nightjar-evolution-plan.md for approval.
 
-8 Scouts research in parallel. Each searches English + Chinese sources.
-Each returns structured findings with URLs and evidence.
-Then the Coordinator synthesizes ALL findings into nightjar-evolution-plan.md.
-Then the Adversarial Reviewer stress-tests the plan.
-OUTPUT: one approved .md document ready for a BUILD swarm.
+SCOUTS (parallel):
+3: Kill Dafny bottleneck — faster/better verification
+4: Kill developer friction — auto-generate all invariants
+5: Kill latency — sub-second feedback
+6: Kill Daikon dep — better mining to clean-room
+7: Near-term unmatched features
+8: Beyond agentic engineering — future positioning
+9: Viral demo + hosted API + revenue + branding psychology
+10: Open-source intelligence harvest + rename audit (contractd→nightjar)
 
-SCOUT MISSIONS:
-Scout 3: Kill Dafny verification bottleneck — find faster/better alternatives
-Scout 4: Kill developer friction — find auto-invariant generation tools
-Scout 5: Kill latency — find sub-second verification techniques
-Scout 6: Kill Daikon dependency — find better mining algorithms to clean-room
-Scout 7: Find features nobody else has — the "holy shit" factor
-Scout 8: Find what comes after agentic engineering — future positioning
-Scout 9: Find viral demo patterns + hosted API + revenue model + branding
-Scout 10: Find open-source algorithms to harvest via clean-room implementation
+RULES: sequential-thinking before searching. English + Chinese queries. URL + evidence for every finding. DO NOT hallucinate. Any license OK — we clean-room.
 
-METHODOLOGY:
-- Use sequential-thinking MCP before searching
-- Search in BOTH English AND Chinese (proper language per query)
-- Every finding needs: URL, evidence, honest score (1-10)
-- Check GitHub repos with github MCP — examine actual code
-- Use context7 MCP for library documentation
-- DO NOT HALLUCINATE — say "not found" if you can't find it
-- Look at tools with ANY license — we clean-room, not copy
-- Prioritize WORKING tools over theoretical papers
-
-COORDINATOR (Opus):
-After ALL scouts complete, synthesize into nightjar-evolution-plan.md:
-- Weakness elimination plan
-- New capability additions
-- Frontier positioning
-- Demo + revenue architecture
-- Ready-to-deploy BUILD swarm plan (10 Opus agents)
-- Clean-room register (every algorithm to reimplement)
-
-ADVERSARIAL REVIEWER (Opus):
-Kill anything hallucinated, ungrounded, or impractical.
-Verify URLs. Check competitors. Stress-test the build plan.
-
-KEY CONTEXT FILES (attached):
-- CLAUDE.md — project rules
-- docs/ARCHITECTURE.md — current system design
-- docs/REFERENCES.md — existing citation library
-- docs/POSITIONING.md — competitive landscape
+Full scout missions in attached plan doc. Read it FIRST.
 ```
 
 ---
