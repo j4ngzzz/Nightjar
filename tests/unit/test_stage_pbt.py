@@ -10,12 +10,12 @@ References:
 """
 
 import pytest
-from contractd.types import (
+from nightjar.types import (
     CardSpec, Contract, ContractInput, ContractOutput,
     Invariant, InvariantTier, ModuleBoundary,
     StageResult, VerifyStatus,
 )
-from contractd.stages.pbt import run_pbt
+from nightjar.stages.pbt import run_pbt
 
 
 def _make_spec(invariants: list[Invariant]) -> CardSpec:
@@ -187,3 +187,65 @@ class TestRunPbt:
         result = run_pbt(spec, FAILING_CODE)
         assert result.status == VerifyStatus.FAIL
         assert any("INV-042" in str(e.get("invariant_id", "")) for e in result.errors)
+
+
+# ── W3.1: Hypothesis dev/CI profiles [Scout 5 F6] ─────────────────────────
+
+
+class TestHypothesisProfiles:
+    """Hypothesis dev/CI profile split for fast dev feedback [Scout 5 F6].
+
+    dev profile: max_examples=10 — fast feedback during development (~300-500ms)
+    ci  profile: max_examples=200 — thorough checking in CI (~3-8s)
+
+    Profile selected via NIGHTJAR_TEST_PROFILE env var (default: dev).
+
+    Source: Scout 5 Finding 6
+    """
+
+    def test_dev_profile_has_10_examples(self):
+        """dev profile must use max_examples=10 for 10x faster dev feedback."""
+        import nightjar.stages.pbt  # ensure profiles are registered  # noqa: F401
+        from hypothesis import settings
+        dev = settings.get_profile("dev")
+        assert dev.max_examples == 10, (
+            "dev profile must use 10 examples for fast feedback [Scout 5 F6]"
+        )
+
+    def test_ci_profile_has_200_examples(self):
+        """ci profile must use max_examples=200 for thorough CI coverage."""
+        import nightjar.stages.pbt  # ensure profiles are registered  # noqa: F401
+        from hypothesis import settings
+        ci = settings.get_profile("ci")
+        assert ci.max_examples == 200, (
+            "ci profile must use 200 examples for thorough coverage [Scout 5 F6]"
+        )
+
+    def test_dev_profile_uses_derandomize(self):
+        """dev profile uses derandomize=True for reproducible dev runs."""
+        import nightjar.stages.pbt  # noqa: F401
+        from hypothesis import settings
+        dev = settings.get_profile("dev")
+        assert dev.derandomize is True, (
+            "dev profile must use derandomize=True for reproducible runs"
+        )
+
+    def test_uses_dev_profile_by_default(self, monkeypatch):
+        """Without NIGHTJAR_TEST_PROFILE env var, dev profile is loaded (10 examples)."""
+        monkeypatch.delenv("NIGHTJAR_TEST_PROFILE", raising=False)
+        from nightjar.stages.pbt import _load_pbt_profile
+        _load_pbt_profile()
+        from hypothesis import settings
+        assert settings().max_examples == 10, (
+            "Default profile must be dev (10 examples) for fast dev feedback [Scout 5 F6]"
+        )
+
+    def test_uses_ci_profile_when_env_set(self, monkeypatch):
+        """NIGHTJAR_TEST_PROFILE=ci loads ci profile (200 examples)."""
+        monkeypatch.setenv("NIGHTJAR_TEST_PROFILE", "ci")
+        from nightjar.stages.pbt import _load_pbt_profile
+        _load_pbt_profile()
+        from hypothesis import settings
+        assert settings().max_examples == 200, (
+            "NIGHTJAR_TEST_PROFILE=ci must load 200-example profile [Scout 5 F6]"
+        )
