@@ -1,5 +1,7 @@
-# BridgeMCP credentials - NEVER commit API keys
+# Credentials - NEVER commit API keys
 .mcp.json
+.env
+.env.local
 
 # Generated artifacts
 dist/
