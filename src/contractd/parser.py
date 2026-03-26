@@ -178,6 +178,67 @@ def _parse_invariants(raw: list | None) -> list[Invariant]:
     return result
 
 
+def load_constitution(path: str) -> list[Invariant]:
+    """Load global invariants from a constitution.card.md file.
+
+    Constitution files define project-level invariants that inherit to all
+    modules, per [REF-T25] GitHub Spec Kit constitution pattern.
+
+    Args:
+        path: Filesystem path to the constitution.card.md file.
+
+    Returns:
+        List of Invariant objects from the ``global-invariants`` block.
+        Returns empty list if file does not exist.
+    """
+    constitution_path = Path(path)
+    if not constitution_path.exists():
+        return []
+
+    content = constitution_path.read_text(encoding="utf-8")
+    frontmatter, _body = _split_frontmatter(content)
+    data = _parse_yaml(frontmatter)
+
+    return _parse_invariants(data.get("global-invariants", []))
+
+
+def parse_with_constitution(
+    spec_path: str,
+    constitution_path: str,
+) -> CardSpec:
+    """Parse a .card.md spec and merge constitution invariants.
+
+    Module-specific invariants come first, followed by global invariants
+    from the constitution. Duplicate IDs (if any) are deduplicated —
+    module-level takes precedence.
+
+    Per [REF-T25] Spec Kit: constitution.md defines project-level invariants
+    inherited by all modules.
+
+    Args:
+        spec_path: Path to the module's .card.md file.
+        constitution_path: Path to constitution.card.md (may not exist).
+
+    Returns:
+        CardSpec with merged invariants.
+    """
+    spec = parse_card_spec(spec_path)
+    global_invariants = load_constitution(constitution_path)
+
+    if not global_invariants:
+        return spec
+
+    # Deduplicate: module invariants take precedence over global
+    existing_ids = {inv.id for inv in spec.invariants}
+    merged = list(spec.invariants)
+    for inv in global_invariants:
+        if inv.id not in existing_ids:
+            merged.append(inv)
+
+    spec.invariants = merged
+    return spec
+
+
 def _extract_section(body: str, heading: str) -> str:
     """Extract the content under a Markdown ``## heading`` section.
 
