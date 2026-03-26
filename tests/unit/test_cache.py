@@ -18,6 +18,12 @@ import pytest
 from nightjar.cache import (
     compute_cache_key,
     get_cached_result,
+    get_stage_cache,
+    hash_stage_inputs,
+    StageCacheEntry,
+    should_skip_stage,
+    store_stage_cache,
+    check_early_cutoff,
     store_result,
     invalidate_cache,
     is_cache_valid,
@@ -208,3 +214,199 @@ class TestInvalidateCache:
         assert len(list(tmp_path.glob("*.json"))) == 3
         invalidate_cache("*", str(tmp_path))
         assert len(list(tmp_path.glob("*.json"))) == 0
+
+
+# ── W3.3: Salsa-style per-stage caching [Scout 5 F3] ─────────────────────
+
+
+class TestHashStageInputs:
+    """Content-addressed hash for per-stage inputs [Scout 5 F3]."""
+
+    def test_returns_hex_string(self):
+        """Stage input hash must be a 64-char hex SHA-256."""
+        h = hash_stage_inputs("stage0", "spec content")
+        assert isinstance(h, str)
+        assert len(h) == 64
+        int(h, 16)  # must be valid hex
+
+    def test_deterministic(self):
+        """Same stage name + inputs produce same hash."""
+        h1 = hash_stage_inputs("pbt", "invariant text", "code text")
+        h2 = hash_stage_inputs("pbt", "invariant text", "code text")
+        assert h1 == h2
+
+    def test_stage_name_affects_hash(self):
+        """Different stage names produce different hashes for same inputs."""
+        h1 = hash_stage_inputs("stage0", "same input")
+        h2 = hash_stage_inputs("stage1", "same input")
+        assert h1 != h2
+
+    def test_different_inputs_produce_different_hash(self):
+        """Different inputs produce different hash (no collisions for small inputs)."""
+        h1 = hash_stage_inputs("pbt", "input_v1")
+        h2 = hash_stage_inputs("pbt", "input_v2")
+        assert h1 != h2
+
+
+class TestStageCacheEntry:
+    """Per-stage cache entry stores stage result + hashes [Scout 5 F3]."""
+
+    def test_has_required_fields(self):
+        """StageCacheEntry must track stage, input hash, result hash, status."""
+        entry = StageCacheEntry(
+            stage_name="pbt",
+            input_hash="abc" * 21 + "a",
+            result_hash="def" * 21 + "d",
+            status="pass",
+            duration_ms=300,
+        )
+        assert entry.stage_name == "pbt"
+        assert entry.status == "pass"
+        assert entry.duration_ms == 300
+
+    def test_serialization_roundtrip(self):
+        """to_dict / from_dict roundtrip preserves all fields."""
+        entry = StageCacheEntry(
+            stage_name="schema",
+            input_hash="a" * 64,
+            result_hash="b" * 64,
+            status="pass",
+            duration_ms=150,
+            timestamp="2026-03-26T00:00:00Z",
+        )
+        d = entry.to_dict()
+        restored = StageCacheEntry.from_dict(d)
+        assert restored.stage_name == entry.stage_name
+        assert restored.input_hash == entry.input_hash
+        assert restored.result_hash == entry.result_hash
+        assert restored.status == entry.status
+        assert restored.duration_ms == entry.duration_ms
+
+
+class TestStageCache:
+    """Salsa-style per-stage cache — skip unchanged stages [Scout 5 F3]."""
+
+    def test_cache_skips_unchanged_stage(self, tmp_path):
+        """If stage inputs unchanged and cache has a pass, should_skip returns True."""
+        stage = "pbt"
+        input_hash = hash_stage_inputs(stage, "invariants unchanged")
+        entry = StageCacheEntry(
+            stage_name=stage,
+            input_hash=input_hash,
+            result_hash="x" * 64,
+            status="pass",
+            duration_ms=300,
+        )
+        store_stage_cache(entry, str(tmp_path))
+        assert should_skip_stage(stage, input_hash, str(tmp_path)) is True
+
+    def test_cache_does_not_skip_on_miss(self, tmp_path):
+        """Cache miss (no entry) → should_skip returns False."""
+        assert should_skip_stage("pbt", "a" * 64, str(tmp_path)) is False
+
+    def test_cache_does_not_skip_failed_stage(self, tmp_path):
+        """Failed stage is not skippable (must re-verify after fix)."""
+        stage = "formal"
+        input_hash = hash_stage_inputs(stage, "code v1")
+        entry = StageCacheEntry(
+            stage_name=stage,
+            input_hash=input_hash,
+            result_hash="x" * 64,
+            status="fail",
+            duration_ms=5000,
+        )
+        store_stage_cache(entry, str(tmp_path))
+        assert should_skip_stage(stage, input_hash, str(tmp_path)) is False
+
+    def test_cache_invalidates_on_upstream_change(self, tmp_path):
+        """When input hash changes, old stage cache is no longer valid."""
+        stage = "pbt"
+        old_hash = hash_stage_inputs(stage, "invariants v1")
+        new_hash = hash_stage_inputs(stage, "invariants v2")  # upstream changed
+
+        entry = StageCacheEntry(
+            stage_name=stage,
+            input_hash=old_hash,
+            result_hash="x" * 64,
+            status="pass",
+            duration_ms=300,
+        )
+        store_stage_cache(entry, str(tmp_path))
+
+        # Old hash still valid
+        assert should_skip_stage(stage, old_hash, str(tmp_path)) is True
+        # New hash is a miss — must re-run
+        assert should_skip_stage(stage, new_hash, str(tmp_path)) is False
+
+    def test_store_and_retrieve_stage_cache(self, tmp_path):
+        """store_stage_cache + get_stage_cache roundtrip."""
+        stage = "schema"
+        input_hash = hash_stage_inputs(stage, "contract schema")
+        entry = StageCacheEntry(
+            stage_name=stage,
+            input_hash=input_hash,
+            result_hash="y" * 64,
+            status="pass",
+            duration_ms=120,
+        )
+        store_stage_cache(entry, str(tmp_path))
+        retrieved = get_stage_cache(stage, input_hash, str(tmp_path))
+        assert retrieved is not None
+        assert retrieved.stage_name == stage
+        assert retrieved.status == "pass"
+
+    def test_get_stage_cache_returns_none_on_miss(self, tmp_path):
+        """get_stage_cache returns None when no entry exists."""
+        result = get_stage_cache("formal", "a" * 64, str(tmp_path))
+        assert result is None
+
+
+class TestEarlyCutoff:
+    """Early cutoff: if result unchanged, downstream stages skip [Scout 5 F3].
+
+    This is the Salsa red-green optimization:
+    If a recomputed stage produces the SAME result hash as before,
+    all downstream stages can skip (their inputs haven't actually changed).
+    """
+
+    def test_early_cutoff_when_result_unchanged(self, tmp_path):
+        """If stage result hash is same as cached, downstream can skip."""
+        stage = "stage0"
+        input_hash = hash_stage_inputs(stage, "new spec content")
+        same_result_hash = "a" * 64
+
+        # Store entry with this result hash
+        entry = StageCacheEntry(
+            stage_name=stage,
+            input_hash=input_hash,
+            result_hash=same_result_hash,
+            status="pass",
+            duration_ms=50,
+        )
+        store_stage_cache(entry, str(tmp_path))
+
+        # Check: same result_hash → early cutoff (downstream can skip)
+        assert check_early_cutoff(stage, input_hash, same_result_hash, str(tmp_path)) is True
+
+    def test_no_early_cutoff_when_result_changes(self, tmp_path):
+        """If stage result hash changed, downstream must re-run."""
+        stage = "stage0"
+        input_hash = hash_stage_inputs(stage, "spec content")
+        old_result_hash = "a" * 64
+        new_result_hash = "b" * 64  # result changed
+
+        entry = StageCacheEntry(
+            stage_name=stage,
+            input_hash=input_hash,
+            result_hash=old_result_hash,
+            status="pass",
+            duration_ms=50,
+        )
+        store_stage_cache(entry, str(tmp_path))
+
+        # Different result_hash → no early cutoff
+        assert check_early_cutoff(stage, input_hash, new_result_hash, str(tmp_path)) is False
+
+    def test_no_early_cutoff_on_cache_miss(self, tmp_path):
+        """Cache miss → no early cutoff (no prior result to compare)."""
+        assert check_early_cutoff("stage0", "a" * 64, "b" * 64, str(tmp_path)) is False
