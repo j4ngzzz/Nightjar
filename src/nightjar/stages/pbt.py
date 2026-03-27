@@ -286,6 +286,35 @@ def _run_pbt_core(
     )
 
 
+def _make_pbt_settings() -> settings:
+    """Return PBT settings, optionally with CrossHair SMT backend.
+
+    Checks NIGHTJAR_CROSSHAIR_BACKEND env var. If set to "1" and
+    hypothesis-crosshair is installed, activates CrossHair's SMT-based
+    symbolic execution backend instead of random sampling [REF-T09].
+
+    CrossHair via pschanely/hypothesis-crosshair:
+    - Same @given tests, zero code changes — one flag, two execution modes
+    - Path exhaustion = property verified for ALL inputs (not just sampled)
+    - deadline=None → CrossHair defaults to 2.5s per SMT path
+    - Registered via entry-point hook at import time; no explicit config needed
+    - Requires: pip install hypothesis-crosshair
+
+    Falls back to NIGHTJAR_PBT_SETTINGS (active profile) if package is
+    unavailable, so random-sampling mode is always the safe default.
+    """
+    if os.getenv("NIGHTJAR_CROSSHAIR_BACKEND", "0") != "1":
+        return NIGHTJAR_PBT_SETTINGS
+    try:
+        # hypothesis-crosshair self-registers via entry points on import:
+        #   hypothesis_crosshair_provider:_hypothesis_setup_hook
+        # sets AVAILABLE_PROVIDERS["crosshair"] = CrossHairPrimitiveProvider
+        import hypothesis_crosshair_provider  # noqa: F401
+        return settings(deadline=None, database=None, backend="crosshair")
+    except ImportError:
+        return NIGHTJAR_PBT_SETTINGS
+
+
 def run_pbt_extended(spec: CardSpec, code: str) -> StageResult:
     """Run PBT with 10K+ examples — graceful degradation fallback (W1.5).
 
@@ -322,4 +351,4 @@ def run_pbt(spec: CardSpec, code: str) -> StageResult:
     Returns:
         StageResult with stage=3, status=PASS/FAIL/SKIP.
     """
-    return _run_pbt_core(spec, code, pbt_settings=NIGHTJAR_PBT_SETTINGS)
+    return _run_pbt_core(spec, code, pbt_settings=_make_pbt_settings())

@@ -73,18 +73,118 @@ def parse_deps_lock(path: str) -> dict[str, dict]:
     return packages
 
 
+def detect_drift(
+    current: dict[str, dict],
+    baseline: dict[str, dict],
+) -> list[dict]:
+    """Detect drift between two deps.lock snapshots.
+
+    Uses sbomlyze's 3-category model (rezmoss/sbomlyze) to classify changes.
+    Priority order: integrity > version > metadata (same as sbomlyze's
+    ClassifyDrift logic in internal/analysis/drift.go).
+
+    Categories:
+    - integrity (HIGH): hash changed WITHOUT version bump.
+      The cryptographic ground truth disagrees with the declared version.
+      Classical supply chain attack vector (event-stream, XZ utils):
+      attacker replaces artifact at known version without bumping it.
+      Always investigate — this is never a routine update.
+    - version (info): version changed (normal update/downgrade).
+    - metadata (info): license/maintainer changed — governance risk.
+      NOTE: deps.lock format only stores version+hash, so metadata drift
+      (license changes) is not detectable here without an enriched SBOM.
+    - added/removed (info): package appeared or disappeared.
+
+    Args:
+        current: Current deps.lock dict from parse_deps_lock().
+        baseline: Baseline deps.lock dict to compare against.
+
+    Returns:
+        List of drift event dicts sorted by package name, each with
+        'package', 'drift_type', 'severity', and type-specific fields.
+    """
+    events: list[dict] = []
+    all_packages = sorted(set(current) | set(baseline))
+
+    for pkg in all_packages:
+        if pkg not in baseline:
+            events.append({
+                "package": pkg,
+                "drift_type": "added",
+                "severity": "info",
+                "version": current[pkg]["version"],
+            })
+            continue
+
+        if pkg not in current:
+            events.append({
+                "package": pkg,
+                "drift_type": "removed",
+                "severity": "info",
+                "version": baseline[pkg]["version"],
+            })
+            continue
+
+        cur = current[pkg]
+        base = baseline[pkg]
+
+        version_changed = cur["version"] != base["version"]
+        # Only flag hash change when both snapshots recorded a non-empty hash.
+        # Missing hash = uv hash not captured yet; not a drift signal.
+        hash_changed = (
+            bool(cur["hash"]) and bool(base["hash"])
+            and cur["hash"] != base["hash"]
+        )
+
+        # Priority order from sbomlyze: integrity > version > metadata.
+        # Integrity check is BEFORE version check so that integrity is only
+        # flagged for the anomalous case (same version, different hash).
+        if hash_changed and not version_changed:
+            events.append({
+                "package": pkg,
+                "drift_type": "integrity",
+                "severity": "high",
+                "version": cur["version"],
+                "baseline_hash": base["hash"],
+                "current_hash": cur["hash"],
+                "message": (
+                    f"Hash changed without version bump for '{pkg}' "
+                    f"(version {cur['version']}). "
+                    "Potential supply chain tampering — verify the artifact."
+                ),
+            })
+        elif version_changed:
+            events.append({
+                "package": pkg,
+                "drift_type": "version",
+                "severity": "info",
+                "version_from": base["version"],
+                "version_to": cur["version"],
+            })
+        # Metadata drift (license/maintainer) requires enriched SBOM data
+        # not present in the deps.lock hash+version format.
+
+    return events
+
+
 def run_deps_check(
     code_path: str,
     deps_lock_path: str,
+    baseline_lock_path: Optional[str] = None,
 ) -> StageResult:
     """Run Stage 1 dependency check on generated code.
 
     Extracts all import statements from the code, then verifies each
-    third-party import exists in the deps.lock allowlist.
+    third-party import exists in the deps.lock allowlist. Optionally runs
+    sbomlyze-style drift detection against a baseline snapshot.
 
     Args:
         code_path: Path to generated Python code.
         deps_lock_path: Path to deps.lock sealed manifest.
+        baseline_lock_path: Optional path to a previous deps.lock snapshot
+            for drift detection. Integrity drift (hash change without version
+            bump) triggers a FAIL — it is a supply chain attack signal.
+            Version/added/removed drift is informational only.
 
     Returns:
         StageResult with stage=1, name='deps', and pass/fail status.
@@ -135,6 +235,31 @@ def run_deps_check(
             for pkg in sorted(set(disallowed))
         ]
         return _fail(start, errors)
+
+    # 6. Optional sbomlyze drift detection [sbomlyze rezmoss/sbomlyze].
+    # Integrity drift (hash change without version bump) = HIGH severity FAIL.
+    # Supply chain attacks replace artifacts at the same version; only a hash
+    # comparison reveals the substitution.
+    if baseline_lock_path is not None:
+        baseline = parse_deps_lock(baseline_lock_path)
+        if baseline:
+            drift_events = detect_drift(allowed, baseline)
+            integrity_events = [e for e in drift_events if e["drift_type"] == "integrity"]
+            if integrity_events:
+                drift_errors = [
+                    {
+                        "type": "integrity_drift",
+                        "message": e["message"],
+                        "package": e["package"],
+                        "drift_type": e["drift_type"],
+                        "severity": e["severity"],
+                        "version": e["version"],
+                        "baseline_hash": e["baseline_hash"],
+                        "current_hash": e["current_hash"],
+                    }
+                    for e in integrity_events
+                ]
+                return _fail(start, drift_errors)
 
     return _pass(start)
 
