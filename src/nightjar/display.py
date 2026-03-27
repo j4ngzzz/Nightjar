@@ -27,7 +27,7 @@ References:
 
 from typing import Optional, TYPE_CHECKING
 
-from nightjar.types import StageResult, VerifyResult, VerifyStatus
+from nightjar.types import StageResult, TrustLevel, VerifyResult, VerifyStatus
 
 # Graceful Rich import -- fall back to plain text if Rich is not installed.
 try:
@@ -126,6 +126,8 @@ class RichStreamingDisplay:
         self.stage_durations: dict[int, int] = {}
         self.pipeline_done: bool = False
         self.pipeline_verified: bool = False
+        self.pipeline_trust_level: Optional[TrustLevel] = None
+        self.pipeline_confidence_val: float = 0.0
         self._live: Optional["Live"] = None
 
     # ── Context manager ──────────────────────────────────────────────────
@@ -169,6 +171,9 @@ class RichStreamingDisplay:
         """Render the final pass/fail banner and freeze the display."""
         self.pipeline_done = True
         self.pipeline_verified = result.verified
+        self.pipeline_trust_level = result.trust_level
+        if result.confidence is not None:
+            self.pipeline_confidence_val = result.confidence.total / 100.0
         self._refresh()
 
     # ── Internal rendering ───────────────────────────────────────────────
@@ -221,15 +226,24 @@ class RichStreamingDisplay:
 
         if self.pipeline_done:
             if self.pipeline_verified:
-                banner = Panel(
-                    Text(" ✓ VERIFIED ", style="bold white on green", justify="center"),
-                    border_style="green",
-                )
+                banner_text = Text(" ✓ VERIFIED ", style="bold white on green", justify="center")
+                border = "green"
             else:
-                banner = Panel(
-                    Text(" ✗ FAIL ", style="bold white on red", justify="center"),
-                    border_style="red",
+                banner_text = Text(" ✗ FAIL ", style="bold white on red", justify="center")
+                border = "red"
+
+            if self.pipeline_trust_level is not None:
+                style = _TRUST_LEVEL_STYLES.get(self.pipeline_trust_level, "")
+                trust_text = Text(
+                    f"Trust: {self.pipeline_trust_level.value} ({self.pipeline_confidence_val:.2f})",
+                    style=style,
+                    justify="center",
                 )
+                banner_content = Group(banner_text, trust_text)
+            else:
+                banner_content = banner_text
+
+            banner = Panel(banner_content, border_style=border)
             return Group(table, banner)
 
         return table
@@ -240,10 +254,15 @@ class RichStreamingDisplay:
         for stage_num in range(5):
             status = self.stage_status.get(stage_num, "waiting")
             name = self.stage_names.get(stage_num, f"stage{stage_num}")
-            lines.append(f"  Stage {stage_num} ({name}): {status}")
+            status_str = status.value if hasattr(status, "value") else status
+            lines.append(f"  Stage {stage_num} ({name}): {status_str}")
         if self.pipeline_done:
             result_str = "VERIFIED" if self.pipeline_verified else "FAIL"
             lines.append(f"\n>>> {result_str}")
+            if self.pipeline_trust_level is not None:
+                lines.append(
+                    f"Trust: {self.pipeline_trust_level.value} ({self.pipeline_confidence_val:.2f})"
+                )
         return "\n".join(lines)
 
 
@@ -277,6 +296,14 @@ _STATUS_STYLES = {
     VerifyStatus.FAIL: ("FAIL", "bold red"),
     VerifyStatus.SKIP: ("SKIP", "bold yellow"),
     VerifyStatus.TIMEOUT: ("TIMEOUT", "bold magenta"),
+}
+
+# SkillFortify trust level color coding [Scout 9 W2-2]
+_TRUST_LEVEL_STYLES: dict[TrustLevel, str] = {
+    TrustLevel.FORMALLY_VERIFIED: "bold green",
+    TrustLevel.PROPERTY_VERIFIED: "bold blue",
+    TrustLevel.SCHEMA_VERIFIED:   "bold yellow",
+    TrustLevel.UNVERIFIED:        "bold red",
 }
 
 
@@ -334,6 +361,17 @@ def format_verify_result(result: VerifyResult) -> None:
 
     console.print()
     console.print(badge)
+
+    # ── Trust level (SkillFortify graduated trust) [Scout 9 W2-2] ───────
+    if result.trust_level is not None:
+        style = _TRUST_LEVEL_STYLES.get(result.trust_level, "")
+        confidence_val = (result.confidence.total / 100.0) if result.confidence else 0.0
+        trust_line = Text(
+            f"Trust: {result.trust_level.value} ({confidence_val:.2f})",
+            style=style,
+        )
+        console.print(trust_line)
+
     console.print()
 
     # ── Stage table ─────────────────────────────────────
@@ -400,6 +438,10 @@ def _format_verify_result_plain(result: VerifyResult) -> None:
         print("VERIFIED -- all stages passed")
     else:
         print("FAIL -- verification did not pass")
+
+    if result.trust_level is not None:
+        confidence_val = (result.confidence.total / 100.0) if result.confidence else 0.0
+        print(f"Trust: {result.trust_level.value} ({confidence_val:.2f})")
 
     for stage in result.stages:
         print(format_stage_result(stage))

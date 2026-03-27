@@ -25,7 +25,40 @@ References:
 
 from dataclasses import dataclass, field
 
-from nightjar.types import StageResult, VerifyResult, VerifyStatus
+from nightjar.types import StageResult, TrustLevel, VerifyResult, VerifyStatus
+
+
+# SkillFortify trust algebra thresholds [Scout 9 W2-2]
+# Source: qualixar/skillfortify src/skillfortify/core/trust/models.py
+# LEVEL_FORMAL_THRESHOLD=0.75, LEVEL_COMMUNITY_THRESHOLD=0.50, LEVEL_SIGNED_THRESHOLD=0.25
+_TRUST_FORMAL_THRESHOLD: float = 0.75
+_TRUST_COMMUNITY_THRESHOLD: float = 0.50
+_TRUST_SIGNED_THRESHOLD: float = 0.25
+
+
+def compute_trust_level(score: float) -> TrustLevel:
+    """Map a normalized confidence score [0, 1] to a SkillFortify TrustLevel.
+
+    Thresholds from SkillFortify trust algebra (arxiv:2603.00195, [Scout 9 W2-2]):
+      >= 0.75 → FORMALLY_VERIFIED  (Stage 4 Dafny proof passed)
+      >= 0.50 → PROPERTY_VERIFIED  (Stage 3 PBT passed, no formal proof)
+      >= 0.25 → SCHEMA_VERIFIED    (Stage 2 schema passed, no PBT/formal)
+      <  0.25 → UNVERIFIED         (only preflight/deps passed or nothing)
+
+    Args:
+        score: Normalized confidence score in [0.0, 1.0].
+
+    Returns:
+        The corresponding TrustLevel enum value.
+    """
+    if score >= _TRUST_FORMAL_THRESHOLD:
+        return TrustLevel.FORMALLY_VERIFIED
+    elif score >= _TRUST_COMMUNITY_THRESHOLD:
+        return TrustLevel.PROPERTY_VERIFIED
+    elif score >= _TRUST_SIGNED_THRESHOLD:
+        return TrustLevel.SCHEMA_VERIFIED
+    else:
+        return TrustLevel.UNVERIFIED
 
 
 # Per Scout 3 S5.3: canonical stage name → points
@@ -101,6 +134,12 @@ def compute_confidence(result: VerifyResult) -> ConfidenceScore:
     FAIL means the check ran and found a violation — 0 points awarded.
     TIMEOUT means verification didn't complete — 0 points awarded.
 
+    Side effect:
+        Sets ``result.trust_level`` on the input VerifyResult using
+        ``compute_trust_level(total / 100.0)`` so callers do not need
+        a second call. Any code path that bypasses this function will
+        leave ``result.trust_level = None``.
+
     Args:
         result: VerifyResult from run_pipeline() or run_bfs_search().
 
@@ -135,4 +174,8 @@ def compute_confidence(result: VerifyResult) -> ConfidenceScore:
 
     # Clamp to [0, 100] for safety
     total = max(0, min(100, total))
+
+    # Map to SkillFortify trust level [Scout 9 W2-2] — normalize to [0, 1]
+    result.trust_level = compute_trust_level(total / 100.0)
+
     return ConfidenceScore(total=total, breakdown=breakdown, gap=gap)

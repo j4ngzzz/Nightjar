@@ -14,10 +14,11 @@ References:
 """
 
 import pytest
-from nightjar.types import StageResult, VerifyResult, VerifyStatus
+from nightjar.types import StageResult, TrustLevel, VerifyResult, VerifyStatus
 from nightjar.confidence import (
     ConfidenceScore,
     compute_confidence,
+    compute_trust_level,
     STAGE_POINTS,
 )
 
@@ -245,3 +246,86 @@ class TestComputeConfidence:
         formatted = score.format()
         assert isinstance(formatted, str)
         assert str(score.total) in formatted  # total should appear in string
+
+
+class TestComputeTrustLevel:
+    """Tests for compute_trust_level() and the trust level side-effect in compute_confidence().
+
+    Thresholds from SkillFortify trust algebra [Scout 9 W2-2]:
+      FORMALLY_VERIFIED: >= 0.75
+      PROPERTY_VERIFIED: >= 0.50
+      SCHEMA_VERIFIED:   >= 0.25
+      UNVERIFIED:        <  0.25
+    """
+
+    def test_score_1_0_is_formally_verified(self):
+        assert compute_trust_level(1.0) == TrustLevel.FORMALLY_VERIFIED
+
+    def test_score_0_75_boundary_is_formally_verified(self):
+        assert compute_trust_level(0.75) == TrustLevel.FORMALLY_VERIFIED
+
+    def test_score_0_74_is_property_verified(self):
+        assert compute_trust_level(0.74) == TrustLevel.PROPERTY_VERIFIED
+
+    def test_score_0_50_boundary_is_property_verified(self):
+        assert compute_trust_level(0.50) == TrustLevel.PROPERTY_VERIFIED
+
+    def test_score_0_49_is_schema_verified(self):
+        assert compute_trust_level(0.49) == TrustLevel.SCHEMA_VERIFIED
+
+    def test_score_0_25_boundary_is_schema_verified(self):
+        assert compute_trust_level(0.25) == TrustLevel.SCHEMA_VERIFIED
+
+    def test_score_0_24_is_unverified(self):
+        assert compute_trust_level(0.24) == TrustLevel.UNVERIFIED
+
+    def test_score_0_0_is_unverified(self):
+        assert compute_trust_level(0.0) == TrustLevel.UNVERIFIED
+
+    def test_compute_confidence_sets_trust_level_on_result(self):
+        """compute_confidence() sets result.trust_level as a side effect [Scout 9 W2-2]."""
+        result = VerifyResult(
+            verified=True,
+            stages=[
+                _pass_stage(0, "preflight"),
+                _pass_stage(1, "deps"),
+                _pass_stage(2, "schema"),
+                _pass_stage(3, "pbt"),
+                _pass_stage(4, "formal"),
+            ],
+        )
+        compute_confidence(result)
+        assert result.trust_level == TrustLevel.FORMALLY_VERIFIED
+
+    def test_compute_confidence_sets_unverified_for_empty_result(self):
+        """No stages = score 0 = UNVERIFIED trust level."""
+        result = VerifyResult(verified=False, stages=[])
+        compute_confidence(result)
+        assert result.trust_level == TrustLevel.UNVERIFIED
+
+    def test_compute_confidence_sets_schema_verified_for_preflight_only(self):
+        """preflight(15) + deps(10) = 25 -> normalized 0.25 -> SCHEMA_VERIFIED."""
+        result = VerifyResult(
+            verified=False,
+            stages=[
+                _pass_stage(0, "preflight"),
+                _pass_stage(1, "deps"),
+            ],
+        )
+        compute_confidence(result)
+        assert result.trust_level == TrustLevel.SCHEMA_VERIFIED
+
+    def test_compute_confidence_all_stages_pass_is_formally_verified(self):
+        """All stages pass -> score 100 -> normalized 1.0 -> FORMALLY_VERIFIED."""
+        result = VerifyResult(
+            verified=True,
+            stages=[
+                _pass_stage(0, "preflight"),
+                _pass_stage(1, "deps"),
+                _pass_stage(2, "schema"),
+                _pass_stage(3, "pbt"),
+                _pass_stage(4, "formal"),
+            ],
+        )
+        compute_confidence(result)
+        assert result.trust_level == TrustLevel.FORMALLY_VERIFIED

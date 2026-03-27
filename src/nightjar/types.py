@@ -27,6 +27,25 @@ class VerifyStatus(str, Enum):
     TIMEOUT = "timeout"
 
 
+class TrustLevel(str, Enum):
+    """SkillFortify graduated trust levels [Scout 9 W2-2].
+
+    Thresholds aligned with SkillFortify's trust algebra
+    (qualixar/skillfortify src/skillfortify/core/trust/models.py):
+      LEVEL_FORMAL_THRESHOLD     = 0.75
+      LEVEL_COMMUNITY_THRESHOLD  = 0.50
+      LEVEL_SIGNED_THRESHOLD     = 0.25
+
+    References:
+    - arxiv:2603.00195 DY-Skill threat model — trust algebra with formal properties
+    - qualixar/skillfortify src/skillfortify/core/trust/models.py
+    """
+    FORMALLY_VERIFIED = "FORMALLY_VERIFIED"  # score >= 0.75 — Stage 4 Dafny proof passed
+    PROPERTY_VERIFIED = "PROPERTY_VERIFIED"  # score >= 0.50 — Stage 3 PBT passed
+    SCHEMA_VERIFIED   = "SCHEMA_VERIFIED"    # score >= 0.25 — Stage 2 schema passed
+    UNVERIFIED        = "UNVERIFIED"         # score <  0.25 — preflight/deps only or nothing
+
+
 @dataclass
 class Invariant:
     id: str
@@ -99,3 +118,4 @@ class VerifyResult:
     total_duration_ms: int = 0
     retry_count: int = 0
     confidence: Optional[Any] = None  # ConfidenceScore; Any avoids circular import
+    trust_level: Optional["TrustLevel"] = None  # SkillFortify graduated trust [Scout 9 W2-2]

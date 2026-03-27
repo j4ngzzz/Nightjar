@@ -11,7 +11,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from nightjar.types import VerifyResult, StageResult, VerifyStatus
+from nightjar.types import VerifyResult, StageResult, TrustLevel, VerifyStatus
 
 
 # ── Fixtures ────────────────────────────────────────────
@@ -382,3 +382,69 @@ class TestGracefulFallback:
         format_explain(explain_report)
         captured = capsys.readouterr().out
         assert len(captured) > 0
+
+
+# ── Trust level display tests [Scout 9 W2-2] ──────────
+
+
+class TestTrustLevelDisplay:
+    """Test that trust level appears in formatted output [Scout 9 W2-2]."""
+
+    def test_trust_level_appears_in_plain_output(self, capsys):
+        """format_verify_result prints trust level when result.trust_level is set."""
+        from nightjar.display import format_verify_result
+        result = VerifyResult(
+            verified=True,
+            stages=[
+                StageResult(stage=0, name="preflight", status=VerifyStatus.PASS),
+                StageResult(stage=4, name="formal", status=VerifyStatus.PASS),
+            ],
+            total_duration_ms=100,
+            trust_level=TrustLevel.FORMALLY_VERIFIED,
+        )
+        format_verify_result(result)
+        captured = capsys.readouterr().out
+        assert "FORMALLY_VERIFIED" in captured
+
+    def test_trust_level_absent_when_none(self, capsys):
+        """format_verify_result does not print trust level when trust_level is None."""
+        from nightjar.display import format_verify_result
+        result = VerifyResult(
+            verified=True,
+            stages=[StageResult(stage=0, name="preflight", status=VerifyStatus.PASS)],
+            total_duration_ms=10,
+            trust_level=None,
+        )
+        format_verify_result(result)
+        captured = capsys.readouterr().out
+        # None of the trust level strings should appear
+        for level in TrustLevel:
+            assert level.value not in captured
+
+    def test_unverified_trust_level_in_output(self, capsys):
+        """UNVERIFIED trust level appears in output for low-confidence results."""
+        from nightjar.display import format_verify_result
+        result = VerifyResult(
+            verified=False,
+            stages=[],
+            total_duration_ms=0,
+            trust_level=TrustLevel.UNVERIFIED,
+        )
+        format_verify_result(result)
+        captured = capsys.readouterr().out
+        assert "UNVERIFIED" in captured
+
+    def test_trust_level_confidence_value_in_output(self, capsys):
+        """Trust level line includes the normalized confidence score."""
+        from nightjar.confidence import ConfidenceScore
+        from nightjar.display import format_verify_result
+        result = VerifyResult(
+            verified=True,
+            stages=[],
+            total_duration_ms=0,
+            trust_level=TrustLevel.FORMALLY_VERIFIED,
+            confidence=ConfidenceScore(total=82, breakdown={}),
+        )
+        format_verify_result(result)
+        captured = capsys.readouterr().out
+        assert "0.82" in captured
