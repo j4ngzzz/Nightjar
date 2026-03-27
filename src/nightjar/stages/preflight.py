@@ -52,7 +52,8 @@ _UNKNOWN: object = object()
 _SAFE_BUILTINS: dict[str, Any] = {
     "abs": abs, "bool": bool, "dict": dict, "float": float,
     "int": int, "isinstance": isinstance, "len": len, "list": list,
-    "max": max, "min": min, "str": str, "sum": sum, "type": type,
+    "max": max, "min": min, "str": str, "sum": sum,
+    # "type" omitted: three-arg form enables class creation at runtime
 }
 
 
@@ -97,10 +98,11 @@ def check_dead_constraints(invariants: list[dict]) -> list[dict]:
     boundary values. Natural language statements that don't parse as Python
     are silently skipped — no false positives.
 
-    Categories:
-    - Always true ("dead"): invariant holds for ALL boundary values.
+    Categories (evaluated over decidable boundary values only — inputs that
+    raise NameError, SyntaxError, or TypeError are skipped per deal's pattern):
+    - Always true ("dead"): invariant holds for all decidable boundary values.
       The constraint never catches violations — wasted verification budget.
-    - Always false ("unsatisfiable"): invariant fails for ALL boundary values.
+    - Always false ("unsatisfiable"): invariant fails for all decidable values.
       The constraint can never be satisfied.
 
     This catches broken specs CHEAPLY in Stage 0, before wasting LLM/Dafny

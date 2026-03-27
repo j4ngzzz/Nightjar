@@ -296,15 +296,18 @@ def _make_pbt_settings() -> settings:
     CrossHair via pschanely/hypothesis-crosshair:
     - Same @given tests, zero code changes — one flag, two execution modes
     - Path exhaustion = property verified for ALL inputs (not just sampled)
-    - deadline=None → CrossHair defaults to 2.5s per SMT path
+    - CrossHair manages its own per-path time budget (deadline=None disables
+      Hypothesis's deadline check; CrossHair uses its own timeout internally)
     - Registered via entry-point hook at import time; no explicit config needed
     - Requires: pip install hypothesis-crosshair
 
-    Falls back to NIGHTJAR_PBT_SETTINGS (active profile) if package is
-    unavailable, so random-sampling mode is always the safe default.
+    Returns a fresh settings() object on every call so the active Hypothesis
+    profile (dev/ci, set via NIGHTJAR_TEST_PROFILE) is always respected.
     """
     if os.getenv("NIGHTJAR_CROSSHAIR_BACKEND", "0") != "1":
-        return NIGHTJAR_PBT_SETTINGS
+        # Fresh settings() inherits max_examples from the currently active
+        # profile, avoiding stale values from the module-level constant.
+        return settings(deadline=None, database=None)
     try:
         # hypothesis-crosshair self-registers via entry points on import:
         #   hypothesis_crosshair_provider:_hypothesis_setup_hook
@@ -312,7 +315,7 @@ def _make_pbt_settings() -> settings:
         import hypothesis_crosshair_provider  # noqa: F401
         return settings(deadline=None, database=None, backend="crosshair")
     except ImportError:
-        return NIGHTJAR_PBT_SETTINGS
+        return settings(deadline=None, database=None)
 
 
 def run_pbt_extended(spec: CardSpec, code: str) -> StageResult:

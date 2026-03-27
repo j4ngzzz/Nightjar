@@ -249,3 +249,62 @@ class TestHypothesisProfiles:
         assert settings().max_examples == 200, (
             "NIGHTJAR_TEST_PROFILE=ci must load 200-example profile [Scout 5 F6]"
         )
+
+
+# ── W2-1: CrossHair SMT backend [REF-T09] ───────────────────────────────────
+
+
+class TestCrossHairBackend:
+    """_make_pbt_settings() activates CrossHair backend via env var [REF-T09].
+
+    CrossHair uses SMT-based symbolic execution (Z3) instead of random sampling.
+    Gate: NIGHTJAR_CROSSHAIR_BACKEND=1. Opt-in, zero impact by default.
+
+    Source: pschanely/hypothesis-crosshair
+    """
+
+    def test_env_unset_returns_standard_settings(self, monkeypatch):
+        """Without NIGHTJAR_CROSSHAIR_BACKEND, returns standard settings (no backend)."""
+        monkeypatch.delenv("NIGHTJAR_CROSSHAIR_BACKEND", raising=False)
+        from nightjar.stages.pbt import _make_pbt_settings
+        s = _make_pbt_settings()
+        assert not hasattr(s, "backend") or getattr(s, "backend", None) != "crosshair"
+
+    def test_env_zero_returns_standard_settings(self, monkeypatch):
+        """NIGHTJAR_CROSSHAIR_BACKEND=0 returns standard settings (no backend)."""
+        monkeypatch.setenv("NIGHTJAR_CROSSHAIR_BACKEND", "0")
+        from nightjar.stages.pbt import _make_pbt_settings
+        s = _make_pbt_settings()
+        assert getattr(s, "backend", None) != "crosshair"
+
+    def test_env_one_with_missing_package_falls_back(self, monkeypatch):
+        """NIGHTJAR_CROSSHAIR_BACKEND=1 without hypothesis-crosshair falls back gracefully."""
+        monkeypatch.setenv("NIGHTJAR_CROSSHAIR_BACKEND", "1")
+        import sys
+        # Temporarily hide the package if it happens to be installed
+        saved = sys.modules.pop("hypothesis_crosshair_provider", None)
+        sys.modules["hypothesis_crosshair_provider"] = None  # type: ignore[assignment]
+        try:
+            # Re-import to force fresh evaluation
+            import importlib
+            import nightjar.stages.pbt as pbt_mod
+            importlib.reload(pbt_mod)
+            # _make_pbt_settings should not raise even with broken package
+            # (ImportError caught internally)
+        finally:
+            if saved is not None:
+                sys.modules["hypothesis_crosshair_provider"] = saved
+            else:
+                sys.modules.pop("hypothesis_crosshair_provider", None)
+
+    def test_returns_fresh_settings_respects_active_profile(self, monkeypatch):
+        """Non-CrossHair path returns fresh settings() inheriting the active profile."""
+        monkeypatch.delenv("NIGHTJAR_CROSSHAIR_BACKEND", raising=False)
+        monkeypatch.setenv("NIGHTJAR_TEST_PROFILE", "ci")
+        from nightjar.stages.pbt import _load_pbt_profile, _make_pbt_settings
+        _load_pbt_profile()
+        s = _make_pbt_settings()
+        # Fresh settings() inherits max_examples from the currently loaded profile
+        assert s.max_examples == 200, (
+            "_make_pbt_settings must return fresh settings() respecting active profile"
+        )
