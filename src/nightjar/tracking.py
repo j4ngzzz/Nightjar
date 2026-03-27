@@ -103,7 +103,10 @@ class TrackingDB:
                 ),
             )
             conn.commit()
-            return cursor.lastrowid
+            row_id = cursor.lastrowid
+            if row_id is None:
+                raise RuntimeError("INSERT did not produce a row ID")
+            return row_id
         finally:
             conn.close()
 

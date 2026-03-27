@@ -173,7 +173,10 @@ class TraceStore:
              trace.observed_type, _ts_to_str(trace.timestamp)),
         )
         conn.commit()
-        return cursor.lastrowid
+        row_id = cursor.lastrowid
+        if row_id is None:
+            raise RuntimeError("INSERT did not produce a row ID")
+        return row_id
 
     def get_type_traces(
         self,
@@ -213,7 +216,10 @@ class TraceStore:
              trace.value_type, _ts_to_str(trace.timestamp)),
         )
         conn.commit()
-        return cursor.lastrowid
+        row_id = cursor.lastrowid
+        if row_id is None:
+            raise RuntimeError("INSERT did not produce a row ID")
+        return row_id
 
     def insert_value_traces_bulk(self, traces: list[ValueTrace]) -> None:
         """Bulk insert value traces for performance."""
@@ -266,7 +272,10 @@ class TraceStore:
              _ts_to_str(trace.timestamp)),
         )
         conn.commit()
-        return cursor.lastrowid
+        row_id = cursor.lastrowid
+        if row_id is None:
+            raise RuntimeError("INSERT did not produce a row ID")
+        return row_id
 
     def get_api_traces(
         self,
@@ -313,7 +322,10 @@ class TraceStore:
              _ts_to_str(trace.timestamp)),
         )
         conn.commit()
-        return cursor.lastrowid
+        row_id = cursor.lastrowid
+        if row_id is None:
+            raise RuntimeError("INSERT did not produce a row ID")
+        return row_id
 
     def get_error_traces(
         self,
@@ -361,7 +373,10 @@ class TraceStore:
              _ts_to_str(candidate.timestamp)),
         )
         conn.commit()
-        return cursor.lastrowid
+        row_id = cursor.lastrowid
+        if row_id is None:
+            raise RuntimeError("INSERT did not produce a row ID")
+        return row_id
 
     def update_candidate_status(
         self, candidate_id: int, status: InvariantStatus
@@ -418,7 +433,10 @@ class TraceStore:
              _ts_to_str(inv.timestamp)),
         )
         conn.commit()
-        return cursor.lastrowid
+        row_id = cursor.lastrowid
+        if row_id is None:
+            raise RuntimeError("INSERT did not produce a row ID")
+        return row_id
 
     def get_verified_invariants(
         self,
