@@ -22,7 +22,10 @@ References:
 
 import re
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from nightjar.types import CardSpec
 
 try:
     import numpy as np
@@ -290,6 +293,5 @@ def diagnose_from_spec(
     Returns:
         DiagnosisResult with binding_constraint and ranked_constraints.
     """
-    from nightjar.types import CardSpec  # late import to avoid circular
     constraints = [inv.statement for inv in spec.invariants]
     return diagnose_failure(constraints, result_value=result_value)

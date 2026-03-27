@@ -285,6 +285,7 @@ def _llm_hypothesize(
     """
     if not _LITELLM_AVAILABLE:
         return []
+    import litellm  # re-import is a no-op but satisfies type checker
 
     resolved_model = model or os.environ.get("NIGHTJAR_MODEL")
     if not resolved_model:

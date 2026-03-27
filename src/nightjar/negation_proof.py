@@ -30,7 +30,10 @@ import tempfile
 import textwrap
 import time
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from nightjar.types import CardSpec
 
 
 # ─── Postcondition Negation ───────────────────────────────────────────────────
