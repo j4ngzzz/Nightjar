@@ -266,12 +266,23 @@ def _run_retry(
     and feeds them back to LLM for repair.
     """
     try:
-        from nightjar.retry import retry_loop
+        from nightjar.retry import run_with_retry
     except ImportError:
         click.echo("Error: retry loop not yet available", err=True)
         raise SystemExit(EXIT_CONFIG_ERROR)
 
-    return retry_loop(contract_path, max_retries=max_retries, model=model)
+    from nightjar.parser import parse_card_spec
+    import os as _os
+    spec = parse_card_spec(contract_path)
+    code = ""
+    audit_dir = config.get("paths", {}).get("audit", ".card/audit/")
+    for ext in (".py", ".dfy"):
+        candidate = _os.path.join(audit_dir, f"{spec.id}{ext}")
+        if _os.path.exists(candidate):
+            with open(candidate, encoding="utf-8") as f:
+                code = f.read()
+            break
+    return run_with_retry(spec, code, max_retries=max_retries)
 
 
 def _run_lock(output_dir: str, config: dict) -> bool:
@@ -737,8 +748,8 @@ def watch(ctx: click.Context, debounce: int, card_dir: str) -> None:
         from nightjar.watch import start_watch, TierEvent
 
         def _on_tier_event(event: TierEvent) -> None:
-            status = "PASS" if event.passed else "FAIL"
-            click.echo(f"[Tier {event.tier}] {event.card_path} — {status} ({event.elapsed_ms:.0f}ms)")
+            status = event.status.upper()
+            click.echo(f"[Tier {event.tier}] {status} ({event.duration_ms}ms)")
             if event.message:
                 click.echo(f"  {event.message}")
 
