@@ -234,8 +234,12 @@ class RichStreamingDisplay:
 
             if self.pipeline_trust_level is not None:
                 style = _TRUST_LEVEL_STYLES.get(self.pipeline_trust_level, "")
+                if self.pipeline_done and self.pipeline_confidence_val != 0.0:
+                    confidence_str = f" ({self.pipeline_confidence_val:.2f})"
+                else:
+                    confidence_str = ""
                 trust_text = Text(
-                    f"Trust: {self.pipeline_trust_level.value} ({self.pipeline_confidence_val:.2f})",
+                    f"Trust: {self.pipeline_trust_level.value}{confidence_str}",
                     style=style,
                     justify="center",
                 )
@@ -260,8 +264,12 @@ class RichStreamingDisplay:
             result_str = "VERIFIED" if self.pipeline_verified else "FAIL"
             lines.append(f"\n>>> {result_str}")
             if self.pipeline_trust_level is not None:
+                if self.pipeline_confidence_val != 0.0:
+                    confidence_str = f" ({self.pipeline_confidence_val:.2f})"
+                else:
+                    confidence_str = ""
                 lines.append(
-                    f"Trust: {self.pipeline_trust_level.value} ({self.pipeline_confidence_val:.2f})"
+                    f"Trust: {self.pipeline_trust_level.value}{confidence_str}"
                 )
         return "\n".join(lines)
 
@@ -365,9 +373,12 @@ def format_verify_result(result: VerifyResult) -> None:
     # ── Trust level (SkillFortify graduated trust) [Scout 9 W2-2] ───────
     if result.trust_level is not None:
         style = _TRUST_LEVEL_STYLES.get(result.trust_level, "")
-        confidence_val = (result.confidence.total / 100.0) if result.confidence else 0.0
+        if result.confidence is not None:
+            confidence_str = f" ({result.confidence.total / 100.0:.2f})"
+        else:
+            confidence_str = ""
         trust_line = Text(
-            f"Trust: {result.trust_level.value} ({confidence_val:.2f})",
+            f"Trust: {result.trust_level.value}{confidence_str}",
             style=style,
         )
         console.print(trust_line)
@@ -440,8 +451,11 @@ def _format_verify_result_plain(result: VerifyResult) -> None:
         print("FAIL -- verification did not pass")
 
     if result.trust_level is not None:
-        confidence_val = (result.confidence.total / 100.0) if result.confidence else 0.0
-        print(f"Trust: {result.trust_level.value} ({confidence_val:.2f})")
+        if result.confidence is not None:
+            confidence_str = f" ({result.confidence.total / 100.0:.2f})"
+        else:
+            confidence_str = ""
+        print(f"Trust: {result.trust_level.value}{confidence_str}")
 
     for stage in result.stages:
         print(format_stage_result(stage))
