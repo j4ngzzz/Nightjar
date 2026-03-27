@@ -897,9 +897,10 @@ def to_sarif(
     sarif_results: list[dict] = []
 
     for stage in result.stages:
-        if stage.status != VerifyStatus.FAIL:
+        if stage.status not in (VerifyStatus.FAIL, VerifyStatus.TIMEOUT):
             continue
 
+        level = "error" if stage.status == VerifyStatus.FAIL else "warning"
         rule_id = _STAGE_TO_RULE.get(stage.stage, f"NJ{stage.stage:03d}")
 
         for error in stage.errors:
@@ -907,7 +908,7 @@ def to_sarif(
 
             sarif_result: dict = {
                 "ruleId": rule_id,
-                "level": "error",
+                "level": level,
                 "message": {"text": f"[{stage.name}] {message_text}"},
             }
 
