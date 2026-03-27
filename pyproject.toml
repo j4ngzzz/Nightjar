@@ -1,7 +1,7 @@
 [project]
 name = "nightjar"
 version = "0.1.0"
-description = "Nightjar — verified spec-as-source platform for AI-generated code"
+description = "Nightjar — formal verification CLI for AI-generated code"
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.0",

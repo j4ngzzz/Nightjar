@@ -81,7 +81,6 @@ def _get_specs_dir(config: dict) -> str:
 # ── Spec template for init command ───────────────────────
 
 _SPEC_TEMPLATE = '''---
-card-version: "1.0"
 id: {module_id}
 title: {title}
 status: draft
@@ -276,7 +275,7 @@ def _load_verify_report(contract_path: str) -> Optional[dict]:
 @click.version_option(version=__version__, prog_name="nightjar")
 @click.pass_context
 def main(ctx: click.Context) -> None:
-    """nightjar -- Contract-Anchored Regenerative Development CLI.
+    """nightjar -- formal verification CLI for AI-generated code.
 
     Verification layer for AI-generated code. Parse .card.md specs,
     generate verified code via LLM + Dafny, and run a 5-stage
@@ -316,7 +315,7 @@ def init(ctx: click.Context, module_name: str, output: str) -> None:
 
 
 @main.command()
-@click.option("--contract", "-c", required=True, help="Path to .card.md spec.")
+@click.option("--spec", "--contract", "-s", "-c", "contract", required=True, help="Path to .card.md spec.")
 @click.option("--fast", is_flag=True, default=False, help="Stages 0-3 only (skip Dafny).")
 @click.option("--stage", type=int, default=None, help="Run only stage N (0-4).")
 @click.option("--ci", is_flag=True, default=False, help="CI mode: strict, no prompts.")
@@ -330,7 +329,7 @@ def verify(
 ) -> None:
     """Run the 5-stage verification pipeline.
 
-    Stages: preflight -> deps -> schema -> PBT -> Dafny formal.
+    Stages: preflight → deps → schema → property-tests → formal-proof.
     Architecture: docs/ARCHITECTURE.md Section 3.
     """
     config = ctx.obj["config"]
@@ -354,7 +353,7 @@ def verify(
 
 
 @main.command()
-@click.option("--contract", "-c", required=True, help="Path to .card.md spec.")
+@click.option("--spec", "--contract", "-s", "-c", "contract", required=True, help="Path to .card.md spec.")
 @click.option("--model", default=None, help="LLM model (default: NIGHTJAR_MODEL env or config).")
 @click.option("--output", "-o", default=".", help="Output directory for generated code.")
 @click.pass_context
@@ -379,7 +378,7 @@ def generate(ctx: click.Context, contract: str, model: Optional[str], output: st
 
 
 @main.command()
-@click.option("--contract", "-c", required=True, help="Path to .card.md spec.")
+@click.option("--spec", "--contract", "-s", "-c", "contract", required=True, help="Path to .card.md spec.")
 @click.option("--target", "-t", default=None,
               type=click.Choice(["py", "js", "ts", "go", "java", "cs"]),
               help="Compile target language (default: from config).")
@@ -433,7 +432,7 @@ def build(
 
 
 @main.command()
-@click.option("--contract", "-c", required=True, help="Path to .card.md spec.")
+@click.option("--spec", "--contract", "-s", "-c", "contract", required=True, help="Path to .card.md spec.")
 @click.option("--target", "-t", default=None,
               type=click.Choice(["py", "js", "ts", "go", "java", "cs"]),
               help="Compile target language.")
@@ -488,7 +487,7 @@ def ship(
 
 
 @main.command()
-@click.option("--contract", "-c", required=True, help="Path to .card.md spec.")
+@click.option("--spec", "--contract", "-s", "-c", "contract", required=True, help="Path to .card.md spec.")
 @click.option("--max", "max_retries", default=5, type=int, help="Maximum repair attempts (default: 5).")
 @click.option("--model", default=None, help="LLM model for repair calls.")
 @click.pass_context
@@ -575,7 +574,7 @@ def optimize(ctx: click.Context, target: str, iterations: int) -> None:
 
 
 @main.command()
-@click.option("--contract", "-c", required=True, help="Path to .card.md spec.")
+@click.option("--spec", "--contract", "-s", "-c", "contract", required=True, help="Path to .card.md spec.")
 @click.pass_context
 def explain(ctx: click.Context, contract: str) -> None:
     """Show last verification failure in human-readable form.
@@ -642,7 +641,7 @@ def auto(ctx: click.Context, intent: str | None, approve_all: bool, output: str,
         if result.card_path:
             click.echo(f"Created spec: {result.card_path}")
             total = result.approved_count + result.skipped_count
-            click.echo(f"Invariants: {total} generated, {result.approved_count} approved, {result.skipped_count} skipped")
+            click.echo(f"Rules: {total} suggested, {result.approved_count} added, {result.skipped_count} skipped")
             ctx.exit(EXIT_PASS)
         else:
             click.echo("No spec generated (all invariants rejected or error).")

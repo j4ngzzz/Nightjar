@@ -401,6 +401,40 @@ nightjar watch
 
 ---
 
+## Verified with Nightjar
+
+Nightjar's own parser and spec engine are verified using Nightjar itself.
+
+```bash
+nightjar verify --spec .card/parser.card.md --fast
+# ✓ Stage 0: preflight   12ms
+# ✓ Stage 1: deps         8ms
+# ✓ Stage 2: schema       3ms
+# ✓ Stage 3: property-tests  847ms
+# VERIFIED — 4 stages passed
+```
+
+---
+
+## Commercial License
+
+Nightjar is [AGPL-3.0](LICENSE). If your organization cannot comply with AGPL (e.g., embedding Nightjar in a proprietary product), a commercial license is available.
+
+**Pricing:** $2,400/yr (teams) · $12,000/yr (enterprise)
+**Contact:** nightjar-license@proton.me
+
+> One enterprise deal funds months of development. The AGPL is not punitive — it's a structural incentive to keep the ecosystem open.
+
+---
+
 ## License
 
-AGPL-3.0. Free for open source. [Commercial license](mailto:hello@nightjar.dev) for enterprises.
+AGPL-3.0. Free for open source. Commercial license for enterprises — see above.
+
+---
+
+## Support
+
+- [GitHub Sponsors](https://github.com/sponsors/nightjar-dev) — $5/mo supporter · $25/mo cloud beta · $99/mo priority support
+- Commercial license for enterprise embedding
+- Star the repo if Nightjar saved you from a bug

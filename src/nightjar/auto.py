@@ -196,6 +196,7 @@ Rules:
   - For numerical inputs, always include bounds invariants
   - For outputs, always include nullness/emptiness invariants
   - confidence >= 0.8 for obvious invariants, lower for speculative ones
+  - When labeling type, prefer user-friendly terms: use 'precondition', 'postcondition', 'state-rule' instead of formal notation.
 
 Return ONLY the JSON array, no other text.
 """
@@ -310,7 +311,7 @@ def _run_approval_loop(
 
         # Interactive: show invariant and prompt
         click.echo(f"\n[{i}/{len(ranked)}] {formatted}")
-        click.echo(f"  Type: {candidate.inv_class.value}  |  Confidence: {candidate.confidence:.0%}")
+        click.echo(f"  Category: behavior check  |  Certainty: {candidate.confidence:.0%}")
 
         choice = _prompt_with_timeout(
             prompt="Accept? [y/n/m=modify]",

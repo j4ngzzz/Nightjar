@@ -1,8 +1,6 @@
-# CARD Reference Library
+# Nightjar Reference Library
 
-> **MANDATORY**: Every BridgeSwarm agent MUST consult this document before implementing any component.
-> Find the relevant `[REF-XXX]` entries for your task, fetch the URLs, read the source material, THEN write code.
-> Do NOT implement from memory or training data. Every pattern must trace to a specific citation below.
+> Contributors: before implementing any component, find the relevant `[REF-XXX]` entry below, read the source material, then write code.
 
 ---
 
@@ -508,3 +506,86 @@
 **[REF-G08]** Shanghai AI Lab — Veri-Code team. Re:Form.
 **[REF-G09]** Nanjing University PASCAL Lab — Tian Tan. ChiSA, Tai-e framework.
 **[REF-G10]** UC San Diego PL — Nadia Polikarpova. HiLDe, intent-based coding.
+
+---
+
+## Section E: Phase 2 References (U1-U5)
+
+**[REF-NEW-01]** Proven spec rewriting rules (19 rules)
+- Source: Proven MIT repo — internal reference
+- What: 19 structured rewrite rules for spec preprocessing: decompose complex specs, normalize preconditions, simplify postconditions.
+- How Nightjar uses it: `src/nightjar/spec_rewriter.py` — `decompose_spec()` master orchestrator applies all 19 rules.
+
+**[REF-NEW-02]** SpecLoop — CEGIS counterexample-guided synthesis
+- URL: https://arxiv.org/abs/2603.02895
+- What: Counterexample-guided inductive synthesis loop: generate spec → verify → extract counterexample → refine spec. Structured counterexample parse + retry prompt pattern.
+- How Nightjar uses it: `src/nightjar/retry.py` — CEGIS retry loop extension.
+
+**[REF-NEW-03]** LP dual root-cause diagnosis
+- Source: LP relaxation + shadow prices via `scipy.optimize.linprog`
+- What: Encodes verification failures as a linear program; shadow prices on constraints identify the root-cause constraint with highest dual value.
+- How Nightjar uses it: `src/nightjar/diagnosis.py` — `diagnose_failure()` root-cause analysis.
+
+**[REF-NEW-04]** NegProof — negation-proof spec validation
+- URL: https://arxiv.org/abs/2603.13414
+- What: Negate the postcondition → run CrossHair symbolic execution → if CrossHair finds a proof, the spec is vacuously true (weak spec detection).
+- How Nightjar uses it: `src/nightjar/negation_proof.py` — `validate_spec_negation()`.
+
+**[REF-NEW-05]** SafePilot — complexity-discriminated routing
+- URL: https://arxiv.org/abs/2603.21523
+- What: Measures cyclomatic complexity + AST depth of the target function; routes simple functions to CrossHair (fast) and complex functions to Dafny (thorough).
+- How Nightjar uses it: `src/nightjar/verifier.py` — complexity routing in Stage 4.
+
+**[REF-NEW-06]** Wonda — invariant quality scoring (4-criteria filter)
+- URL: https://arxiv.org/abs/2603.15510
+- What: Four-criteria quality gate for generated invariants: specificity, falsifiability, coverage, and redundancy. Filters low-quality candidates before verification.
+- How Nightjar uses it: `src/immune/quality_scorer.py` — `score_invariant()`.
+
+**[REF-NEW-07]** Test oracle lifting
+- URL: https://arxiv.org/abs/2601.12845
+- What: Lifts existing test assertions into formal spec annotations. Multi-model approach (Claude + GPT) achieves 98.2% correctness on 110 programs within 8 repair iterations.
+- How Nightjar uses it: `src/nightjar/oracle_lifter.py` — `lift_test_oracles()`.
+
+**[REF-NEW-08]** TradingAgents — adversarial debate pattern
+- Source: TradingAgents multi-agent framework
+- What: Two LLM agents take opposing positions on an invariant (advocate vs. adversary); structured debate resolves disagreement by majority or arbitration.
+- How Nightjar uses it: `src/immune/debate.py` — `debate_invariant()` adversarial validation.
+
+**[REF-NEW-09]** Supermemory — temporal fact supersession (exponential decay)
+- Source: Supermemory temporal fact supersession pattern
+- What: Invariant confidence decays exponentially over time: `confidence(t) = base * 0.5^(elapsed/half_life)`. Superseded invariants are marked stale but preserved in the audit trail.
+- How Nightjar uses it: `src/immune/enforcer.py` — `TemporalInvariant` + `InvariantStore`.
+
+**[REF-NEW-10]** Textual — TUI framework
+- URL: https://github.com/Textualize/textual
+- License: MIT
+- What: Python framework for building rich terminal user interfaces with reactive widgets, CSS-like styling, and async event handling.
+- How Nightjar uses it: `src/nightjar/tui.py` — `NightjarTUI` dashboard with live stage panels.
+
+**[REF-NEW-11]** VHS — declarative terminal recording
+- URL: https://github.com/charmbracelet/vhs
+- License: MIT
+- What: Write `.tape` files describing terminal interactions; VHS renders them to GIF/MP4/WebP. Reproducible demo recordings.
+- How Nightjar uses it: `demo/nightjar-demo.tape`, `demo/nightjar-tui.tape` — CI-generated demo assets.
+
+**[REF-NEW-12]** Rich — terminal formatting
+- URL: https://github.com/Textualize/rich
+- License: MIT
+- What: Python library for rich text, tables, panels, progress bars, and syntax highlighting in the terminal.
+- How Nightjar uses it: `src/nightjar/display.py` — `RichStreamingDisplay`, `format_verify_result()`.
+
+**[REF-NEW-13]** Sentry — error tracking
+- URL: https://sentry.io
+- What: Error and performance monitoring platform. Webhook payloads contain exception type, stack trace, and affected users — suitable as an immune system feed.
+- How Nightjar uses it: `src/nightjar/sentry_integration.py` — `sentry_event_to_candidate()` converts Sentry events into invariant candidates.
+
+**[REF-NEW-14]** Playwright — browser automation
+- URL: https://playwright.dev
+- License: Apache 2.0
+- What: Cross-browser end-to-end testing framework with async Python API.
+- How Nightjar uses it: `tests/e2e/` — Playwright-based e2e tests for badge server and PR comment rendering.
+
+**[REF-NEW-15]** EU Cyber Resilience Act
+- URL: https://digital-strategy.ec.europa.eu/en/policies/cyber-resilience-act
+- What: EU regulation requiring manufacturers of products with digital elements to maintain security throughout the lifecycle. Enforced from September 2026.
+- How Nightjar uses it: Compliance positioning — Nightjar's formal verification pipeline provides an audit trail satisfying CRA software supply-chain requirements.
