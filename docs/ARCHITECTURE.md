@@ -1,15 +1,14 @@
-# CARD Architecture
+# Nightjar Architecture
 
 > **Contract-Anchored Regenerative Development**
 >
 > Every section in this document cites specific entries from [REFERENCES.md](./REFERENCES.md).
-> BridgeSwarm agents: fetch and read the cited references BEFORE implementing.
 
 ---
 
 ## 1. System Overview
 
-CARD is a verification layer for AI-generated code. Developers write specs. AI generates code. CARD verifies the code satisfies the specs mathematically. Code is regenerated from scratch on every build — it is never manually edited.
+Nightjar is a verification layer for AI-generated code. Developers write specs. AI generates code. Nightjar verifies the code satisfies the specs mathematically. Code is regenerated from scratch on every build — it is never manually edited.
 
 The system has 5 layers executed in sequence:
 
@@ -22,21 +21,27 @@ LAYER 2: GENERATION (LLM via litellm)
   Analyst → Formalizer → Coder pipeline [REF-C03, REF-P07]
   LLM generates Dafny code from spec [REF-C04, REF-P12]
          ↓
-LAYER 3: VERIFICATION (5-stage pipeline)
+LAYER 3: VERIFICATION (6-stage pipeline with Phase 2 extensions)
   Stage 0: Pre-flight (AST parse)
   Stage 1: Dependency check (sealed manifest) [REF-C08, REF-P27]
   Stage 2: Schema validation (Pydantic) [REF-T08]
   Stage 3: Property-based testing (Hypothesis) [REF-T03, REF-P10]
-  Stage 4: Formal verification (Dafny) [REF-T01, REF-P02]
-  Retry loop on failure [REF-C02, REF-P03, REF-P06]
+  Stage 2.5: Negation-proof spec validation [REF-NEW-07]
+  Stage 4: Formal verification — complexity-routed [REF-T01, REF-P02]
+           CrossHair (simple) or Dafny (complex) per SafePilot [REF-NEW-08]
+  Retry loop on failure — CEGIS counterexample-guided [REF-C02, REF-P03, REF-P06]
          ↓
 LAYER 4: OUTPUT
   Dafny compiles to target language (Python/JS/Go/Java/C#) [REF-T01]
   Binary/artifact shipped
   Code committed to read-only audit branch (never edited)
          ↓
-LAYER 5: IMMUNE SYSTEM (month 2-3+)
+LAYER 5: IMMUNE SYSTEM
   Production monitoring → invariant mining → verification → spec update
+  Wonda quality scoring [REF-NEW-05]
+  Test oracle lifting [REF-NEW-06]
+  Adversarial debate validation [REF-NEW-10]
+  Temporal fact supersession with exponential decay
   [REF-C09, REF-T12, REF-T13, REF-T09, REF-T10]
 ```
 
@@ -44,7 +49,7 @@ LAYER 5: IMMUNE SYSTEM (month 2-3+)
 
 **"Don't Round-Trip"** [REF-C07, REF-P29]
 
-Generated code is NEVER manually edited. All changes go through the `.card.md` spec. This is enforced architecturally, not by convention. The round-trip engineering death spiral that killed MDD [REF-P30] is structurally impossible in CARD.
+Generated code is NEVER manually edited. All changes go through the `.card.md` spec. This is enforced architecturally, not by convention. The round-trip engineering death spiral that killed MDD [REF-P30] is structurally impossible in Nightjar.
 
 ---
 
@@ -68,22 +73,22 @@ Generated code is NEVER manually edited. All changes go through the `.card.md` s
 
 ```yaml
 ---
-# ── CARD Spec Frontmatter ──────────────────────────────
+# ── Nightjar Spec Frontmatter ──────────────────────────────
 card-version: "1.0"
 id: module-name
 title: Human-Readable Module Title
 status: draft | review | approved | frozen
 
-# ── Module Boundary ────────────────────────────────────
+# ── Module Boundary ────────────────────────────────────────
 module:
   owns: [function_a(), function_b(), EntityX, EntityY]
   depends-on:
-    - other-module: "approved"     # internal CARD module
+    - other-module: "approved"     # internal Nightjar module
     - external-service: "^3.x"    # external dependency
   excludes:
     - "feature explicitly out of scope"
 
-# ── Interface Contract ─────────────────────────────────
+# ── Interface Contract ─────────────────────────────────────
 contract:
   inputs:
     - name: param_name
@@ -100,7 +105,7 @@ contract:
   events-emitted:
     - event.name
 
-# ── Invariants (Tiered) [REF-C01] ─────────────────────
+# ── Invariants (Tiered) [REF-C01] ─────────────────────────
 # tier: 'example' → unit test only
 # tier: 'property' → Hypothesis/fast-check PBT auto-generated [REF-T03]
 # tier: 'formal' → Dafny mathematical proof required [REF-T01]
@@ -115,7 +120,7 @@ invariants:
     statement: "Critical safety property requiring mathematical proof"
     rationale: "Business/safety justification"
 
-# ── Nonfunctional Constraints ──────────────────────────
+# ── Nonfunctional Constraints ──────────────────────────────
 constraints:
   performance: "p95 latency < 2000ms"
   security: "compliance requirement"
@@ -150,7 +155,7 @@ Natural language description of what this module does and why it exists.
 
 ### Minimum Viable `.card.md` (~30 lines)
 
-A vibecoder writes this in 5 minutes:
+A developer writes this in 5 minutes:
 
 ```yaml
 ---
@@ -200,7 +205,6 @@ The same `.card.md` file serves different rigor levels:
 
 ## 3. Verification Pipeline
 
-**Designed from:** Agent 2 research findings
 **Pattern:** Cheapest/fastest stages first, short-circuit on failure [REF-P06]
 
 ```
@@ -225,8 +229,17 @@ The same `.card.md` file serves different rigor levels:
 │ • Properties auto-generated from invariants [REF-P10]   │
 │ SHORT-CIRCUIT: property violation → FAIL + counterex    │
 ├─────────────────────────────────────────────────────────┤
+│ STAGE 2.5: NEGATION-PROOF VALIDATION  [~2-5s, $0.00]   │
+│ • Negate postconditions of FORMAL invariants [REF-NEW-07]│
+│ • CrossHair checks negated spec — trivially true? FAIL  │
+│ • Guards against degenerate/vacuously-true invariants   │
+│ SKIP: no FORMAL invariants present                      │
+│ SHORT-CIRCUIT: weak spec detected → FAIL                │
+├─────────────────────────────────────────────────────────┤
 │ STAGE 4: FORMAL VERIFICATION  [~5-20s, $0.00]          │
-│ • dafny verify module.dfy [REF-T01]                     │
+│ Complexity-discriminated routing [REF-NEW-08]:          │
+│  complexity ≤ 5 → CrossHair symbolic [REF-T09]         │
+│  complexity > 5 → Dafny [REF-T01]                      │
 │   --verification-time-limit 15                          │
 │   --isolate-assertions                                  │
 │   --boogie /vcsCores:4                                  │
@@ -235,7 +248,7 @@ The same `.card.md` file serves different rigor levels:
 └─────────────────────────────────────────────────────────┘
          │
     ALL PASS → Ship artifact
-    ANY FAIL → Retry Loop [Section 4]
+    ANY FAIL → CEGIS Retry Loop [Section 4]
 ```
 
 ### Stage 2+3 Parallelization
@@ -243,7 +256,6 @@ The same `.card.md` file serves different rigor levels:
 Stages 2 and 3 have no dependency and run in parallel:
 
 ```python
-# Pseudocode from Agent 2 design
 async def verify_pipeline(module_path, contract_path):
     await run_stage(0, preflight_check)        # sequential
     await run_stage(1, dependency_check)        # sequential
@@ -253,7 +265,34 @@ async def verify_pipeline(module_path, contract_path):
     )
     if not (schema_result.ok and pbt_result.ok):
         return FAIL(schema_result, pbt_result)
-    return await run_stage(4, dafny_verification)  # sequential (heaviest)
+    neg_result = await run_stage(2.5, negation_proof)  # sequential gate
+    if not neg_result.ok:
+        return FAIL(neg_result)
+    return await run_stage(4, formal_verification)  # sequential (heaviest)
+```
+
+### Complexity-Discriminated Routing (SafePilot)
+
+Stage 4 routes code based on cyclomatic complexity and AST depth, per SafePilot [REF-NEW-08]:
+
+```
+complexity score = cyclomatic_complexity + floor(ast_depth / 3)
+
+score ≤ 5 → CrossHair symbolic execution (~13s avg, saves ~70% wall-time)
+score > 5 → Full Dafny formal verification
+```
+
+Syntax errors route to Dafny for safety (unknown complexity = assume worst case).
+
+### Graceful Degradation Ladder
+
+When Dafny times out or is unavailable, the pipeline falls back gracefully:
+
+```
+1. Dafny verification (primary, complex functions)
+2. CrossHair symbolic (timeout/unavailable fallback, ~80% coverage)
+3. Hypothesis extended (10K+ examples, final fallback)
+4. Confidence-scored partial result (never blocks the user)
 ```
 
 ### Cost Summary
@@ -264,10 +303,12 @@ async def verify_pipeline(module_path, contract_path):
 | 1: Dep check | ~1-2s | $0.000 | uv + pip-audit [REF-T05, REF-T06] |
 | 2: Schema | ~0.5-1s | $0.000 | Pydantic [REF-T08] |
 | 3: PBT | ~3-8s | $0.000 | Hypothesis [REF-T03] |
-| 4: Formal | ~5-20s | $0.000 | Dafny [REF-T01] |
-| **Total (0 retries)** | **~10-31s** | **~$0.001** | |
+| 2.5: Negation-proof | ~2-5s | $0.000 | CrossHair [REF-T09] |
+| 4: Formal (simple) | ~5-13s | $0.000 | CrossHair [REF-T09] |
+| 4: Formal (complex) | ~5-20s | $0.000 | Dafny [REF-T01] |
+| **Total (0 retries)** | **~12-49s** | **~$0.001** | |
 | Per retry (LLM call) | ~3-8s | ~$0.01-0.03 | litellm [REF-T16] |
-| **Total (3 retries)** | **~30-55s** | **~$0.03-0.10** | |
+| **Total (3 retries)** | **~30-65s** | **~$0.03-0.10** | |
 
 ---
 
@@ -275,7 +316,10 @@ async def verify_pipeline(module_path, contract_path):
 
 **Pattern:** [REF-C02] Closed-Loop Verification (Clover Pattern) [REF-P03]
 **Error format:** [REF-P06] DafnyPro structured errors
+**Counterexample guidance:** [REF-NEW-02] CEGIS (Counterexample-Guided Inductive Synthesis)
 **Success rate:** 86% pass@10 with Claude 3.5 Sonnet [REF-P06]
+
+Phase 2 extended the retry loop with CEGIS: counterexamples from Stage 3 (PBT) and Stage 4 (formal) are parsed into structured repair prompts that guide the LLM toward the specific invariant violation.
 
 ```
 On FAIL from any stage:
@@ -283,12 +327,14 @@ On FAIL from any stage:
 1. COLLECT FAILURE CONTEXT
    Stage 1 fail → disallowed packages + lock diff
    Stage 2 fail → schema diff (Pydantic error trace)
-   Stage 3 fail → counterexample (input, output, property text)
+   Stage 2.5 fail → weak spec identification + negated invariant text
+   Stage 3 fail → counterexample (input, output, property text) [CEGIS]
    Stage 4 fail → Dafny error lines + assertion batch ID + resource units
+                  OR CrossHair counterexample trace
 
-2. BUILD REPAIR PROMPT
+2. BUILD REPAIR PROMPT (CEGIS-guided)
    System: original .card.md spec
-   User: failed code + structured error block + prior failed attempts
+   User: failed code + structured error block + counterexample + prior failed attempts
 
 3. CALL LLM (via litellm [REF-T16])
    Temperature: 0.2 (deterministic repair)
@@ -297,7 +343,16 @@ On FAIL from any stage:
 4. RE-RUN FULL PIPELINE from Stage 0
 
 5. RETRY CAP: N=5 → if still failing, ESCALATE to human
+   LP dual root-cause diagnosis provided to human [Section 10]
 ```
+
+### Spec Rewriting (Pre-Retry)
+
+Before regenerating code, the Proven rewrite rules [REF-NEW-01] are applied to the spec itself:
+
+- 19 proven rewrite rules transform ambiguous or underspecified invariants
+- `spec_rewriter.py` runs as a pre-processing step before each generation attempt
+- Catches common spec patterns that lead to Dafny proof failures
 
 ### Structured Error Format (for LLM repair prompt)
 
@@ -329,6 +384,10 @@ counterexample:
 ```
 .card.md spec
      ↓
+SPEC REWRITER (pre-processing)
+  Applies 19 Proven rewrite rules [REF-NEW-01]
+  Normalizes ambiguous invariants before generation
+     ↓
 ANALYST AGENT (LLM call 1)
   Reads: intent + acceptance criteria + edge cases
   Outputs: structured requirements analysis
@@ -354,35 +413,35 @@ Verified artifact in target language
 All LLM calls go through litellm [REF-T16]. Model is configurable via environment variable:
 
 ```bash
-CARD_MODEL=claude-sonnet-4-6     # default — best balance
-CARD_MODEL=deepseek/deepseek-chat  # budget — 10x cheaper
-CARD_MODEL=openai/o3               # premium — highest success rate
+NIGHTJAR_MODEL=claude-sonnet-4-6     # default — best balance
+NIGHTJAR_MODEL=deepseek/deepseek-chat  # budget — 10x cheaper
+NIGHTJAR_MODEL=openai/o3               # premium — highest success rate
 ```
 
 For Dafny-specific repair calls, Re:Form fine-tuned models [REF-P32] can be used on-premise at $0.001/retry vs $0.01/retry for Claude.
 
 ---
 
-## 6. Immune System Design (Month 2-3+)
+## 6. Immune System Design
 
 **Concept:** [REF-C09] Acquired Immunity
 **Biological reference:** [REF-P18] Self-Healing Software
 **Trace collection:** [REF-T12] MonkeyType, [REF-T15] OpenTelemetry
-**Mining engine:** [REF-T13] Fuzzingbook DynamicInvariants (MUST reimplement for commercial use — see license warning in REFERENCES.md)
+**Mining engine:** Reimplemented Daikon algorithm (CC-BY-NC-SA safe — see REFERENCES.md)
 **Verification:** [REF-T09] CrossHair, [REF-T03] Hypothesis
 **Enforcement:** [REF-T10] icontract
 **LLM enrichment:** [REF-P15] Agentic PBT, [REF-P14] NL2Contract
 
-### 5-Stage Pipeline
+### 5-Stage Invariant Mining Pipeline
 
 ```
 STAGE 1: SIGNAL COLLECTION
   OpenTelemetry [REF-T15] → API-level spans (auto-instrumented)
   MonkeyType [REF-T12] → function-level type traces
-  Sentry-style error capture → semantic fingerprinting
+  Sentry error capture → semantic fingerprinting [Section 11]
 
 STAGE 2: INVARIANT CANDIDATE GENERATION
-  Fuzzingbook DynamicInvariants algorithm → value invariants
+  Reimplemented DynamicInvariants algorithm → value invariants
   MonkeyType → type invariants
   LLM enrichment [REF-P15] → semantic invariants from error context
 
@@ -391,67 +450,99 @@ STAGE 3: INVARIANT VERIFICATION
   Hypothesis [REF-T03] → PBT with 1000+ random inputs
   Passing invariants = verified candidates
 
-STAGE 4: SPEC INTEGRATION
-  Verified invariants appended to .card.md invariants: block
+STAGE 4: QUALITY SCORING (Phase 2 — Wonda [REF-NEW-05])
+  4-criteria quality filter:
+    • Precision: does the invariant hold for all known-good traces?
+    • Recall: does it catch known-bad traces?
+    • Specificity: not vacuously true
+    • Stability: consistent across multiple verification runs
+  Threshold: score ≥ 0.8 to proceed
+
+STAGE 5: SPEC INTEGRATION
+  Verified, quality-scored invariants appended to .card.md invariants: block
   Git commit to invariant history (append-only)
   Next build incorporates new invariants
+```
 
-STAGE 5: NETWORK EFFECT (Month 6+)
+### Adversarial Debate Validation (Phase 2)
+
+Before a candidate invariant is committed to the spec, it passes through adversarial debate validation [REF-NEW-10]:
+
+- Proposer LLM argues the invariant is correct and meaningful
+- Adversary LLM challenges it with counterexamples and edge cases
+- Debate judge scores the exchange and accepts/rejects the invariant
+- Failed debates are logged with the adversary's counterexamples for developer review
+
+This catches invariants that pass mechanical verification but are semantically wrong.
+
+### Temporal Fact Supersession (Phase 2)
+
+The immune system's `enforcer.py` implements temporal fact supersession [Supermemory pattern]:
+
+```
+confidence(t) = base_confidence * 0.5^(elapsed / half_life)
+```
+
+Older invariants decay in confidence over time. When a new invariant contradicts an existing one:
+- `supersede()` marks the old invariant as stale (not deleted — audit trail preserved)
+- The new invariant takes effect immediately
+- Decay rate is configurable per invariant type (security invariants: longer half-life)
+
+### Test Oracle Lifting (Phase 2)
+
+`oracle_lifter.py` extracts test oracles from existing test suites [REF-NEW-06]:
+
+```
+Input: existing pytest/unittest test files
+Output: structured invariants in .card.md format
+Accuracy: 98.2% on standard Python test patterns
+```
+
+This provides a migration path: existing test-covered code gains machine-checkable invariants without rewriting specs from scratch.
+
+### Network Effect (Long-term)
+
+```
+STAGE 6: NETWORK EFFECT
   Structural abstraction (no PII, type-level patterns only)
   Differential privacy via OpenDP [REF-T20]
   Shared pattern library across tenants
   Herd immunity threshold: confidence > 0.95 across 50+ tenants → universal
 ```
 
-### Minimum Viable Immune System (Python)
+---
 
-Using EXISTING tools, the simplest version that works:
+## 7. LP Dual Root-Cause Diagnosis
 
-```python
-# Step 1: Trace collection
-from fuzzingbook.DynamicInvariants import InvariantAnnotator  # [REF-T13] reference only
-annotator = InvariantAnnotator(function_to_monitor)
+**Reference:** [REF-NEW-03] Linear programming duality for constraint diagnosis
 
-# Step 2: Get candidate invariants
-preconditions = annotator.preconditions()    # "x > 0", "len(items) > 0"
-postconditions = annotator.postconditions()  # "result IS_A float"
+When the retry loop exhausts its budget (N=5 attempts), the LP dual diagnosis engine provides a human-readable root cause:
 
-# Step 3: LLM enrichment [REF-P15 Agentic PBT pattern]
-llm_prompt = f"""
-Function: {function_signature}
-Observed invariants: {preconditions + postconditions}
-Failing call: {error_trace}
-Generate Python assert statements that would have caught this failure.
-"""
-
-# Step 4: Verify with Hypothesis [REF-T03]
-@given(st.from_type(function_type_hints))
-def test_invariant(args):
-    assert llm_generated_condition(args)
-
-# Step 5: Enforce with icontract [REF-T10]
-@icontract.require(lambda x: x > 0)
-@icontract.ensure(lambda result: result is not None)
-def my_function(x): ...
+```
+diagnosis.py:
+  Input: failed verification result + all counterexamples
+  Method: LP relaxation of invariant constraints
+          Shadow prices (dual variables) identify binding constraints
+  Output: ranked list of "most likely violated root causes"
+          with natural-language explanation per constraint
 ```
 
-**NOTE:** For commercial use, reimplement the DynamicInvariants algorithm (~300 lines) under MIT. The algorithm itself (Daikon, 1999) is not patented.
+This replaces the unhelpful "verification failed after 5 retries" message with something actionable: which invariant constraint is structurally infeasible given the spec, and why.
 
 ---
 
-## 7. MCP Server Interface
+## 8. MCP Server Interface
 
 **Protocol:** [REF-T18] Model Context Protocol
-**Strategy:** [Agent 3 adoption playbook] Ship as MCP server for universal IDE integration
 
-CARD ships as an MCP server with 3 tools:
+Nightjar ships as an MCP server with 3 tools:
 
 ### Tool 1: `verify_contract`
 
 ```json
 {
   "name": "verify_contract",
-  "description": "Run CARD verification pipeline on generated code against a .card.md spec",
+  "description": "Run Nightjar verification pipeline on generated code against a .card.md spec",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -503,32 +594,33 @@ Returns: `{ suggested_code: string, explanation: string, confidence: number }`
 
 ---
 
-## 8. CLI Design
+## 9. CLI Design
 
 **Framework:** [REF-T17] Click
 
 ```
-contractd — Contract-Anchored Regenerative Development CLI
+nightjar — Contract-Anchored Regenerative Development CLI
 
 COMMANDS:
-  contractd init [module-name]     Scaffold .card.md + deps.lock + tests/
-  contractd generate [--model]     LLM generates code from .card.md
-  contractd verify                 Run full 5-stage verification pipeline
-  contractd verify --fast          Stages 0-3 only (skip Dafny)
-  contractd verify --stage N       Run only stage N (0-4)
-  contractd build                  generate + verify + compile to target
-  contractd ship                   build + sign artifact
-  contractd retry [--max N]        Force retry with LLM repair loop
-  contractd lock                   Freeze deps into deps.lock with hashes
-  contractd explain                Show last failure in human-readable form
-  contractd optimize               Run DSPy SIMBA prompt optimization [REF-T26]
+  nightjar init [module-name]     Scaffold .card.md + deps.lock + tests/
+  nightjar generate [--model]     LLM generates code from .card.md
+  nightjar verify                 Run full verification pipeline
+  nightjar verify --fast          Stages 0-3 only (skip Stage 2.5 + Dafny)
+  nightjar verify --stage N       Run only stage N (0-4)
+  nightjar build                  generate + verify + compile to target
+  nightjar ship                   build + sign artifact
+  nightjar retry [--max N]        Force retry with LLM repair loop
+  nightjar lock                   Freeze deps into deps.lock with hashes
+  nightjar explain                Show last failure with LP dual diagnosis
+  nightjar optimize               Run DSPy SIMBA prompt optimization [REF-T26]
 
 FLAGS:
   --contract PATH    Path to .card.md (default: ./.card/*.card.md)
   --target LANG      Compile target: py | js | ts | go | java | cs
-  --model NAME       LLM model (default: from CARD_MODEL env var)
+  --model NAME       LLM model (default: from NIGHTJAR_MODEL env var)
   --retries N        Max repair attempts (default: 5)
   --output DIR       Output directory for artifacts
+  --tui              Launch Textual TUI dashboard [Section 12]
   --ci               CI mode (strict, no prompts, exit code on fail)
 
 EXIT CODES:
@@ -542,12 +634,14 @@ EXIT CODES:
 
 ---
 
-## 9. Data Flow (End-to-End)
+## 10. Data Flow (End-to-End)
 
 ```
 DEVELOPER writes .card.md
         ↓
-contractd build
+nightjar build
+        ↓
+SPEC REWRITER applies 19 Proven rules
         ↓
 PARSE .card.md → extract contract + invariants + acceptance criteria
         ↓
@@ -555,9 +649,10 @@ GENERATE (via litellm [REF-T16])
   Analyst → Formalizer → Coder [REF-C03]
   Output: module.dfy (Dafny source)
         ↓
-VERIFY (5-stage pipeline)
-  Stage 0-4 [Section 3]
-  On fail: retry loop [Section 4] up to N times
+VERIFY (6-stage pipeline)
+  Stage 0-4 + Stage 2.5 [Section 3]
+  On fail: CEGIS retry loop [Section 4] up to N times
+  On exhaustion: LP dual diagnosis report [Section 7]
         ↓
 COMPILE (Dafny → target language)
   dafny compile --target py module.dfy [REF-T01]
@@ -568,13 +663,91 @@ OUTPUT
   .card/audit/module.py → read-only audit branch
   .card/verify.json → verification report
         ↓
-(Month 2-3+) IMMUNE SYSTEM monitors production [Section 6]
-  Failures → new invariants → .card.md updated → next build is safer
+IMMUNE SYSTEM monitors production [Section 6]
+  Sentry errors → candidate invariants [Section 11]
+  Failures → Wonda quality scoring → adversarial debate → .card.md updated
+  Next build is safer
 ```
 
 ---
 
-## 10. Directory Structure
+## 11. Observability
+
+### Sentry Integration
+
+`sentry_integration.py` feeds Sentry error events into the immune system pipeline:
+
+```python
+sentry_event_to_candidate(event)  # extract invariant candidate from error
+sentry_feed(events)                # batch with deduplication
+process_webhook_payload(payload)   # handle Sentry webhook callbacks
+get_sentry_dsn()                   # DSN management
+```
+
+Sentry errors become invariant candidates. The immune system verifies them, scores them with Wonda, and — if they pass adversarial debate — commits them to the spec. Production failures directly improve future verification coverage.
+
+### GitNexus Blast Radius Hooks
+
+`gitnexus_hooks.py` integrates with the GitNexus code intelligence graph to warn before regeneration:
+
+```python
+check_blast_radius(symbol)             # query impact graph
+warn_before_regeneration(module)       # issue warning if HIGH/CRITICAL
+format_blast_radius_warning(result)    # human-readable warning text
+```
+
+When `nightjar build` would regenerate a module, blast radius analysis runs first. If the impacted call graph is HIGH or CRITICAL risk, the developer is warned before proceeding.
+
+### Playwright E2E Tests
+
+`tests/e2e/` contains Playwright browser tests for web-facing components:
+
+- Badge server SVG rendering
+- PR comment HTML rendering
+- Tests auto-skip when no browser is available (CI-safe)
+
+---
+
+## 12. Developer Experience
+
+### Textual TUI Dashboard
+
+`src/nightjar/tui.py` provides a real-time terminal dashboard built with Textual:
+
+- `NightjarTUI` — top-level App, thread-safe via `post_message`
+- `StagePanel` — reactive widgets, one per pipeline stage
+- Live stage status: pending → running → pass/fail/skip
+- Activated with `--tui` flag: `nightjar verify --tui`
+- Implements the `DisplayCallback` protocol — wired to `run_pipeline(display=tui)`
+
+### Rich Streaming Display
+
+`src/nightjar/display.py` provides the `DisplayCallback` protocol:
+
+```python
+class DisplayCallback(Protocol):
+    def on_stage_start(self, stage: int, name: str) -> None: ...
+    def on_stage_complete(self, result: StageResult) -> None: ...
+    def on_pipeline_complete(self, result: VerifyResult) -> None: ...
+```
+
+- `RichStreamingDisplay` — streaming output with Rich formatting (colours, tables, progress)
+- `NullDisplay` — silent no-op default (used in library mode and tests)
+
+### VHS Demo Recording
+
+`demo/nightjar-demo.tape` is a VHS declarative demo script:
+
+```bash
+vhs demo/nightjar-demo.tape    # generates nightjar-demo.gif
+vhs demo/nightjar-tui.tape     # generates tui screenshot
+```
+
+The demo tape records a complete `nightjar build` session including the TUI dashboard. The output GIF is embedded in the README.
+
+---
+
+## 13. Directory Structure
 
 ```
 project/
@@ -582,7 +755,7 @@ project/
 │   ├── constitution.card.md        # Project-level invariants
 │   ├── auth.card.md                # Module specs
 │   ├── payment.card.md
-│   ��── audit/                      # Read-only generated code (git-tracked)
+│   ├── audit/                      # Read-only generated code (git-tracked)
 │   │   ├── auth.py
 │   │   └── payment.py
 │   ├── cache/                      # Verification cache (hash → verified)
@@ -593,11 +766,40 @@ project/
 │   └── payment.py
 ├── tests/
 │   ├── generated/                  # Auto-generated PBT tests
-│   │   ├── test_auth_properties.py
-│   │   └── test_payment_properties.py
-│   └── manual/                     # Human-written example tests
-├── contractd.toml                  # CLI configuration
-├── CLAUDE.md                       # AI agent instructions
+│   ├── manual/                     # Human-written example tests
+│   └── e2e/                        # Playwright browser tests [Section 11]
+├── demo/
+│   ├── nightjar-demo.tape          # VHS declarative demo recording
+│   └── nightjar-tui.tape           # TUI screenshot recording
+├── src/
+│   ├── nightjar/
+│   │   ├── cli.py                  # Click commands [REF-T17]
+│   │   ├── parser.py               # .card.md parser
+│   │   ├── generator.py            # LLM generation pipeline [REF-C03]
+│   │   ├── verifier.py             # Verification pipeline orchestrator
+│   │   ├── spec_rewriter.py        # 19 Proven rewrite rules [REF-NEW-01]
+│   │   ├── retry.py                # CEGIS retry loop [REF-NEW-02, REF-C02]
+│   │   ├── diagnosis.py            # LP dual root-cause diagnosis [REF-NEW-03]
+│   │   ├── negation_proof.py       # Negation-proof validation [REF-NEW-07]
+│   │   ├── oracle_lifter.py        # Test oracle lifting [REF-NEW-06]
+│   │   ├── tui.py                  # Textual TUI dashboard
+│   │   ├── display.py              # Rich streaming DisplayCallback
+│   │   ├── sentry_integration.py   # Sentry → immune feed [Section 11]
+│   │   ├── gitnexus_hooks.py       # Blast radius warnings [Section 11]
+│   │   ├── mcp_server.py           # MCP server [REF-T18]
+│   │   └── stages/
+│   │       ├── preflight.py        # Stage 0
+│   │       ├── deps.py             # Stage 1 [REF-C08]
+│   │       ├── schema.py           # Stage 2 [REF-T08]
+│   │       ├── pbt.py              # Stage 3 [REF-T03]
+│   │       └── formal.py           # Stage 4 [REF-T01]
+│   └── immune/
+│       ├── collector.py            # Trace collection [REF-T12, REF-T15]
+│       ├── miner.py                # Invariant mining [REF-C05]
+│       ├── enricher.py             # LLM enrichment [REF-C06]
+│       ├── enforcer.py             # Runtime enforcement + temporal supersession [REF-T10]
+│       ├── quality_scorer.py       # Wonda quality scoring [REF-NEW-05]
+│       └── debate.py               # Adversarial debate [REF-NEW-10]
 └── docs/
     ├── REFERENCES.md               # Citation library
     ├── ARCHITECTURE.md             # This document
@@ -606,7 +808,7 @@ project/
 
 ---
 
-## 11. Key Design Decisions
+## 14. Key Design Decisions
 
 | Decision | Choice | Rationale | Reference |
 |----------|--------|-----------|-----------|
@@ -616,9 +818,21 @@ project/
 | LLM interface | litellm | Model-agnostic, 100+ providers | [REF-T16] |
 | CLI framework | Click | Python-native, composable | [REF-T17] |
 | IDE integration | MCP server | Universal bus for all vibe coding tools | [REF-T18] |
-| Retry pattern | Clover closed-loop | 87% correct acceptance, 0% false positive | [REF-P03] |
+| Retry pattern | Clover + CEGIS | 87% correct acceptance, counterexample-guided repair | [REF-P03, REF-NEW-02] |
 | Error format | DafnyPro structured | Enables targeted LLM repair | [REF-P06] |
+| Spec preprocessing | 19 Proven rewrite rules | Normalises ambiguous specs before generation | [REF-NEW-01] |
+| Negation validation | Stage 2.5 CrossHair | Catches degenerate specs before expensive Dafny | [REF-NEW-07] |
+| Complexity routing | SafePilot cyclomatic | ~70% wall-time savings on typical codebases | [REF-NEW-08] |
+| Root-cause diagnosis | LP duality shadow prices | Replaces "5 retries failed" with actionable root cause | [REF-NEW-03] |
+| Invariant quality gate | Wonda 4-criteria | Precision + recall + specificity + stability | [REF-NEW-05] |
+| Adversarial validation | Debate judge pattern | Catches semantically wrong but mechanically passing invariants | [REF-NEW-10] |
+| Temporal supersession | Exponential decay | Old invariants decay; supersede() preserves audit trail | Supermemory |
+| Oracle migration | Test oracle lifter | 98.2% accuracy migrating tests → .card.md invariants | [REF-NEW-06] |
 | Dependency security | Sealed manifest + hash verification | 19.7% of AI deps are hallucinated | [REF-P27] |
 | Architecture principle | Don't round-trip | MDD died from this; enforce architecturally | [REF-P29] |
 | Immune system mining | Reimplemented Daikon algorithm | Fuzzingbook is CC-BY-NC-SA (non-commercial) | [REF-T13] |
 | Immune system enforcement | icontract decorators | Runtime DBC for Python | [REF-T10] |
+| TUI framework | Textual | Reactive widgets, thread-safe, terminal-native | [REF-T27] |
+| Streaming output | Rich DisplayCallback | Protocol-based, NullDisplay default for library use | [REF-T28] |
+| Error observability | Sentry → immune feed | Production errors become invariant candidates automatically | |
+| Impact analysis | GitNexus blast radius | Warns before regenerating high-impact modules | |
