@@ -76,3 +76,9 @@ Nightjar is AGPL-3.0. If your organization cannot comply with AGPL (for example
 when embedding Nightjar in a proprietary product), a commercial license is available.
 
 Pricing: $2,400/yr (teams), $12,000/yr (enterprise). Contact: nightjar-license@proton.me
+
+## Dependency Governance Note
+
+Nightjar uses `uv` and `ruff` as development tools. On March 19, 2026, OpenAI acquired Astral (the company behind both tools). They remain open-source under MIT/Apache-2.0 and continue to function normally.
+
+If future changes to uv/Ruff introduce OpenAI-platform-specific behavior, Nightjar will evaluate alternatives (pip + black/ruff-fork). Contributions that add fallback paths or reduce hard dependency on Astral tooling are welcome.

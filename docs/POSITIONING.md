@@ -8,7 +8,7 @@
 
 AI now generates 42% of all code [REF-P33]. But 96% of developers don't fully trust it, and only 48% verify before committing. AWS CTO Werner Vogels calls this **"verification debt"** — the growing gap between AI-generated code volume and verification coverage.
 
-The result: 20% faster PRs, but 23.5% more incidents and 30% higher failure rates.
+The result: 20% faster PRs, but 23.5% more incidents and 30% higher failure rates. AI-coauthored code carries **2.74× higher vulnerability rates** than human-written code. In March 2026 alone, 35 new CVEs from AI-generated code were logged — up from 6 in January.
 
 **"2025 was the year of AI speed. 2026 will be the year of AI quality."** — Industry consensus [REF-P33]
 
@@ -101,9 +101,15 @@ Nightjar's approach is independently validated by multiple research groups:
 - **Stanford** (2024): Clover proves closed-loop verification works at 87% acceptance / 0% false positive [REF-P03]
 - **MIT/BAIF** (POPL 2026): Vericoding benchmark shows 82-96% Dafny success [REF-P02]
 - **Trail of Bits** (2025): Calls for "invariant-driven development" as first-class practice [REF-P31]
-- **Martin Kleppmann** (2025): Predicts "AI will make formal verification mainstream" [REF-P28]
+- **Martin Kleppmann** (2025): Predicts "AI will make formal verification mainstream" [REF-P28] — and identifies the bottleneck: *"The limiting factor will not be the technology, but the culture change required for people to realise that formal methods have become viable in practice."* Nightjar's design goal is to make that culture change unnecessary by making verification frictionless.
 
 None of these groups knew about the others when they published. Independent convergence is the strongest signal available that a thesis is correct.
+
+### The Vericoding Frame
+
+POPL 2026 coined the term **vericoding** to describe formally verified code generation from specifications — explicitly contrasting it with vibe coding ("potentially buggy code from natural language"). The benchmark showed 96% LLM success on Dafny verification tasks, up from 68% one year prior [REF-P02].
+
+Nightjar is a vericoding pipeline. This terminology should be adopted in all external communications: *"Nightjar turns vibe coding into vericoding."*
 
 ---
 

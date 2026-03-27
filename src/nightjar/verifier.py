@@ -627,3 +627,134 @@ def run_pipeline_with_fallback(spec: CardSpec, code: str, spec_path: str = "") -
         pass
 
     return result
+
+
+# SARIF rule IDs and metadata per verification stage
+_SARIF_RULES: list[dict] = [
+    {
+        "id": "NJ000",
+        "name": "PreflightCheck",
+        "shortDescription": {"text": "Spec preflight validation"},
+        "helpUri": "https://github.com/j4ngzzz/Nightjar#stage-0-preflight",
+    },
+    {
+        "id": "NJ001",
+        "name": "DependencyAudit",
+        "shortDescription": {"text": "Dependency security audit"},
+        "helpUri": "https://github.com/j4ngzzz/Nightjar#stage-1-deps",
+    },
+    {
+        "id": "NJ002",
+        "name": "SchemaValidation",
+        "shortDescription": {"text": "Schema and type validation"},
+        "helpUri": "https://github.com/j4ngzzz/Nightjar#stage-2-schema",
+    },
+    {
+        "id": "NJ003",
+        "name": "PropertyTests",
+        "shortDescription": {"text": "Property-based test failure"},
+        "helpUri": "https://github.com/j4ngzzz/Nightjar#stage-3-property-tests",
+    },
+    {
+        "id": "NJ004",
+        "name": "FormalProof",
+        "shortDescription": {"text": "Formal verification failure (Dafny)"},
+        "helpUri": "https://github.com/j4ngzzz/Nightjar#stage-4-formal-proof",
+    },
+]
+
+# Map stage number → SARIF rule ID
+_STAGE_RULE_ID: dict[int, str] = {r["id"][-1:]: r["id"] for r in _SARIF_RULES}
+_STAGE_TO_RULE: dict[int, str] = {i: f"NJ{i:03d}" for i in range(5)}
+
+
+def to_sarif(
+    result: "VerifyResult",
+    spec_path: str = "",
+    tool_version: str = "0.1.0",
+) -> dict:
+    """Convert a VerifyResult to SARIF 2.1.0 format for GitHub Code Scanning.
+
+    SARIF (Static Analysis Results Interchange Format) allows Nightjar
+    verification failures to appear as native PR annotations in GitHub.
+    Upload the output to GitHub via:
+
+        nightjar verify --sarif > nightjar.sarif
+        gh upload-sarif --sarif-file nightjar.sarif
+
+    Args:
+        result: The VerifyResult from run_pipeline() or run_pipeline_with_fallback().
+        spec_path: Optional path to the .card.md file (used as artifact URI).
+        tool_version: Nightjar version string embedded in the SARIF driver block.
+
+    Returns:
+        SARIF 2.1.0 dict, ready for json.dumps().
+
+    References:
+        SARIF 2.1.0 spec: https://docs.oasis-open.org/sarif/sarif/v2.1.0/
+        GitHub Code Scanning: https://docs.github.com/en/code-security/code-scanning
+    """
+    sarif_results: list[dict] = []
+
+    for stage in result.stages:
+        if stage.status != VerifyStatus.FAIL:
+            continue
+
+        rule_id = _STAGE_TO_RULE.get(stage.stage, f"NJ{stage.stage:03d}")
+
+        for error in stage.errors:
+            message_text = error.get("message") or error.get("error") or str(error)
+
+            sarif_result: dict = {
+                "ruleId": rule_id,
+                "level": "error",
+                "message": {"text": f"[{stage.name}] {message_text}"},
+            }
+
+            # Attach artifact location if spec_path is provided
+            if spec_path:
+                sarif_result["locations"] = [
+                    {
+                        "physicalLocation": {
+                            "artifactLocation": {"uri": spec_path},
+                            "region": {"startLine": 1},
+                        }
+                    }
+                ]
+
+            # Attach counterexample as a related location note
+            if result.stages and stage.counterexample:
+                ce_text = "; ".join(
+                    f"{k}={v}" for k, v in stage.counterexample.items()
+                )
+                sarif_result["relatedLocations"] = [
+                    {
+                        "id": 1,
+                        "message": {"text": f"Counterexample: {ce_text}"},
+                    }
+                ]
+
+            sarif_results.append(sarif_result)
+
+    artifacts = []
+    if spec_path:
+        artifacts.append({"location": {"uri": spec_path}})
+
+    return {
+        "version": "2.1.0",
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "Nightjar",
+                        "version": tool_version,
+                        "informationUri": "https://github.com/j4ngzzz/Nightjar",
+                        "rules": _SARIF_RULES,
+                    }
+                },
+                "results": sarif_results,
+                "artifacts": artifacts,
+            }
+        ],
+    }

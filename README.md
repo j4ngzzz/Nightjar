@@ -31,9 +31,14 @@
 
 84% of developers use AI coding tools. 96% don't fully trust what comes out ([Sonar 2025](https://www.sonarsource.com/company/press-releases/sonar-data-reveals-critical-verification-gap-in-ai-coding/)). Only half even bother to verify before committing.
 
-Meanwhile, 45% of AI-generated code ships with OWASP vulnerabilities ([Veracode 2025](https://www.getautonoma.com/blog/vibe-coding-security-risks)). Georgetown CSET measured an 86% XSS failure rate. AI-coauthored PRs carry 1.7x more issues than human-only ones.
+Meanwhile, 45% of AI-generated code ships with OWASP vulnerabilities ([Veracode 2025](https://www.getautonoma.com/blog/vibe-coding-security-risks)). Georgetown CSET measured an 86% XSS failure rate. AI-coauthored code carries **2.74× higher vulnerability rates** than human-written code — and 35 new CVEs from AI-generated code landed in March 2026 alone.
 
 There's a gap between "the AI wrote it" and "you can trust it." Nightjar closes it with math.
+
+> *"The limiting factor will not be the technology, but the culture change required for people to realise that formal methods have become viable in practice."*
+> — [Martin Kleppmann](https://martin.kleppmann.com/2025/12/08/ai-formal-verification.html), 2025
+
+Nightjar's job is to make that culture change unnecessary. Vericoding — formally verified code generation — should require zero PhD and five minutes of setup.
 
 > *"An AI that generates provably correct code is qualitatively different
 > from one that merely generates plausible code."*
