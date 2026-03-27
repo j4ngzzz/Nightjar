@@ -81,6 +81,7 @@ def _get_specs_dir(config: dict) -> str:
 # ── Spec template for init command ───────────────────────
 
 _SPEC_TEMPLATE = '''---
+card-version: "1.0"
 id: {module_id}
 title: {title}
 status: draft
