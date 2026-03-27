@@ -44,7 +44,7 @@ invariants:
     statement: "get_model never returns an empty string or None"
     rationale: "Every code path in get_model terminates with a non-empty string (hardcoded fallback guarantees this)"
   - id: INV-05
-    tier: safety
+    tier: property
     statement: "_load_dotenv_simple falls back to manual KEY=VALUE parsing when python-dotenv is not installed"
     rationale: "python-dotenv is an optional dependency; the config loader must work in minimal environments"
 ---
