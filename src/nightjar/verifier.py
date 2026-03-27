@@ -688,6 +688,14 @@ def run_pipeline_parallel(
     if not _stage_ok(result_1):
         return _build_result(stages, start, verified=False)
 
+    # Negation-proof gate (U1.4 — NegProof): validate FORMAL invariants are meaningful
+    # before launching formal verification. Runs before the fan-out so a degenerate
+    # spec is caught without wasting the ThreadPoolExecutor budget.
+    result_neg = _run_stage_negproof(spec, code)
+    stages.append(result_neg)
+    if not _stage_ok(result_neg):
+        return _build_result(stages, start, verified=False)
+
     # Stages 2, 3, 4: parallel fan-out (DeerFlow scoped subagent pattern)
     # Each stage receives the same (spec, code) — no inter-stage data dependency.
     with ThreadPoolExecutor(max_workers=3) as executor:
@@ -721,13 +729,16 @@ def _save_hashes_to_cache(hashes: dict[str, str]) -> None:
 
 
 def _build_incremental_noop_result(start: float) -> VerifyResult:
-    """Synthesize an all-PASS VerifyResult for a full cache hit (nothing changed)."""
-    total_ms = int((time.monotonic() - start) * 1000)
+    """Synthesize an all-PASS VerifyResult for a full cache hit (nothing changed).
+
+    Routes through _build_result() so the confidence score is computed and
+    attached consistently with all other pipeline exit paths.
+    """
     synthetic_stages = [
         StageResult(stage=i, name=name, status=VerifyStatus.PASS, duration_ms=0)
         for i, name in enumerate(["preflight", "deps", "schema", "pbt", "formal"])
     ]
-    return VerifyResult(verified=True, stages=synthetic_stages, total_duration_ms=total_ms)
+    return _build_result(synthetic_stages, start, verified=True)
 
 
 def run_pipeline_incremental(
