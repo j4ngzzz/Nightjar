@@ -62,6 +62,10 @@ class ImmuneCycleConfig:
     require_both_verifiers: bool = False
 
 
+# Backward-compatible alias
+ImmuneConfig = ImmuneCycleConfig
+
+
 @dataclass
 class ImmuneCycleResult:
     """Result of a full immune cycle run. [REF-C09]

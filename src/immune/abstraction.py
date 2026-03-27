@@ -31,6 +31,10 @@ class AbstractionConfig:
     strip_values: bool = True
 
 
+# Backward-compatible alias
+AbstractionLayer = AbstractionConfig
+
+
 @dataclass
 class StructuralSignature:
     """A PII-free structural representation of a failure trace.

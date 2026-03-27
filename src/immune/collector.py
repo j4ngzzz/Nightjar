@@ -234,3 +234,7 @@ class TypeCollector:
         else:
             self._call_traces.clear()
             self._trace_count = 0
+
+
+# Backward-compatible alias
+TraceCollector = TypeCollector

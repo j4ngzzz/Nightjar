@@ -36,6 +36,10 @@ class HerdConfig:
     epsilon: float = 1.0
 
 
+# Backward-compatible alias
+HerdImmunity = HerdConfig
+
+
 @dataclass
 class HerdResult:
     """Result from evaluating a pattern against herd immunity thresholds.
