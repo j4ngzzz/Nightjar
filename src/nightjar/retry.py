@@ -225,7 +225,7 @@ def _call_llm_with_prompt(prompt: str) -> str:
         temperature=REPAIR_TEMPERATURE,
         max_tokens=REPAIR_MAX_TOKENS,
     )
-    return response.choices[0].message.content
+    return response.choices[0].message.content or ""
 
 
 def _collect_failure_context(verify_result: VerifyResult) -> list[dict]:
