@@ -33,6 +33,9 @@ import time
 from pathlib import Path
 from typing import Optional
 
+import litellm
+
+from nightjar.generator import get_model
 from nightjar.types import (
     CardSpec, Invariant, InvariantTier, StageResult, VerifyStatus,
 )
@@ -40,6 +43,12 @@ from nightjar.types import (
 # Dafny CLI flags per ARCHITECTURE.md Section 3 and [REF-T01]
 DAFNY_VERIFY_TIMEOUT = 15  # seconds per verification task
 DAFNY_CMD = os.environ.get("DAFNY_PATH", "dafny")
+
+# Annotation repair constants (dafny-annotator greedy pattern [REF-T02])
+ANNOTATION_MAX_TOKENS = 256
+ANNOTATION_TEMPERATURE = 0.2
+# Valid Dafny annotation keywords — the only things the repair model may insert
+ANNOTATION_KEYWORDS = ("assert", "invariant", "decreases")
 
 
 def _get_vcs_cores() -> int:
@@ -350,3 +359,174 @@ def run_formal(spec: CardSpec, dfy_code: str) -> StageResult:
             Path(tmp_path).unlink(missing_ok=True)
         except (NameError, OSError):
             pass
+
+
+# ─── Dafny Annotation Repair (dafny-annotator greedy pattern [REF-T02]) ──────
+# Per metareflection/dafny-annotator: greedy search inserts ONE annotation at a
+# time and re-verifies after each, rather than bulk-inserting. This is surgical —
+# most Dafny failures need just 1-2 missing invariants.
+#
+# Algorithm from dafny-annotator annotate():
+#   1. Identify error location from Dafny output
+#   2. Prompt LLM for ONE annotation (invariant/assert/decreases)
+#   3. Insert annotation just before error location
+#   4. Return patched code (caller re-verifies)
+#
+# Three-valued feedback (FAIL / partial progress / SUCCESS) is handled by the
+# caller (retry.py) via re-verification.
+
+
+def _build_annotation_prompt(dafny_code: str, error: dict, spec: CardSpec) -> str:
+    """Build a prompt asking the LLM for ONE annotation to fix a Dafny error.
+
+    Per dafny-annotator: show the code context around the error and ask for
+    exactly one annotation (invariant/assert/decreases). The model sees the
+    nearby lines so it can choose an appropriate annotation type and value.
+
+    Args:
+        dafny_code: Full Dafny source code that failed verification.
+        error: Structured error dict from parse_dafny_output() with keys
+               "line", "type", "message".
+        spec: Original CardSpec — provides invariant context.
+
+    Returns:
+        Formatted prompt string for the annotation LLM call.
+    """
+    lines = dafny_code.splitlines()
+    error_line = error.get("line", 1)
+    error_type = error.get("type", "other")
+    error_msg = error.get("message", "")
+
+    # Show up to 8 lines of context centred on the error
+    context_start = max(0, error_line - 6)
+    context_end = min(len(lines), error_line + 3)
+    numbered = "\n".join(
+        f"{context_start + i + 1:4d} | {line}"
+        for i, line in enumerate(lines[context_start:context_end])
+    )
+
+    spec_invariants = "\n".join(
+        f"  - {inv.id}: {inv.statement}"
+        for inv in spec.invariants
+    )
+
+    return (
+        f"The following Dafny code fails to verify at line {error_line}.\n"
+        f"Error type: {error_type}\n"
+        f"Error: {error_msg}\n\n"
+        f"Code context (around error line):\n"
+        f"```\n{numbered}\n```\n\n"
+        f"Spec invariants that must hold:\n{spec_invariants}\n\n"
+        f"Suggest ONE Dafny annotation (invariant, assert, or decreases clause) "
+        f"to help Dafny prove this. It will be inserted just before line {error_line}.\n"
+        f"Return ONLY the single annotation line. Examples:\n"
+        f"  invariant 0 <= i <= |s|\n"
+        f"  assert x >= 0;\n"
+        f"  decreases n - i\n"
+    )
+
+
+def _insert_annotation_at_line(dafny_code: str, line_number: int, annotation: str) -> str:
+    """Insert an annotation just before the specified 1-based line number.
+
+    Per dafny-annotator: annotations are inserted at valid positions relative
+    to the error location. The indentation is matched to the target line so
+    the inserted line is syntactically clean.
+
+    Args:
+        dafny_code: Full Dafny source code.
+        line_number: 1-based line number — annotation is inserted before this line.
+        annotation: The annotation text (may or may not be indented).
+
+    Returns:
+        New Dafny code string with annotation inserted.
+    """
+    lines = dafny_code.splitlines()
+    # Clamp to valid range
+    insert_idx = max(0, min(line_number - 1, len(lines)))
+
+    # Infer indentation from the target line
+    if insert_idx < len(lines):
+        target = lines[insert_idx]
+        indent = len(target) - len(target.lstrip())
+        indent_str = target[:indent]
+    else:
+        indent_str = "    "
+
+    indented = f"{indent_str}{annotation.strip()}"
+    new_lines = lines[:insert_idx] + [indented] + lines[insert_idx:]
+    return "\n".join(new_lines)
+
+
+def attempt_annotation_repair(
+    dafny_code: str,
+    errors: list[dict],
+    spec: CardSpec,
+) -> Optional[str]:
+    """Try to repair Dafny verification failures by adding ONE surgical annotation.
+
+    Implements the dafny-annotator greedy search pattern [REF-T02]:
+    1. Find the first error that has a known line location
+    2. Ask the LLM (via litellm) for ONE annotation to fix it
+    3. Validate the annotation contains a known Dafny keyword
+    4. Insert the annotation just before the error line
+    5. Return the patched code — the caller (retry.py) re-verifies
+
+    Key insight: one annotation at a time is surgical. dafny-annotator's
+    benchmark shows most Dafny failures need just 1-2 missing invariants.
+    Bulk insertion risks introducing new errors; greedy repair does not.
+
+    All LLM calls go through litellm [REF-T16]. Model selected from
+    NIGHTJAR_MODEL env var.
+
+    Args:
+        dafny_code: Generated Dafny code that failed formal verification.
+        errors: Structured error list from parse_dafny_output() — each dict
+                has "line", "column", "type", "message".
+        spec: Original CardSpec — provides invariant context for the prompt.
+
+    Returns:
+        Patched Dafny code string with one annotation inserted, or None if:
+        - No errors have line numbers (can't locate insertion point)
+        - LLM returns empty or non-annotation content
+    """
+    # Only handle errors with known line locations (dafny-annotator requirement)
+    located = [e for e in errors if e.get("line") is not None]
+    if not located:
+        return None
+
+    # Take the first located error — greedy: fix one at a time
+    error = located[0]
+
+    model = get_model()  # NIGHTJAR_MODEL env var → default; centralised in get_model()
+    prompt = _build_annotation_prompt(dafny_code, error, spec)
+
+    response = litellm.completion(
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a Dafny annotation expert. "
+                    "When given a verification failure, suggest ONE loop invariant, "
+                    "assertion, or decreases clause that helps Dafny prove the code. "
+                    "Return ONLY the single annotation line — no explanation."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        temperature=ANNOTATION_TEMPERATURE,
+        max_tokens=ANNOTATION_MAX_TOKENS,
+    )
+
+    annotation = response.choices[0].message.content
+    if not annotation or not annotation.strip():
+        return None
+
+    annotation = annotation.strip()
+
+    # Validate: must contain a recognised Dafny annotation keyword
+    if not any(kw in annotation.lower() for kw in ANNOTATION_KEYWORDS):
+        return None
+
+    return _insert_annotation_at_line(dafny_code, error["line"], annotation)

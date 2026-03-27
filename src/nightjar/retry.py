@@ -45,6 +45,7 @@ from typing import Any, Optional
 
 import litellm
 
+from nightjar.stages.formal import attempt_annotation_repair
 from nightjar.types import CardSpec, StageResult, VerifyResult, VerifyStatus
 from nightjar.verifier import run_pipeline
 
@@ -53,6 +54,11 @@ from nightjar.verifier import run_pipeline
 DEFAULT_MAX_RETRIES = 5
 REPAIR_TEMPERATURE = 0.2  # Deterministic repair [ARCHITECTURE.md]
 REPAIR_MAX_TOKENS = 2048  # Output cap per ARCHITECTURE.md
+
+# Annotation repair settings (dafny-annotator greedy pattern [REF-T02])
+# Annotation repair is attempted BEFORE full LLM regeneration — it is faster
+# and surgical. Configurable via NIGHTJAR_ANNOTATION_RETRIES env var.
+DEFAULT_ANNOTATION_RETRIES = 3
 
 
 # ─── CEGIS Counterexample Parsing (U1.2) ─────────────────────────────────────
@@ -343,6 +349,32 @@ def _call_repair_llm(
     return _call_llm_with_prompt(prompt)
 
 
+def _get_annotation_retries() -> int:
+    """Get max annotation repair attempts from NIGHTJAR_ANNOTATION_RETRIES env var."""
+    try:
+        return int(os.environ.get("NIGHTJAR_ANNOTATION_RETRIES", DEFAULT_ANNOTATION_RETRIES))
+    except (ValueError, TypeError):
+        return DEFAULT_ANNOTATION_RETRIES
+
+
+def _get_formal_stage_errors(result: VerifyResult) -> list[dict]:
+    """Extract errors from the formal verification stage if it failed.
+
+    Used by the annotation repair path: annotation repair only applies to
+    Dafny formal stage failures (stage name 'formal'), not PBT or schema failures.
+
+    Args:
+        result: VerifyResult from run_pipeline().
+
+    Returns:
+        List of error dicts from the formal stage, or [] if formal didn't fail.
+    """
+    for stage in result.stages:
+        if stage.name == "formal" and stage.status == VerifyStatus.FAIL:
+            return stage.errors
+    return []
+
+
 def run_with_retry(
     spec: CardSpec,
     code: str,
@@ -350,17 +382,24 @@ def run_with_retry(
 ) -> VerifyResult:
     """Run verification with Clover-pattern retry loop [REF-C02, REF-P03].
 
+    Upgrade: before each full LLM regeneration, attempt surgical annotation
+    repair per dafny-annotator greedy search [REF-T02]. Annotation repair
+    inserts ONE invariant/assert/decreases clause at the error location and
+    re-verifies. If it succeeds, the expensive full regeneration is skipped.
+
     1. Run full verification pipeline
     2. If PASS → return success
-    3. If FAIL → collect error context → build repair prompt →
-       call LLM → get repaired code → re-run pipeline
-    4. Repeat up to max_retries times
-    5. If still failing after max_retries → return failure (human escalation)
+    3. If FAIL with formal errors → try annotation repair (up to
+       NIGHTJAR_ANNOTATION_RETRIES, default 3). Each attempt inserts one
+       annotation, re-verifies, and keeps partial progress if errors decrease.
+    4. If annotation repair exhausts attempts → fall back to full LLM repair
+       (Clover pattern [REF-P03]). Repeat up to max_retries times.
+    5. If still failing → return failure (human escalation)
 
     Args:
         spec: Parsed .card.md specification.
         code: Initial generated code to verify.
-        max_retries: Maximum repair attempts (default 5 per ARCHITECTURE.md).
+        max_retries: Maximum full LLM repair attempts (default 5 per ARCHITECTURE.md).
 
     Returns:
         VerifyResult with verified status and retry_count.
@@ -374,7 +413,41 @@ def run_with_retry(
         result.retry_count = 0
         return result
 
-    # Retry loop per [REF-P03] Clover pattern
+    # ── Annotation repair phase (dafny-annotator greedy pattern [REF-T02]) ───
+    # Only runs when the formal stage failed and error locations are available.
+    # Annotation repair is cheaper than full regeneration — try it first.
+    formal_errors = _get_formal_stage_errors(result)
+    if formal_errors:
+        annotation_retries = _get_annotation_retries()
+        for ann_attempt in range(annotation_retries):
+            patched_code = attempt_annotation_repair(current_code, formal_errors, spec)
+            if patched_code is None:
+                break  # No applicable repair (e.g. no line numbers in errors)
+
+            patched_result = run_pipeline(spec, patched_code)
+            if patched_result.verified:
+                patched_result.retry_count = ann_attempt + 1
+                return patched_result
+
+            # Keep patched code if it made progress (fewer total errors)
+            patched_error_count = sum(
+                len(s.errors) for s in patched_result.stages
+                if s.status == VerifyStatus.FAIL
+            )
+            current_error_count = sum(
+                len(s.errors) for s in result.stages
+                if s.status == VerifyStatus.FAIL
+            )
+            if patched_error_count < current_error_count:
+                current_code = patched_code
+                result = patched_result
+
+            # Always refresh formal_errors for next iteration — error locations
+            # can shift even when overall error count doesn't decrease, so stale
+            # line numbers from a prior result would produce off-target annotations.
+            formal_errors = _get_formal_stage_errors(patched_result)
+
+    # ── Full LLM repair phase (Clover pattern [REF-P03]) ─────────────────────
     for attempt in range(1, max_retries + 1):
         # Step 1: Call LLM for repair [REF-T16]
         repaired_code = _call_repair_llm(spec, current_code, result, attempt)
