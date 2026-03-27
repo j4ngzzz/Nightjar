@@ -120,6 +120,22 @@ def check_regression(
     )
 
 
+def check_no_regressions(previous_result: VerifyResult, new_result: VerifyResult) -> SafetyGateResult:
+    """Alias for check_regression with conventional arg order (prev, new).
+
+    The internal check_regression takes (new, prev). This wrapper provides
+    the natural (prev, new) ordering that callers expect.
+
+    Args:
+        previous_result: VerifyResult from the previous verification run.
+        new_result: VerifyResult from the current verification run.
+
+    Returns:
+        SafetyGateResult with passed=True if no regressions.
+    """
+    return check_regression(new_result, previous_result)
+
+
 def load_previous_result(verify_json_path: str) -> Optional[VerifyResult]:
     """Load previous VerifyResult from verify.json.
 
