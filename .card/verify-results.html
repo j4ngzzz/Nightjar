@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nightjar .card.md Spec Verification Results — Wave 3, Agent W3-1</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0f1117;
+    color: #e1e4e8;
+    padding: 32px;
+    line-height: 1.6;
+  }
+  h1 { font-size: 1.5rem; color: #58a6ff; margin-bottom: 6px; }
+  .subtitle { font-size: 0.875rem; color: #8b949e; margin-bottom: 28px; }
+  .summary-bar {
+    display: flex; gap: 16px; margin-bottom: 28px;
+  }
+  .badge {
+    padding: 6px 16px; border-radius: 20px; font-weight: 600; font-size: 0.875rem;
+  }
+  .badge.pass { background: #1a4731; color: #3fb950; border: 1px solid #3fb950; }
+  .badge.fail { background: #4a1919; color: #f85149; border: 1px solid #f85149; }
+  .badge.total { background: #1c2128; color: #8b949e; border: 1px solid #30363d; }
+  table {
+    width: 100%; border-collapse: collapse; background: #161b22;
+    border-radius: 8px; overflow: hidden;
+    border: 1px solid #30363d;
+  }
+  thead th {
+    background: #1c2128; padding: 12px 16px; text-align: left;
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
+    color: #8b949e; font-weight: 600; border-bottom: 1px solid #30363d;
+  }
+  tbody tr { border-bottom: 1px solid #21262d; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 12px 16px; font-size: 0.875rem; vertical-align: top; }
+  .status-pass {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #3fb950; font-weight: 600;
+  }
+  .status-fail {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #f85149; font-weight: 600;
+  }
+  .icon { font-size: 1rem; }
+  .spec-id { font-family: 'Cascadia Code', 'Fira Code', monospace; color: #79c0ff; font-weight: 600; }
+  .inv-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .inv-chip {
+    padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-family: monospace;
+  }
+  .inv-chip.property { background: #1a3a4a; color: #58a6ff; border: 1px solid #1f6feb; }
+  .inv-chip.example  { background: #2d1f3d; color: #d2a8ff; border: 1px solid #6e40c9; }
+  .inv-chip.formal   { background: #1a4731; color: #3fb950; border: 1px solid #2ea043; }
+  .error-text { color: #f85149; font-family: monospace; font-size: 0.8rem; }
+  .action { color: #8b949e; font-size: 0.8rem; font-style: italic; }
+  .footer {
+    margin-top: 24px; font-size: 0.75rem; color: #484f58;
+    border-top: 1px solid #21262d; padding-top: 16px;
+  }
+  .section-divider { color: #30363d; margin: 4px 0; font-size: 0.75rem; }
+</style>
+</head>
+<body>
+
+<h1>Nightjar .card.md Spec Verification Results</h1>
+<div class="subtitle">Wave 3 · Agent W3-1 · 2026-03-27 · Core Pipeline Specs</div>
+
+<div class="summary-bar">
+  <span class="badge pass">5 PASS</span>
+  <span class="badge fail">0 FAIL</span>
+  <span class="badge total">5 Total Specs</span>
+  <span class="badge total">26 Total Invariants</span>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Spec File</th>
+      <th>Module ID</th>
+      <th>Status</th>
+      <th>Invariants</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>.card/parser.card.md</code></td>
+      <td><span class="spec-id">parser</span></td>
+      <td><span class="status-pass"><span class="icon">✓</span> PASS</span></td>
+      <td>
+        5 invariants
+        <div class="inv-list">
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip example">example</span>
+          <span class="inv-chip property">property</span>
+        </div>
+      </td>
+      <td class="action">Existing spec — reviewed, no inaccuracies found</td>
+    </tr>
+    <tr>
+      <td><code>.card/auto.card.md</code></td>
+      <td><span class="spec-id">auto</span></td>
+      <td><span class="status-pass"><span class="icon">✓</span> PASS</span></td>
+      <td>
+        4 invariants
+        <div class="inv-list">
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip example">example</span>
+        </div>
+      </td>
+      <td class="action">Existing spec — reviewed, no inaccuracies found</td>
+    </tr>
+    <tr>
+      <td><code>.card/generator.card.md</code></td>
+      <td><span class="spec-id">generator</span></td>
+      <td><span class="status-pass"><span class="icon">✓</span> PASS</span></td>
+      <td>
+        6 invariants
+        <div class="inv-list">
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+        </div>
+      </td>
+      <td class="action">New spec — written from source code analysis</td>
+    </tr>
+    <tr>
+      <td><code>.card/verifier.card.md</code></td>
+      <td><span class="spec-id">verifier</span></td>
+      <td><span class="status-pass"><span class="icon">✓</span> PASS</span></td>
+      <td>
+        6 invariants
+        <div class="inv-list">
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+        </div>
+      </td>
+      <td class="action">New spec — written from source code analysis</td>
+    </tr>
+    <tr>
+      <td><code>.card/retry.card.md</code></td>
+      <td><span class="spec-id">retry</span></td>
+      <td><span class="status-pass"><span class="icon">✓</span> PASS</span></td>
+      <td>
+        6 invariants
+        <div class="inv-list">
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+          <span class="inv-chip property">property</span>
+        </div>
+      </td>
+      <td class="action">New spec — written from source code analysis</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="footer">
+  Verification method: <code>nightjar.parser.parse_card_spec()</code> · All specs parsed without errors ·
+  Invariants derived from actual source code behavior, not aspirational goals ·
+  Agent W3-1 · Wave 3 Core Pipeline Specs
+</div>
+
+</body>
+</html>
