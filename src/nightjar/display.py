@@ -37,11 +37,18 @@ try:
     from rich.text import Text
     from rich.syntax import Syntax
     from rich.live import Live
-    from rich.group import Group
     from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
     HAS_RICH = True
+    try:
+        from rich.group import Group
+        HAS_RICH_GROUP = True
+    except ImportError:
+        HAS_RICH_GROUP = False
+        Group = None  # type: ignore[assignment,misc]
 except ImportError:
     HAS_RICH = False
+    HAS_RICH_GROUP = False
+    Group = None  # type: ignore[assignment,misc]
 
 # ── Streaming display_callback interface (U3.3) [REF-NEW-11] ─────────────
 #
@@ -243,12 +250,17 @@ class RichStreamingDisplay:
                     style=style,
                     justify="center",
                 )
-                banner_content = Group(banner_text, trust_text)
+                if HAS_RICH_GROUP:
+                    banner_content = Group(banner_text, trust_text)
+                else:
+                    banner_content = banner_text
             else:
                 banner_content = banner_text
 
             banner = Panel(banner_content, border_style=border)
-            return Group(table, banner)
+            if HAS_RICH_GROUP:
+                return Group(table, banner)
+            return table
 
         return table
 
