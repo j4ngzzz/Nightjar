@@ -9,7 +9,9 @@ Format based on:
 BEFORE MODIFYING: Read docs/ARCHITECTURE.md Section 2.
 """
 
+import hashlib
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -26,6 +28,22 @@ from .types import (
 
 # Required top-level frontmatter fields per ARCHITECTURE.md Section 2
 _REQUIRED_FIELDS = ("card-version", "id")
+
+
+@dataclass
+class SpecDiff:
+    """Difference between two invariant hash maps (SpecLang incremental pattern).
+
+    Per GitHub Next SpecLang: track spec changes incrementally — most edits
+    touch 1-2 invariants. Only those need re-verification.
+
+    Defined here (not types.py) as a parser-layer concern: it describes how
+    a spec changed between two parses, not a verification artifact.
+    """
+    added: list[str] = field(default_factory=list)     # invariant IDs new in new_hashes
+    removed: list[str] = field(default_factory=list)   # invariant IDs absent from new_hashes
+    changed: list[str] = field(default_factory=list)   # IDs in both but hash differs
+    unchanged: list[str] = field(default_factory=list) # IDs in both with same hash
 
 
 def parse_card_spec(path: str) -> CardSpec:
@@ -251,3 +269,65 @@ def _extract_section(body: str, heading: str) -> str:
     if not match:
         return ""
     return match.group(1).strip()
+
+
+# ─── SpecLang Incremental Recompilation (W2-5) ───────────────────────────────
+# Per GitHub Next SpecLang: watch for spec changes and recompile only the
+# affected sections. hash_invariants + diff_specs implement the change-tracking
+# layer that verifier.run_pipeline_incremental() consumes.
+
+
+def hash_invariants(spec: CardSpec) -> dict[str, str]:
+    """Return {invariant_id: sha256_hash} for each invariant in the spec.
+
+    Hash covers: invariant statement + tier + rationale. Changing any of these
+    means the invariant's verification may produce a different result and must
+    be re-run. Only the invariant ID is used as the key, not the index.
+
+    Per SpecLang: identify which spec sections changed without re-running all
+    verification. hash_invariants() is called before and after a spec edit;
+    diff_specs() compares the two maps to find what actually changed.
+
+    Uses stdlib hashlib only — no external dependencies.
+
+    Args:
+        spec: Parsed .card.md specification.
+
+    Returns:
+        Dict mapping each invariant's ID to its SHA-256 hex digest.
+    """
+    result: dict[str, str] = {}
+    for inv in spec.invariants:
+        content = f"{inv.statement}|{inv.tier.value}|{inv.rationale}"
+        result[inv.id] = hashlib.sha256(content.encode()).hexdigest()
+    return result
+
+
+def diff_specs(
+    old_hashes: dict[str, str],
+    new_hashes: dict[str, str],
+) -> SpecDiff:
+    """Compare two invariant hash maps and return which invariants changed.
+
+    Per GitHub Next SpecLang: most spec edits touch 1-2 invariants. This diff
+    identifies exactly which invariant IDs need re-verification so the pipeline
+    can skip unchanged ones.
+
+    Args:
+        old_hashes: Previous {invariant_id: sha256_hash} map (e.g., from cache).
+        new_hashes: Current {invariant_id: sha256_hash} from hash_invariants().
+
+    Returns:
+        SpecDiff listing added/removed/changed/unchanged invariant IDs.
+        All lists are sorted for stable, deterministic output.
+    """
+    old_ids = set(old_hashes.keys())
+    new_ids = set(new_hashes.keys())
+
+    added = sorted(new_ids - old_ids)
+    removed = sorted(old_ids - new_ids)
+    common = old_ids & new_ids
+    changed = sorted(id_ for id_ in common if old_hashes[id_] != new_hashes[id_])
+    unchanged = sorted(id_ for id_ in common if old_hashes[id_] == new_hashes[id_])
+
+    return SpecDiff(added=added, removed=removed, changed=changed, unchanged=unchanged)
