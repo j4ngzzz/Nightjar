@@ -14,11 +14,14 @@ References:
 - [REF-C09] Immune System / Acquired Immunity — runtime enforcement stage
 """
 
+import copy
+import inspect
 import re
 import textwrap
 import time
+import warnings
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -396,3 +399,286 @@ class InvariantStore:
         elapsed = current_time - inv.timestamp
         decayed = inv.confidence * (0.5 ** (elapsed / inv.half_life))
         return max(0.0, min(1.0, decayed))
+
+
+# ---------------------------------------------------------------------------
+# U2.4-B — icontract @snapshot OLD-State Transition Postconditions [REF-T10]
+# ---------------------------------------------------------------------------
+# icontract's @snapshot decorator (Parquery/icontract _decorators.py) captures
+# argument state *before* function execution and makes it available in
+# postconditions via an OLD parameter:
+#   @snapshot(lambda items: items.copy())
+#   @ensure(lambda result, OLD: len(OLD['items']) + 1 == len(items))
+#
+# This section implements the same pattern natively (no icontract import at
+# runtime) so state-transition invariants like "balance after >= balance before"
+# can be checked directly by the immune system's enforcement loop.
+# ---------------------------------------------------------------------------
+
+
+class TransitionViolationError(Exception):
+    """Raised when a state-transition postcondition (OLD pattern) is violated.
+
+    Contains the violated expression and the pre/post states for diagnostics.
+    """
+
+
+class _OldState:
+    """Proxy for the OLD dict in transition postconditions.
+
+    icontract passes OLD as a keyword argument to postcondition lambdas.
+    Supports both OLD['name'] (dict-style) and OLD.name (attribute-style)
+    access so expressions can be written either way.
+    """
+
+    def __init__(self, state: dict) -> None:
+        object.__setattr__(self, "_state", state)
+
+    def __getitem__(self, key: str) -> Any:
+        return self._state[key]
+
+    def __getattr__(self, key: str) -> Any:
+        try:
+            return object.__getattribute__(self, "_state")[key]
+        except KeyError:
+            raise AttributeError(f"OLD has no snapshot named '{key}'") from None
+
+    def __repr__(self) -> str:
+        return f"OLD({self._state!r})"
+
+
+def _extract_old_references(expression: str) -> set:
+    """Extract argument names referenced via OLD in a postcondition expression.
+
+    Recognises both OLD['name'] / OLD["name"] and OLD.name patterns,
+    matching icontract's two access styles. [REF-T10]
+
+    Args:
+        expression: A Python boolean expression that may contain OLD references.
+
+    Returns:
+        Set of argument name strings referenced through OLD.
+    """
+    names: set = set()
+    names.update(re.findall(r"\bOLD\[['\"](\w+)['\"]\]", expression))
+    names.update(re.findall(r"\bOLD\.(\w+)", expression))
+    return names
+
+
+def capture_pre_state(
+    func: Any,
+    args: tuple,
+    kwargs: dict,
+    referenced_args: Optional[set] = None,
+) -> dict:
+    """Snapshot argument values before function execution (icontract @snapshot).
+
+    Implements the icontract @snapshot pattern: for each argument that a
+    transition postcondition references via OLD, capture its value before the
+    function runs so the postcondition can compare pre/post state. [REF-T10]
+
+    Only snapshots arguments listed in ``referenced_args`` to keep deep-copy
+    overhead proportional to what is actually needed.
+
+    Args:
+        func: The function about to be called (used to bind positional args
+            to parameter names via inspect.signature).
+        args: Positional arguments tuple.
+        kwargs: Keyword arguments dict.
+        referenced_args: Set of argument names to snapshot. If None, all
+            bound arguments are snapshotted.
+
+    Returns:
+        Dict mapping argument name → deep-copied (or copied) value.
+        Arguments that cannot be copied are silently skipped with a warning.
+    """
+    try:
+        sig = inspect.signature(func)
+        bound = sig.bind(*args, **kwargs)
+        bound.apply_defaults()
+    except Exception:
+        return {}
+
+    pre_state: dict = {}
+    for name, value in bound.arguments.items():
+        if referenced_args is not None and name not in referenced_args:
+            continue
+        try:
+            if isinstance(value, (list, dict, set, bytearray)):
+                pre_state[name] = copy.deepcopy(value)
+            else:
+                try:
+                    pre_state[name] = copy.copy(value)
+                except Exception as copy_exc:
+                    warnings.warn(
+                        f"capture_pre_state: copy.copy failed for '{name}' "
+                        f"({type(value).__name__}) — using live reference. {copy_exc}",
+                        stacklevel=3,
+                    )
+                    pre_state[name] = value  # primitives / immutables are safe
+        except Exception as exc:
+            warnings.warn(
+                f"capture_pre_state: could not snapshot argument '{name}' "
+                f"({type(value).__name__}) — skipping. {exc}",
+                stacklevel=3,
+            )
+    return pre_state
+
+
+def check_transition_postcondition(
+    pre_state: dict,
+    post_state: dict,
+    result: Any,
+    invariant: dict,
+) -> bool:
+    """Evaluate a state-transition postcondition using captured OLD state.
+
+    Provides the icontract OLD mechanism for expressions like:
+        "result >= OLD['balance']"
+        "len(items) == OLD['len_items'] + 1"
+        "OLD.count <= result"
+
+    The expression is evaluated in a controlled namespace containing OLD (the
+    pre-call state proxy), result (the return value), and current post_state
+    argument values. [REF-T10]
+
+    Args:
+        pre_state: Dict of argument values captured *before* the call
+            (from capture_pre_state).
+        post_state: Dict of argument values *after* the call (for mutable
+            objects whose values changed in-place).
+        result: The function's return value.
+        invariant: Dict with at least an 'expression' key. Must contain 'OLD'
+            to be treated as a transition postcondition; returns True otherwise.
+
+    Returns:
+        True if the postcondition holds (or is not a transition postcondition).
+        Returns True on evaluation errors (fail-open) — a warning is emitted.
+    """
+    expression = invariant.get("expression", "")
+    if not expression or "OLD" not in expression:
+        return True  # Not a transition postcondition — nothing to check here
+
+    OLD = _OldState(pre_state)
+
+    namespace: dict = {
+        "result": result,
+        "OLD": OLD,
+        # Safe builtins only — no __import__, no exec
+        "len": len,
+        "abs": abs,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "isinstance": isinstance,
+        "bool": bool,
+        "int": int,
+        "float": float,
+        "str": str,
+        "list": list,
+        "dict": dict,
+        "set": set,
+        "tuple": tuple,
+        "sorted": sorted,
+        "reversed": reversed,
+        "enumerate": enumerate,
+        "zip": zip,
+        "any": any,
+        "all": all,
+    }
+    namespace.update(post_state)
+
+    try:
+        return bool(eval(expression, {"__builtins__": {}}, namespace))  # noqa: S307
+    except Exception as exc:
+        warnings.warn(
+            f"check_transition_postcondition: could not evaluate "
+            f"'{expression}': {exc}",
+            stacklevel=2,
+        )
+        return True  # Fail-open: don't crash production on unevaluable invariants
+
+
+def enforce_with_transitions(
+    func: Any,
+    invariants: list,
+    args: tuple,
+    kwargs: dict,
+) -> Any:
+    """Call func enforcing state-transition postconditions (OLD pattern).
+
+    Integrates the icontract @snapshot + @ensure(OLD) workflow into the immune
+    system's runtime enforcement loop, without requiring icontract as a runtime
+    import:
+
+    1. Identify postconditions that reference OLD.
+    2. Collect the argument names they reference.
+    3. Deep-copy only those arguments (capture_pre_state).
+    4. Call func(*args, **kwargs).
+    5. Evaluate each transition postcondition via check_transition_postcondition.
+    6. Raise TransitionViolationError listing all violations.
+
+    Static preconditions / postconditions (those without OLD) are handled by
+    icontract decorators in the generated source — this layer complements that
+    enforcement with the transition-aware OLD pattern. [REF-T10]
+
+    Args:
+        func: The function to call.
+        invariants: List of InvariantSpec objects to enforce.
+        args: Positional arguments for func.
+        kwargs: Keyword arguments for func.
+
+    Returns:
+        The function's return value.
+
+    Raises:
+        TransitionViolationError: If any transition postcondition is violated.
+    """
+    # Identify transition postconditions (postconditions referencing OLD)
+    transition_posts = [
+        inv for inv in invariants
+        if not inv.is_precondition and "OLD" in inv.expression
+    ]
+
+    if not transition_posts:
+        return func(*args, **kwargs)
+
+    # Collect arg names needed for snapshots
+    referenced_args: set = set()
+    for inv in transition_posts:
+        referenced_args.update(_extract_old_references(inv.expression))
+
+    # Capture pre-state (only the args referenced in postconditions)
+    pre_state = capture_pre_state(func, args, kwargs, referenced_args or None)
+
+    # Call the target function
+    result = func(*args, **kwargs)
+
+    # Build post-state (mutable args may have changed in-place)
+    try:
+        sig = inspect.signature(func)
+        bound = sig.bind(*args, **kwargs)
+        bound.apply_defaults()
+        post_state = dict(bound.arguments)
+    except Exception:
+        post_state = {}
+
+    # Evaluate all transition postconditions
+    violations = []
+    for inv in transition_posts:
+        holds = check_transition_postcondition(
+            pre_state=pre_state,
+            post_state=post_state,
+            result=result,
+            invariant={"expression": inv.expression, "explanation": inv.explanation},
+        )
+        if not holds:
+            violations.append(inv)
+
+    if violations:
+        msgs = "; ".join(f"'{v.expression}'" for v in violations)
+        raise TransitionViolationError(
+            f"Transition postcondition(s) violated: {msgs}"
+        )
+
+    return result
