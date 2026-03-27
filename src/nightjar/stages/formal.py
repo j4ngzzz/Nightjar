@@ -291,6 +291,7 @@ def run_formal(spec: CardSpec, dfy_code: str) -> StageResult:
         )
 
     # Step 2: Write Dafny code to temp file
+    tmp_path: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".dfy", delete=False, encoding="utf-8"
@@ -355,10 +356,11 @@ def run_formal(spec: CardSpec, dfy_code: str) -> StageResult:
 
     finally:
         # Clean up temp file
-        try:
-            Path(tmp_path).unlink(missing_ok=True)
-        except (NameError, OSError):
-            pass
+        if tmp_path is not None:
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 # ─── Dafny Annotation Repair (dafny-annotator greedy pattern [REF-T02]) ──────
