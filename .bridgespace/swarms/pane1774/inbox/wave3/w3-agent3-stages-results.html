@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nightjar Stage Specs — W3-3 Validation</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f1117; color: #e2e8f0; margin: 0; padding: 24px; }
+  h1 { font-size: 1.6rem; font-weight: 700; color: #7dd3fc; margin-bottom: 4px; }
+  .subtitle { font-size: 0.85rem; color: #64748b; margin-bottom: 28px; }
+  .summary { display: flex; gap: 16px; margin-bottom: 28px; }
+  .stat { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 20px; text-align: center; }
+  .stat-num { font-size: 2rem; font-weight: 800; color: #4ade80; }
+  .stat-label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+  .spec-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
+  .spec-card.pass { border-left: 4px solid #4ade80; }
+  .spec-header { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: #243045; }
+  .stage-label { font-size: 0.75rem; font-weight: 700; color: #7dd3fc; background: #1e3a5f; padding: 3px 8px; border-radius: 4px; }
+  .spec-title { font-size: 1rem; font-weight: 600; color: #e2e8f0; flex: 1; }
+  .badge.pass { background: #14532d; color: #4ade80; font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 12px; }
+  .inv-count { font-size: 0.8rem; color: #94a3b8; }
+  .inv-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .inv-table th { background: #161e2e; color: #94a3b8; font-weight: 600; padding: 8px 12px; text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .inv-table td { padding: 8px 12px; border-top: 1px solid #1e293b; color: #cbd5e1; vertical-align: top; }
+  .inv-table tr:hover td { background: #1a2535; }
+  .inv-id { font-family: monospace; color: #7dd3fc; font-size: 0.78rem; white-space: nowrap; }
+  .tier { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; text-align: center; }
+  .tier.property { background: #1e3a5f; color: #7dd3fc; }
+  .tier.formal { background: #3b1f5e; color: #c084fc; }
+  .tier.example { background: #1c3528; color: #4ade80; }
+  .footer { margin-top: 28px; font-size: 0.78rem; color: #475569; text-align: center; }
+</style>
+</head>
+<body>
+<h1>Nightjar Stage Specs — W3-3 Validation</h1>
+<div class="subtitle">Agent W3-3 | 2026-03-27 | 7 specs validated</div>
+<div class="summary">
+  <div class="stat"><div class="stat-num">7</div><div class="stat-label">Specs</div></div>
+  <div class="stat"><div class="stat-num">7</div><div class="stat-label">Passed</div></div>
+  <div class="stat"><div class="stat-num">0</div><div class="stat-label">Failed</div></div>
+  <div class="stat"><div class="stat-num">46</div><div class="stat-label">Invariants</div></div>
+</div>
+
+    <div class="spec-card pass">
+      <div class="spec-header">
+        <span class="stage-label">Stage 0</span>
+        <span class="spec-title">Stage 0 - Pre-flight Verification</span>
+        <span class="badge pass">PASS</span>
+        <span class="inv-count">7 invariants</span>
+      </div>
+      <table class="inv-table">
+        <thead><tr><th>ID</th><th>Tier</th><th>Statement</th></tr></thead>
+        <tbody><tr><td class="inv-id">INV-PRE-01</td><td class="tier property">property</td><td>stage=0 and name='preflight' on every returned StageResult</td></tr><tr><td class="inv-id">INV-PRE-02</td><td class="tier property">property</td><td>status is PASS only when spec file exists, YAML frontmatter is well-formed, required fields card-version and id are pres...</td></tr><tr><td class="inv-id">INV-PRE-03</td><td class="tier property">property</td><td>status is FAIL and errors is non-empty whenever any check fails</td></tr><tr><td class="inv-id">INV-PRE-04</td><td class="tier property">property</td><td>errors list is empty when status is PASS</td></tr><tr><td class="inv-id">INV-PRE-05</td><td class="tier property">property</td><td>dead constraint detection skips invariant statements that are not valid Python expressions without raising an exception</td></tr><tr><td class="inv-id">INV-PRE-06</td><td class="tier property">property</td><td>duration_ms is a non-negative integer reflecting elapsed wall-clock time</td></tr><tr><td class="inv-id">INV-PRE-07</td><td class="tier property">property</td><td>short-circuit: when spec file does not exist, no further checks are run and status is FAIL immediately</td></tr></tbody>
+      </table>
+    </div>
+    <div class="spec-card pass">
+      <div class="spec-header">
+        <span class="stage-label">Stage 1</span>
+        <span class="spec-title">Stage 1 - Dependency Manifest Check</span>
+        <span class="badge pass">PASS</span>
+        <span class="inv-count">6 invariants</span>
+      </div>
+      <table class="inv-table">
+        <thead><tr><th>ID</th><th>Tier</th><th>Statement</th></tr></thead>
+        <tbody><tr><td class="inv-id">INV-DEPS-01</td><td class="tier property">property</td><td>stage=1 and name='deps' on every returned StageResult</td></tr><tr><td class="inv-id">INV-DEPS-02</td><td class="tier property">property</td><td>status is FAIL when any third-party import in the generated code is not present in deps.lock, with one error dict per un...</td></tr><tr><td class="inv-id">INV-DEPS-03</td><td class="tier property">property</td><td>stdlib modules are never flagged as disallowed regardless of deps.lock contents</td></tr><tr><td class="inv-id">INV-DEPS-04</td><td class="tier property">property</td><td>import-name to package-name aliasing is applied before allowlist lookup (e.g., 'yaml' resolves to 'pyyaml')</td></tr><tr><td class="inv-id">INV-DEPS-05</td><td class="tier property">property</td><td>integrity drift (hash changed without version bump) causes FAIL; version-only drift and added/removed packages do not ca...</td></tr><tr><td class="inv-id">INV-DEPS-06</td><td class="tier property">property</td><td>status is FAIL when deps.lock file does not exist, with error message referencing 'nightjar lock'</td></tr></tbody>
+      </table>
+    </div>
+    <div class="spec-card pass">
+      <div class="spec-header">
+        <span class="stage-label">Stage 2</span>
+        <span class="spec-title">Stage 2 - Schema Validation</span>
+        <span class="badge pass">PASS</span>
+        <span class="inv-count">6 invariants</span>
+      </div>
+      <table class="inv-table">
+        <thead><tr><th>ID</th><th>Tier</th><th>Statement</th></tr></thead>
+        <tbody><tr><td class="inv-id">INV-SCH-01</td><td class="tier property">property</td><td>stage=2 and name='schema' on every returned StageResult</td></tr><tr><td class="inv-id">INV-SCH-02</td><td class="tier property">property</td><td>status is PASS when spec.contract.outputs is empty or contains no object-typed outputs with a schema</td></tr><tr><td class="inv-id">INV-SCH-03</td><td class="tier property">property</td><td>status is PASS when at least one object-typed output schema validates output_data successfully via Pydantic model_valida...</td></tr><tr><td class="inv-id">INV-SCH-04</td><td class="tier property">property</td><td>status is FAIL with non-empty errors when all attempted schema validations fail and no schema matched</td></tr><tr><td class="inv-id">INV-SCH-05</td><td class="tier property">property</td><td>Pydantic validation errors are structured as dicts with keys 'message', 'output', 'field', and 'type'</td></tr><tr><td class="inv-id">INV-SCH-06</td><td class="tier property">property</td><td>Pydantic models are built dynamically from ContractOutput schema dicts using create_model; only object-typed outputs wit...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="spec-card pass">
+      <div class="spec-header">
+        <span class="stage-label">Stage 3</span>
+        <span class="spec-title">Stage 3 - Property-Based Testing</span>
+        <span class="badge pass">PASS</span>
+        <span class="inv-count">7 invariants</span>
+      </div>
+      <table class="inv-table">
+        <thead><tr><th>ID</th><th>Tier</th><th>Statement</th></tr></thead>
+        <tbody><tr><td class="inv-id">INV-PBT-01</td><td class="tier property">property</td><td>stage=3 and name='pbt' on every returned StageResult</td></tr><tr><td class="inv-id">INV-PBT-02</td><td class="tier property">property</td><td>status is SKIP when no invariants have tier 'property' or 'formal'</td></tr><tr><td class="inv-id">INV-PBT-03</td><td class="tier property">property</td><td>status is FAIL and counterexample is non-None when at least one invariant produces a property_violation or execution_err...</td></tr><tr><td class="inv-id">INV-PBT-04</td><td class="tier property">property</td><td>status is FAIL with a syntax_error type error when the generated code raises SyntaxError during exec</td></tr><tr><td class="inv-id">INV-PBT-05</td><td class="tier property">property</td><td>NIGHTJAR_TEST_PROFILE=dev uses max_examples=10 and derandomize=True; NIGHTJAR_TEST_PROFILE=ci uses max_examples=200 with...</td></tr><tr><td class="inv-id">INV-PBT-06</td><td class="tier property">property</td><td>NIGHTJAR_CROSSHAIR_BACKEND=1 activates CrossHair SMT backend via hypothesis-crosshair if installed; falls back to random...</td></tr><tr><td class="inv-id">INV-PBT-07</td><td class="tier property">property</td><td>run_pbt_extended uses max_examples=10000 as the graceful degradation fallback when Dafny and CrossHair are unavailable</td></tr></tbody>
+      </table>
+    </div>
+    <div class="spec-card pass">
+      <div class="spec-header">
+        <span class="stage-label">Stage 4</span>
+        <span class="spec-title">Stage 4 - Dafny Formal Verification</span>
+        <span class="badge pass">PASS</span>
+        <span class="inv-count">7 invariants</span>
+      </div>
+      <table class="inv-table">
+        <thead><tr><th>ID</th><th>Tier</th><th>Statement</th></tr></thead>
+        <tbody><tr><td class="inv-id">INV-FORM-01</td><td class="tier property">property</td><td>stage=4 and name='formal' on every returned StageResult</td></tr><tr><td class="inv-id">INV-FORM-02</td><td class="tier property">property</td><td>status is SKIP when no invariants have tier 'formal'</td></tr><tr><td class="inv-id">INV-FORM-03</td><td class="tier property">property</td><td>status is PASS when dafny verify exits with returncode=0 and no structured errors are parsed from stdout+stderr</td></tr><tr><td class="inv-id">INV-FORM-04</td><td class="tier property">property</td><td>status is FAIL with structured errors when dafny verify exits non-zero or produces error-pattern output</td></tr><tr><td class="inv-id">INV-FORM-05</td><td class="tier property">property</td><td>status is TIMEOUT with error type='timeout' when subprocess.TimeoutExpired is raised</td></tr><tr><td class="inv-id">INV-FORM-06</td><td class="tier property">property</td><td>status is FAIL with error type='dafny_not_found' when the dafny binary is not installed</td></tr><tr><td class="inv-id">INV-FORM-07</td><td class="tier property">property</td><td>dafny verify is called with --verification-time-limit, --isolate-assertions, /verifySnapshots:3, --vcsCores, and --progr...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="spec-card pass">
+      <div class="spec-header">
+        <span class="stage-label">Stage 2.5</span>
+        <span class="spec-title">Stage 2.5 - Negation-Proof Spec Validation</span>
+        <span class="badge pass">PASS</span>
+        <span class="inv-count">6 invariants</span>
+      </div>
+      <table class="inv-table">
+        <thead><tr><th>ID</th><th>Tier</th><th>Statement</th></tr></thead>
+        <tbody><tr><td class="inv-id">INV-NEG-01</td><td class="tier property">property</td><td>run_negation_proof returns NegProofResult(weak_specs=[], passed=True) when spec has no formal-tier invariants</td></tr><tr><td class="inv-id">INV-NEG-02</td><td class="tier property">property</td><td>an invariant statement is appended to weak_specs when CrossHair returns returncode=0 for its negated postcondition</td></tr><tr><td class="inv-id">INV-NEG-03</td><td class="tier property">property</td><td>an invariant statement is NOT added to weak_specs when CrossHair returns returncode=1</td></tr><tr><td class="inv-id">INV-NEG-04</td><td class="tier property">property</td><td>FileNotFoundError, TimeoutExpired, and OSError during CrossHair execution are silently caught and the invariant is skipp...</td></tr><tr><td class="inv-id">INV-NEG-05</td><td class="tier property">property</td><td>passed is True if and only if weak_specs is empty</td></tr><tr><td class="inv-id">INV-NEG-06</td><td class="tier property">property</td><td>negate_postcondition wraps the statement as 'not (<statement>)' without any semantic simplification</td></tr></tbody>
+      </table>
+    </div>
+    <div class="spec-card pass">
+      <div class="spec-header">
+        <span class="stage-label">DafnyPro</span>
+        <span class="spec-title">DafnyPro Wrapper - Three-Component Annotation Pipeline</span>
+        <span class="badge pass">PASS</span>
+        <span class="inv-count">7 invariants</span>
+      </div>
+      <table class="inv-table">
+        <thead><tr><th>ID</th><th>Tier</th><th>Statement</th></tr></thead>
+        <tbody><tr><td class="inv-id">INV-DFP-01</td><td class="tier property">property</td><td>check_diff returns False when the annotated program introduces new method/function/lemma/predicate/iterator declarations...</td></tr><tr><td class="inv-id">INV-DFP-02</td><td class="tier property">property</td><td>check_diff returns True only when all non-annotation lines from base appear as a subsequence of non-annotation lines in ...</td></tr><tr><td class="inv-id">INV-DFP-03</td><td class="tier property">property</td><td>prune_invariants removes lines matching 'requires true', 'ensures true', and 'invariant true' patterns (with optional in...</td></tr><tr><td class="inv-id">INV-DFP-04</td><td class="tier property">property</td><td>prune_invariants removes duplicate annotation lines (same line content appearing more than once)</td></tr><tr><td class="inv-id">INV-DFP-05</td><td class="tier property">property</td><td>augment_hints returns dfy_code unchanged when errors is empty</td></tr><tr><td class="inv-id">INV-DFP-06</td><td class="tier property">property</td><td>apply returns DafnyProResult(diff_ok=False) immediately when check_diff fails, without calling prune_invariants or augme...</td></tr><tr><td class="inv-id">INV-DFP-07</td><td class="tier property">property</td><td>apply pipeline order is: check_diff → prune_invariants → augment_hints, producing pruned_code and augmented_code in Dafn...</td></tr></tbody>
+      </table>
+    </div>
+<div class="footer">All YAML frontmatter valid &bull; All required fields present &bull; All invariant tiers valid &bull; Wave 3 Agent W3-3</div>
+</body>
+</html>
