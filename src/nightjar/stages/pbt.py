@@ -151,8 +151,6 @@ def _run_single_invariant(
 
         except AssertionError:
             raise  # Let Hypothesis catch assertion failures
-        except (ValueError, TypeError):
-            pass  # Expected errors from constraint violations are OK
         except Exception as e:
             raise AssertionError(
                 f"Invariant {invariant.id} violated: {e}"
