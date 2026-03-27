@@ -94,7 +94,7 @@ def generate_icontract(
             temperature=_GENERATION_TEMPERATURE,
             max_tokens=_MAX_TOKENS,
         )
-        raw = response.choices[0].message.content.strip()
+        raw = (response.choices[0].message.content or "").strip()
     except Exception as e:
         # LLM unavailable — return safe commented stub
         return _fallback_decorator(candidate, reason=str(e))

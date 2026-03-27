@@ -86,7 +86,7 @@ def _proposer_call(expression: str, model: str) -> str:
             temperature=_TEMPERATURE,
             max_tokens=_MAX_TOKENS,
         )
-        return resp.choices[0].message.content.strip()
+        return (resp.choices[0].message.content or "").strip()
     except Exception as e:
         return f"(proposer error: {e})"
 
@@ -108,7 +108,7 @@ def _skeptic_call(expression: str, defence: str, model: str) -> str:
             temperature=_TEMPERATURE,
             max_tokens=_MAX_TOKENS,
         )
-        return resp.choices[0].message.content.strip()
+        return (resp.choices[0].message.content or "").strip()
     except Exception as e:
         return f"(skeptic error: {e})"
 

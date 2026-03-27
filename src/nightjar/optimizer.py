@@ -92,7 +92,7 @@ def _call_llm_for_variation(
         max_tokens=2048,
     )
 
-    return response.choices[0].message.content.strip()
+    return (response.choices[0].message.content or "").strip()
 
 
 class PromptOptimizer:

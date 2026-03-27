@@ -143,7 +143,7 @@ def _llm_lift(assert_expr: str, model: str) -> str:
             temperature=_GENERATION_TEMPERATURE,
             max_tokens=_MAX_TOKENS,
         )
-        return response.choices[0].message.content.strip()
+        return (response.choices[0].message.content or "").strip()
     except Exception:
         # Graceful fallback — never block the pipeline
         return f"expression holds: {assert_expr}"

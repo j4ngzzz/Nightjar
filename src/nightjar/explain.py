@@ -429,7 +429,7 @@ def explain_with_llm(explanation: "ExplainOutput") -> str:
             max_tokens=512,
             temperature=0.2,
         )
-        return response.choices[0].message.content.strip()
+        return (response.choices[0].message.content or "").strip()
 
     except Exception:  # noqa: BLE001
         # Graceful fallback: return heuristic suggestion

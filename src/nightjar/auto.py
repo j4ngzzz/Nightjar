@@ -238,7 +238,7 @@ def _generate_candidates(intent: NLIntent, model: str) -> list[dict]:
             temperature=_GENERATION_TEMPERATURE,
             max_tokens=_CANDIDATE_MAX_TOKENS,
         )
-        raw = response.choices[0].message.content.strip()
+        raw = (response.choices[0].message.content or "").strip()
     except Exception as e:
         click.echo(
             f"Warning: LLM candidate generation failed ({e}). "
