@@ -93,15 +93,37 @@ def _filter_pbt_invariants(invariants: list[Invariant]) -> list[Invariant]:
     ]
 
 
+class _PbtLoadError(Exception):
+    """Raised when source code cannot be exec'd into a PBT namespace.
+
+    This covers relative imports, missing dependencies, and other runtime
+    errors that make the code unsuitable for PBT — but do NOT indicate the
+    code is wrong.  The pipeline should SKIP Stage 3 in this case.
+    """
+
+
 def _build_test_environment(code: str) -> dict[str, Any]:
     """Execute generated code in an isolated namespace and return it.
 
     Security note: This executes code in a restricted dict namespace,
     not in the module's globals. The generated code is already verified
     by Stages 0-2 before reaching Stage 3.
+
+    Raises:
+        SyntaxError: code has a syntax error — caller should FAIL.
+        _PbtLoadError: code exec'd but raised a non-syntax error (e.g.
+            relative imports, missing stdlib symbol) — caller should SKIP.
     """
     namespace: dict[str, Any] = {"__builtins__": __builtins__}
-    exec(compile(code, "<generated>", "exec"), namespace)  # noqa: S102
+    try:
+        exec(compile(code, "<generated>", "exec"), namespace)  # noqa: S102
+    except SyntaxError:
+        raise  # Propagate as-is so caller can FAIL with a clear message
+    except Exception as e:
+        raise _PbtLoadError(
+            f"Code cannot be loaded for PBT (likely relative imports or "
+            f"missing runtime dependencies): {e}"
+        ) from e
     return namespace
 
 
@@ -110,6 +132,7 @@ def _run_single_invariant(
     code: str,
     env: dict[str, Any],
     pbt_settings: settings = NIGHTJAR_PBT_SETTINGS,
+    func: Any = None,
 ) -> dict[str, Any] | None:
     """Run PBT for a single invariant against the generated code.
 
@@ -127,6 +150,8 @@ def _run_single_invariant(
     Args:
         pbt_settings: Hypothesis settings to apply (default: NIGHTJAR_PBT_SETTINGS).
                       Pass NIGHTJAR_PBT_EXTENDED_SETTINGS for 10K+ examples.
+        func: Pre-resolved callable to test.  If None, falls back to
+              :func:`_find_testable_function` (legacy path, no spec hint).
     """
     statement = invariant.statement
     error_result: dict[str, Any] | None = None
@@ -138,13 +163,13 @@ def _run_single_invariant(
     def pbt_test(x: int) -> None:
         nonlocal error_result
         try:
-            # Execute the function from generated code
-            # Find callable functions in the environment
-            func = _find_testable_function(env)
-            if func is None:
+            # Use the pre-resolved function if provided; fall back to
+            # discovery for backwards compatibility.
+            resolved = func if func is not None else _find_testable_function(env)
+            if resolved is None:
                 return
 
-            result = func(x)
+            result = resolved(x)
 
             # Evaluate the invariant assertion
             _assert_invariant(statement, x, result)
@@ -177,17 +202,90 @@ def _run_single_invariant(
         }
 
 
-def _find_testable_function(env: dict[str, Any]) -> Any | None:
-    """Find the first callable function in the generated code namespace.
+# Common stdlib names that appear in a namespace after exec() due to
+# imports like `from dataclasses import dataclass, field` or
+# `from typing import Optional, Dict, List`.  These must NOT be mistaken
+# for the function-under-test.
+_STDLIB_IMPORT_NAMES: frozenset[str] = frozenset({
+    # dataclasses
+    "dataclass", "field", "fields", "asdict", "astuple", "make_dataclass",
+    "replace", "is_dataclass",
+    # typing / type aliases
+    "Optional", "Union", "Any", "Dict", "List", "Set", "Tuple", "Type",
+    "Callable", "Iterator", "Generator", "ClassVar", "Final",
+    "TypeVar", "Generic", "Protocol", "overload", "cast",
+    # enum
+    "Enum", "IntEnum", "Flag", "IntFlag", "auto",
+    # pathlib
+    "Path", "PurePath", "PosixPath", "WindowsPath",
+    # abc
+    "ABC", "ABCMeta", "abstractmethod",
+    # functools
+    "wraps", "lru_cache", "cache", "partial", "reduce",
+    # contextlib
+    "contextmanager", "suppress",
+    # collections
+    "namedtuple", "defaultdict", "OrderedDict", "Counter", "deque",
+    # other builtins that show up as callables
+    "property", "classmethod", "staticmethod",
+})
 
-    Skips builtins and dunder names. Returns None if no function found.
+
+def _find_testable_function(
+    env: dict[str, Any],
+    spec_id: str | None = None,
+) -> Any | None:
+    """Find the best callable function in the generated code namespace.
+
+    Selection strategy (in priority order):
+    1. A function whose name matches *spec_id* (the spec's ``id`` field).
+    2. A function that was actually defined in the exec'd source, identified
+       by having ``__module__ == "<generated>"`` or ``__qualname__`` without
+       dots (i.e. a top-level def, not a method or closure from an import).
+    3. Any remaining non-dunder callable that is not a known stdlib import.
+
+    Returns None if no suitable function is found; the caller then skips PBT.
+
+    Args:
+        env:     The namespace dict returned by :func:`_build_test_environment`.
+        spec_id: Optional ``CardSpec.id`` value used as a hint for the
+                 primary function name.
     """
+    candidates: list[Any] = []
+
     for name, obj in env.items():
+        # Skip dunder / private names
         if name.startswith("_"):
             continue
-        if callable(obj) and not isinstance(obj, type):
+        # Only plain functions (not classes, not module-level type aliases)
+        if not callable(obj) or isinstance(obj, type):
+            continue
+        # Skip well-known stdlib imports that pollute the namespace
+        if name in _STDLIB_IMPORT_NAMES:
+            continue
+
+        # Priority 1: exact match with spec id (underscores ↔ hyphens)
+        normalised_name = name.replace("_", "-").lower()
+        normalised_id = (spec_id or "").replace("_", "-").lower()
+        if normalised_id and normalised_name == normalised_id:
             return obj
-    return None
+
+        candidates.append((name, obj))
+
+    if not candidates:
+        return None
+
+    # Priority 2: functions actually defined in the exec'd code
+    # `compile(..., "<generated>", ...)` gives them __code__.co_filename == "<generated>"
+    defined_here = [
+        (name, obj) for name, obj in candidates
+        if getattr(getattr(obj, "__code__", None), "co_filename", None) == "<generated>"
+    ]
+    if defined_here:
+        return defined_here[0][1]
+
+    # Priority 3: first remaining candidate (last resort)
+    return candidates[0][1]
 
 
 def _assert_invariant(statement: str, input_val: Any, result: Any) -> None:
@@ -264,10 +362,46 @@ def _run_pbt_core(
                 "error": f"Generated code has syntax error: {e}",
             }],
         )
+    except _PbtLoadError as e:
+        # Code has relative imports or other exec-time issues — not a code
+        # defect, just not PBT-testable in isolation.  SKIP gracefully.
+        duration = int((time.monotonic() - start) * 1000)
+        return StageResult(
+            stage=3,
+            name="pbt",
+            status=VerifyStatus.SKIP,
+            duration_ms=duration,
+            errors=[{
+                "type": "load_error",
+                "error": str(e),
+            }],
+        )
+
+    # Resolve the function-under-test once, using the spec id as a hint so
+    # that stdlib names imported into the namespace are not mistaken for it.
+    func = _find_testable_function(env, spec_id=spec.id)
+    if func is None:
+        duration = int((time.monotonic() - start) * 1000)
+        return StageResult(
+            stage=3,
+            name="pbt",
+            status=VerifyStatus.SKIP,
+            duration_ms=duration,
+            errors=[{
+                "type": "no_testable_function",
+                "error": (
+                    "No testable function found in generated code — "
+                    "namespace contains only stdlib imports or type aliases. "
+                    "PBT is not applicable to this module."
+                ),
+            }],
+        )
 
     errors: list[dict] = []
     for inv in pbt_invariants:
-        error = _run_single_invariant(inv, code, env, pbt_settings=pbt_settings)
+        error = _run_single_invariant(
+            inv, code, env, pbt_settings=pbt_settings, func=func,
+        )
         if error is not None:
             errors.append(error)
 
