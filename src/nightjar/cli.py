@@ -23,6 +23,7 @@ Exit Codes:
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -142,13 +143,52 @@ def _run_verify(
         click.echo("Error: verification pipeline not yet available", err=True)
         raise SystemExit(EXIT_CONFIG_ERROR)
 
-    stages_to_run = None
-    if stage is not None:
-        stages_to_run = [stage]
-    elif fast:
-        stages_to_run = [0, 1, 2, 3]
+    # Parse the spec file into a CardSpec object
+    from nightjar.parser import parse_card_spec
+    spec = parse_card_spec(contract_path)
 
-    return run_pipeline(contract_path, stages=stages_to_run)
+    # Locate generated code: look for <spec_id>.py or <spec_id>.dfy in audit dir or cwd
+    import os
+    code = ""
+    audit_dir = config.get("paths", {}).get("audit", ".card/audit/")
+    for ext in (".py", ".dfy"):
+        candidate = os.path.join(audit_dir, f"{spec.id}{ext}")
+        if os.path.exists(candidate):
+            with open(candidate, encoding="utf-8") as f:
+                code = f.read()
+            break
+
+    result = run_pipeline(spec, code, spec_path=contract_path)
+
+    # Filter stages if --stage N or --fast was specified
+    if stage is not None:
+        from nightjar.types import VerifyStatus
+        filtered = [s for s in result.stages if s.stage == stage]
+        if filtered:
+            verified = all(
+                s.status in (VerifyStatus.PASS, VerifyStatus.SKIP) for s in filtered
+            )
+            result = result.__class__(
+                verified=verified,
+                stages=filtered,
+                total_duration_ms=result.total_duration_ms,
+                retry_count=result.retry_count,
+            )
+    elif fast:
+        from nightjar.types import VerifyStatus
+        filtered = [s for s in result.stages if s.stage <= 3]
+        if filtered:
+            verified = all(
+                s.status in (VerifyStatus.PASS, VerifyStatus.SKIP) for s in filtered
+            )
+            result = result.__class__(
+                verified=verified,
+                stages=filtered,
+                total_duration_ms=result.total_duration_ms,
+                retry_count=result.retry_count,
+            )
+
+    return result
 
 
 def _run_generate(
@@ -174,7 +214,7 @@ def _run_generate(
         import os
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, f"{spec.id}.dfy")
-        with open(output_path, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(result.dafny_code)
         click.echo(f"Generated: {output_path}")
 
@@ -298,11 +338,39 @@ def init(ctx: click.Context, module_name: str, output: str) -> None:
     Creates .card/<module_name>.card.md with the standard Nightjar spec format:
     YAML frontmatter + Markdown body [REF-T24, REF-T25].
     """
+    # Validate module name: must be non-empty and match [a-zA-Z][a-zA-Z0-9_-]*
+    if not module_name:
+        click.echo("Error: module name cannot be empty.", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+    if not re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*$', module_name):
+        click.echo(
+            f"Error: invalid module name '{module_name}'. "
+            "Must start with a letter and contain only letters, digits, hyphens, or underscores.",
+            err=True,
+        )
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
     output_path = Path(output)
     card_dir = output_path / ".card"
     card_dir.mkdir(parents=True, exist_ok=True)
 
     spec_path = card_dir / f"{module_name}.card.md"
+
+    # Security: verify the resolved path is inside the .card/ directory
+    try:
+        resolved_spec = spec_path.resolve()
+        resolved_card = card_dir.resolve()
+        resolved_spec.relative_to(resolved_card)
+    except ValueError:
+        click.echo(
+            f"Error: module name '{module_name}' would create a file outside .card/ directory.",
+            err=True,
+        )
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
     if spec_path.exists():
         click.echo(f"Error: {spec_path} already exists. Use --force to overwrite.", err=True)
         ctx.exit(EXIT_CONFIG_ERROR)
@@ -380,9 +448,9 @@ def generate(ctx: click.Context, contract: str, model: Optional[str], output: st
 
 @main.command()
 @click.option("--spec", "--contract", "-s", "-c", "contract", required=True, help="Path to .card.md spec.")
-@click.option("--target", "-t", default=None,
+@click.option("--target", "-t", default="py",
               type=click.Choice(["py", "js", "ts", "go", "java", "cs"]),
-              help="Compile target language (default: from config).")
+              help="Compile target language (default: py).")
 @click.option("--model", default=None, help="LLM model.")
 @click.option("--retries", default=None, type=int, help="Max repair attempts (default: from config).")
 @click.option("--output", "-o", default=".", help="Output directory for artifacts.")
@@ -705,6 +773,12 @@ def badge(ctx: click.Context, fmt: str, report: str) -> None:
     """
     try:
         from nightjar.badge import generate_badge_url_from_report, generate_badge_markdown
+        import os as _os
+
+        if not _os.path.exists(report):
+            click.echo("No verification report found. Run `nightjar verify` first.", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
 
         badge_url = generate_badge_url_from_report(report)
 

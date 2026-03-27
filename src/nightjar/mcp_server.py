@@ -38,8 +38,8 @@ async def _run_verification(
 ) -> VerifyResult:
     """Run the verification pipeline.
 
-    This is a placeholder that will be replaced with the actual verifier
-    once src/nightjar/verifier.py is implemented by Builder 5 (T7).
+    Parses the .card.md spec, reads the code file, and delegates to
+    verifier.run_pipeline() [REF-T01, REF-C02].
 
     Args:
         spec_path: Path to .card.md spec file.
@@ -49,12 +49,48 @@ async def _run_verification(
     Returns:
         VerifyResult from the verification pipeline.
     """
-    # TODO: Import and call verifier.run_pipeline() once T7 is complete.
-    # For now, this function is always mocked in tests.
-    raise NotImplementedError(
-        "Verification pipeline not yet integrated. "
-        "Awaiting T7 (verifier.py) completion."
-    )
+    from nightjar.parser import parse_card_spec
+    from nightjar.verifier import run_pipeline
+
+    # Parse the spec file
+    spec = parse_card_spec(spec_path)
+
+    # Read the code file, or use empty string if it doesn't exist yet
+    code = ""
+    if os.path.exists(code_path):
+        with open(code_path, encoding="utf-8") as f:
+            code = f.read()
+
+    # Run the full pipeline
+    result = run_pipeline(spec, code, spec_path=spec_path)
+
+    # Filter stages based on the 'stages' parameter
+    if stages == "fast":
+        filtered = [s for s in result.stages if s.stage <= 3]
+        if filtered:
+            verified = all(
+                s.status in (VerifyStatus.PASS, VerifyStatus.SKIP) for s in filtered
+            )
+            result = VerifyResult(
+                verified=verified,
+                stages=filtered,
+                total_duration_ms=result.total_duration_ms,
+                retry_count=result.retry_count,
+            )
+    elif stages == "formal":
+        filtered = [s for s in result.stages if s.stage == 4]
+        if filtered:
+            verified = all(
+                s.status in (VerifyStatus.PASS, VerifyStatus.SKIP) for s in filtered
+            )
+            result = VerifyResult(
+                verified=verified,
+                stages=filtered,
+                total_duration_ms=result.total_duration_ms,
+                retry_count=result.retry_count,
+            )
+
+    return result
 
 
 def _extract_violations(result: VerifyResult) -> list[dict[str, Any]]:

@@ -100,7 +100,7 @@ def _run_stage_0(spec: CardSpec, code: str, spec_path: str = "") -> StageResult:
         return run_preflight(spec_path)
     # If no spec file path, write code to temp and validate AST only
     if code:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
             f.write(code)
             tmp = f.name
         try:
@@ -120,7 +120,7 @@ def _run_stage_1(spec: CardSpec, code: str) -> StageResult:
     from nightjar.stages.deps import run_deps_check
     import tempfile, os
     # Write code to temp file for import analysis
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
         f.write(code)
         code_path = f.name
     try:
@@ -233,7 +233,7 @@ def _run_crosshair_symbolic(spec: CardSpec, code: str) -> StageResult:
     import time as _time
 
     start = _time.monotonic()
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
         f.write(code)
         tmp_path = f.name
     try:
@@ -384,6 +384,9 @@ def run_pipeline(
     stages.append(result_4)
     display.on_stage_complete(result_4)
 
+    # Sort stages by stage number so list is always in sequential order (0,1,2,3,...)
+    stages.sort(key=lambda s: s.stage)
+
     verified = _stage_ok(result_4)
     result = _build_result(stages, start, verified=verified)
     display.on_pipeline_complete(result)
@@ -444,7 +447,7 @@ def _run_crosshair_fallback(spec: CardSpec, code: str) -> StageResult:
     start = _time.monotonic()
 
     # Write code to temp file for CrossHair analysis
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
         f.write(code)
         tmp_path = f.name
 
@@ -738,6 +741,10 @@ def _build_incremental_noop_result(start: float) -> VerifyResult:
         StageResult(stage=i, name=name, status=VerifyStatus.PASS, duration_ms=0)
         for i, name in enumerate(["preflight", "deps", "schema", "pbt", "formal"])
     ]
+    # Include negation_proof (stage 5) to match run_pipeline() output — Bug 10
+    synthetic_stages.append(
+        StageResult(stage=5, name="negation_proof", status=VerifyStatus.SKIP, duration_ms=0)
+    )
     return _build_result(synthetic_stages, start, verified=True)
 
 
