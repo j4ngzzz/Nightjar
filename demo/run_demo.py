@@ -1,6 +1,6 @@
-"""CARD automated demo script.
+"""Nightjar automated demo script.
 
-Demonstrates the full CARD pipeline: init -> build -> verify -> explain.
+Demonstrates the full Nightjar pipeline: init -> build -> verify -> explain.
 Shows model swapping, failure handling, and cost tracking.
 
 References:
@@ -36,7 +36,7 @@ except ImportError:
 # ── Constants ─────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONTRACTD_CMD = "contractd"
+CONTRACTD_CMD = "nightjar"
 
 # Approximate per-pipeline costs (USD) for common models.
 # These are estimates based on typical spec sizes (~2k tokens in, ~4k out).
@@ -165,7 +165,7 @@ def _print_header(console):
         console.print()
         console.print(
             Panel(
-                "[bold cyan]CARD Demo[/bold cyan]\n"
+                "[bold cyan]Nightjar Demo[/bold cyan]\n"
                 "Contract-Anchored Regenerative Development\n\n"
                 "[dim]Verification layer for AI-generated code[/dim]",
                 border_style="cyan",
@@ -175,7 +175,7 @@ def _print_header(console):
         console.print()
     else:
         print("=" * 60)
-        print("  CARD Demo")
+        print("  Nightjar Demo")
         print("  Contract-Anchored Regenerative Development")
         print("  Verification layer for AI-generated code")
         print("=" * 60)
@@ -303,7 +303,7 @@ def _run_cmd(
 
 
 def step_init(console, tmp_dir: str, *, dry_run: bool, no_llm: bool) -> str | None:
-    """Step 1: Scaffold a .card.md spec with contractd init.
+    """Step 1: Scaffold a .card.md spec with nightjar init.
 
     References:
         [REF-T17] Click CLI -- init command
@@ -355,7 +355,7 @@ def step_build(
     dry_run: bool,
     no_llm: bool,
 ) -> bool:
-    """Step 3: Run contractd build to generate + verify code.
+    """Step 3: Run nightjar build to generate + verify code.
 
     When --no-llm is set or no API key is present, uses simulated output
     to demonstrate what the pipeline looks like.
@@ -369,7 +369,7 @@ def step_build(
     if no_llm or not _has_llm_key():
         _print_info(console, "No LLM API key detected (or --no-llm). Using simulated output.")
         _print_info(console, "In production, this calls: Analyst -> Formalizer -> Coder [REF-C03]")
-        _print_command(console, f"contractd build --contract {spec_path or '<spec>'} --target py")
+        _print_command(console, f"nightjar build --contract {spec_path or '<spec>'} --target py")
         _print_info(console, "(simulated output)")
         _print_output(console, SIMULATED_BUILD_SUCCESS)
         _print_success(console, "VERIFIED -- all 5 stages passed")
@@ -458,7 +458,7 @@ def step_break_invariant(
         _print_info(console, "Running build with broken spec...")
         _print_command(
             console,
-            f"contractd build --contract {spec_path or '<spec>'} --target py",
+            f"nightjar build --contract {spec_path or '<spec>'} --target py",
         )
         if not dry_run:
             _print_info(console, "(simulated output)")
@@ -492,7 +492,7 @@ def step_break_invariant(
 def step_model_swap(console, *, dry_run: bool, no_llm: bool):
     """Step 6: Demonstrate model swapping via NIGHTJAR_MODEL env var.
 
-    Shows that CARD is model-agnostic -- any litellm-supported model works.
+    Shows that Nightjar is model-agnostic -- any litellm-supported model works.
     The verification pipeline ensures outputs satisfy invariants regardless
     of which model generated the code.
 
@@ -523,7 +523,7 @@ def step_model_swap(console, *, dry_run: bool, no_llm: bool):
     _print_info(console, "Example: switch to DeepSeek for 10x cost savings:")
     _print_command(
         console,
-        'NIGHTJAR_MODEL=deepseek/deepseek-chat contractd build --contract .card/payment.card.md --target py',
+        'NIGHTJAR_MODEL=deepseek/deepseek-chat nightjar build --contract .card/payment.card.md --target py',
     )
     _print_info(console, "Different models produce different code, but the verification")
     _print_info(console, "pipeline ensures all outputs satisfy the same invariants.")
@@ -536,7 +536,7 @@ def step_explain(
     dry_run: bool,
     no_llm: bool,
 ):
-    """Step 7: Run contractd explain on the failure.
+    """Step 7: Run nightjar explain on the failure.
 
     Shows human-readable failure explanation with counterexamples
     and fix suggestions.
@@ -550,7 +550,7 @@ def step_explain(
     if no_llm or not _has_llm_key() or dry_run:
         _print_command(
             console,
-            f"contractd explain --contract {broken_spec or '<spec>'}",
+            f"nightjar explain --contract {broken_spec or '<spec>'}",
         )
         if not dry_run:
             _print_info(console, "(simulated output)")
@@ -648,7 +648,7 @@ def _has_llm_key() -> bool:
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for the demo script."""
     parser = argparse.ArgumentParser(
-        description="CARD Demo -- demonstrates the full verification pipeline.",
+        description="Nightjar Demo -- demonstrates the full verification pipeline.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"

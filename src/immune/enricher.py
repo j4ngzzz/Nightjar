@@ -1,4 +1,4 @@
-"""LLM-driven invariant enrichment for CARD's immune system.
+"""LLM-driven invariant enrichment for Nightjar's immune system.
 
 Takes raw Daikon-mined invariants, function signatures, and error traces,
 then uses an LLM (via litellm) to generate semantically richer Python

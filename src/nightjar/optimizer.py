@@ -1,4 +1,4 @@
-"""DSPy SIMBA-inspired prompt optimization for the CARD pipeline.
+"""DSPy SIMBA-inspired prompt optimization for the Nightjar pipeline.
 
 Optimizes Analyst/Formalizer/Coder prompts by generating variations
 and evaluating them against the verification pass rate metric from

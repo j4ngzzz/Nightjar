@@ -294,7 +294,7 @@ def main(ctx: click.Context) -> None:
 def init(ctx: click.Context, module_name: str, output: str) -> None:
     """Scaffold a .card.md spec for MODULE_NAME.
 
-    Creates .card/<module_name>.card.md with the standard CARD format:
+    Creates .card/<module_name>.card.md with the standard Nightjar spec format:
     YAML frontmatter + Markdown body [REF-T24, REF-T25].
     """
     output_path = Path(output)

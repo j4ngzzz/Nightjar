@@ -1,6 +1,6 @@
 """Verification pipeline orchestrator.
 
-Runs the 5-stage CARD verification pipeline in order:
+Runs the 5-stage Nightjar verification pipeline in order:
   Stage 0 → Stage 1 → (Stage 2 ∥ Stage 3) → Stage 4
 
 Short-circuits on failure at any sequential stage. Stages 2 and 3 run

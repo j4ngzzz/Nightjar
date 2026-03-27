@@ -142,7 +142,7 @@ def run_analyst(spec: CardSpec, model: str | None = None) -> str:
     spec_context = _build_spec_context(spec)
 
     system_prompt = (
-        "You are a requirements analyst for the CARD verification system. "
+        "You are a requirements analyst for the Nightjar verification system. "
         "Your role is to analyze a module specification and produce a structured "
         "requirements analysis that identifies:\n"
         "1. Core functional requirements\n"
@@ -208,7 +208,7 @@ def run_formalizer(spec: CardSpec, analyst_output: str, model: str | None = None
     spec_context = _build_spec_context(spec)
 
     system_prompt = (
-        "You are a formal methods engineer for the CARD verification system. "
+        "You are a formal methods engineer for the Nightjar verification system. "
         "Your role is to translate requirements into a Dafny module with formal "
         "specifications. You MUST:\n"
         "1. Define method signatures matching the contract inputs/outputs\n"
@@ -271,7 +271,7 @@ def run_coder(spec: CardSpec, formalizer_output: str, model: str | None = None) 
     spec_context = _build_spec_context(spec)
 
     system_prompt = (
-        "You are a Dafny programmer for the CARD verification system. "
+        "You are a Dafny programmer for the Nightjar verification system. "
         "Your role is to complete a Dafny module implementation so that it "
         "satisfies ALL formal specifications (requires/ensures/invariants). "
         "You MUST:\n"

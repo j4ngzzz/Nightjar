@@ -1,4 +1,4 @@
-"""MCP server for CARD — exposes verification tools to AI coding assistants.
+"""MCP server for Nightjar — exposes verification tools to AI coding assistants.
 
 Protocol: [REF-T18] Model Context Protocol.
 Tools defined in docs/ARCHITECTURE.md Section 7:
@@ -122,7 +122,7 @@ async def handle_verify_contract(
     code_path: str,
     stages: str = "all",
 ) -> str:
-    """Run CARD verification pipeline on generated code against a .card.md spec.
+    """Run Nightjar verification pipeline on generated code against a .card.md spec.
 
     MCP tool 1 of 3 — see ARCHITECTURE.md Section 7.
 
@@ -209,7 +209,7 @@ async def handle_suggest_fix(
         model=model,
         messages=[
             {"role": "system", "content": (
-                "You are a code repair assistant for the CARD verification system. "
+                "You are a code repair assistant for the Nightjar verification system. "
                 "Given a verification violation, suggest a minimal code fix."
             )},
             {"role": "user", "content": prompt},
@@ -232,7 +232,7 @@ async def handle_suggest_fix(
 
 
 def create_mcp_server() -> FastMCP:
-    """Create and configure the CARD MCP server with 3 tools.
+    """Create and configure the Nightjar MCP server with 3 tools.
 
     Tools follow the schemas defined in ARCHITECTURE.md Section 7 [REF-T18].
 
@@ -247,7 +247,7 @@ def create_mcp_server() -> FastMCP:
         code_path: str,
         stages: str = "all",
     ) -> str:
-        """Run CARD verification pipeline on generated code against a .card.md spec.
+        """Run Nightjar verification pipeline on generated code against a .card.md spec.
 
         Args:
             spec_path: Path to .card.md file.

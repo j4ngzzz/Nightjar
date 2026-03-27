@@ -1,4 +1,4 @@
-"""Configuration loader for CARD.
+"""Configuration loader for Nightjar.
 
 Loads .env for API keys (via python-dotenv) and nightjar.toml for
 project settings. Provides model resolution with precedence:

@@ -2,7 +2,7 @@
 
 When pattern confidence > 0.95 across 50+ tenants (DP-protected count),
 the pattern is promoted to UNIVERSAL status. Universal invariants are
-applied to all new CARD builds regardless of whether that specific
+applied to all new Nightjar builds regardless of whether that specific
 tenant experienced the failure.
 
 This is the network effect: one customer's bug immunizes all.

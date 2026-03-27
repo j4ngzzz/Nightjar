@@ -1,4 +1,4 @@
-"""Shared types for CARD. All builders import from here.
+"""Shared types for Nightjar. All builders import from here.
 
 DO NOT modify without Coordinator approval — this is the shared interface.
 

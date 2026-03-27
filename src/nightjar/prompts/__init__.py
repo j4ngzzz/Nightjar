@@ -1,4 +1,4 @@
-"""Versioned prompt templates for the CARD generation pipeline.
+"""Versioned prompt templates for the Nightjar generation pipeline.
 
 Externalizes all LLM prompts into versioned, file-backed templates with
 performance metadata (version, pass_rate, last_optimized). The generator

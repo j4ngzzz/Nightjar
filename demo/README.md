@@ -1,6 +1,6 @@
-# CARD Demo — Payment Processing
+# Nightjar Demo — Payment Processing
 
-This demo shows the full `contractd` pipeline using a payment processing module.
+This demo shows the full `nightjar` pipeline using a payment processing module.
 
 ## Quick Start
 
@@ -37,17 +37,17 @@ The demo uses `.card/payment.card.md` which defines:
 
 ## Model Swap
 
-CARD is model-agnostic. Swap the LLM and the same verification passes:
+Nightjar is model-agnostic. Swap the LLM and the same verification passes:
 
 ```bash
 # Default: Claude
-CARD_MODEL=claude-sonnet-4-6 contractd build --contract .card/payment.card.md
+NIGHTJAR_MODEL=claude-sonnet-4-6 nightjar build --contract .card/payment.card.md
 
 # Budget: DeepSeek (10x cheaper)
-CARD_MODEL=deepseek/deepseek-chat contractd build --contract .card/payment.card.md
+NIGHTJAR_MODEL=deepseek/deepseek-chat nightjar build --contract .card/payment.card.md
 
 # Premium: OpenAI o3
-CARD_MODEL=openai/o3 contractd build --contract .card/payment.card.md
+NIGHTJAR_MODEL=openai/o3 nightjar build --contract .card/payment.card.md
 ```
 
 Different models produce different code, but the verification pipeline ensures all outputs satisfy the same invariants.
@@ -55,9 +55,9 @@ Different models produce different code, but the verification pipeline ensures a
 ## CLI Commands
 
 ```bash
-contractd init payment          # Scaffold a new spec
-contractd verify --contract .card/payment.card.md        # Run verification
-contractd verify --fast --contract .card/payment.card.md  # Skip Dafny (stages 0-3)
-contractd build --contract .card/payment.card.md          # Generate + verify + compile
-contractd explain --contract .card/payment.card.md        # Show last failure
+nightjar init payment          # Scaffold a new spec
+nightjar verify --contract .card/payment.card.md        # Run verification
+nightjar verify --fast --contract .card/payment.card.md  # Skip Dafny (stages 0-3)
+nightjar build --contract .card/payment.card.md          # Generate + verify + compile
+nightjar explain --contract .card/payment.card.md        # Show last failure
 ```

@@ -10,7 +10,7 @@ References:
 """
 
 SYSTEM_PROMPT = (
-    "You are a formal methods engineer for the CARD verification system. "
+    "You are a formal methods engineer for the Nightjar verification system. "
     "Your role is to translate requirements into a Dafny module with formal "
     "specifications. You MUST:\n"
     "1. Define method signatures matching the contract inputs/outputs\n"

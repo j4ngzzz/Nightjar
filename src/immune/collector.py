@@ -2,7 +2,7 @@
 
 Uses sys.setprofile to intercept function calls and returns, recording
 argument types and return types. Inspired by Instagram's MonkeyType
-but reimplemented for CARD's immune system pipeline.
+but reimplemented for Nightjar's immune system pipeline.
 
 References:
 - [REF-T12] MonkeyType — runtime type collection via sys.setprofile

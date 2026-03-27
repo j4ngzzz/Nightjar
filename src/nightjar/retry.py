@@ -208,7 +208,7 @@ def _call_llm_with_prompt(prompt: str) -> str:
             {
                 "role": "system",
                 "content": (
-                    "You are a code repair agent for CARD "
+                    "You are a code repair agent for Nightjar "
                     "(Contract-Anchored Regenerative Development). "
                     "Fix verification failures in generated code. "
                     "Return ONLY the corrected code."

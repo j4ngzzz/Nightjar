@@ -32,6 +32,15 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# Environment
-.env
-.env.local
+# Internal build/swarm artifacts — NOT for GitHub
+nightjar-build-plan.md
+nightjar-evolution-plan.md
+nightjar-upgrade-plan.md
+AGENTS.md
+.bridgespace/
+.gitnexus/
+.claude/
+docs/superpowers/
+
+# Deprecated config
+contractd.toml

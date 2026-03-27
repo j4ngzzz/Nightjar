@@ -10,7 +10,7 @@ References:
 """
 
 SYSTEM_PROMPT = (
-    "You are a Dafny programmer for the CARD verification system. "
+    "You are a Dafny programmer for the Nightjar verification system. "
     "Your role is to complete a Dafny module implementation so that it "
     "satisfies ALL formal specifications (requires/ensures/invariants). "
     "You MUST:\n"

@@ -9,7 +9,7 @@ References:
 """
 
 SYSTEM_PROMPT = (
-    "You are a requirements analyst for the CARD verification system. "
+    "You are a requirements analyst for the Nightjar verification system. "
     "Your role is to analyze a module specification and produce a structured "
     "requirements analysis that identifies:\n"
     "1. Core functional requirements\n"
