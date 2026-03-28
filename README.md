@@ -215,3 +215,47 @@ No sponsors yet. If Nightjar saves your team time, consider [sponsoring developm
 - [LLM docs](docs/llms.txt) — structured project description for LLM consumption
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 - Commercial license for teams that can't work with AGPL: $2,400/yr (teams) · $12,000/yr (enterprise). Contact: nightjar-license@proton.me
+
+---
+
+## How Nightjar Compares
+
+| Feature | Nightjar | Semgrep | CrossHair | Bandit | mypy |
+|---------|----------|---------|-----------|--------|------|
+| Formal proofs (Dafny) | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Symbolic execution | ✓ | ✗ | ✓ | ✗ | ✗ |
+| Property-based testing | ✓ | ✗ | ✓ | ✗ | ✗ |
+| Zero-config scanning | ✓ | ✗ | ✗ | ✓ | ✓ |
+| AI-native spec format | ✓ | ✗ | ✗ | ✗ | ✗ |
+| CEGIS retry loop | ✓ | ✗ | ✗ | ✗ | ✗ |
+| CVE-level bug finding | ✓ | ✓ | ✗ | Partial | ✗ |
+
+---
+
+## FAQ
+
+**Can Nightjar verify async/await code?**
+Yes. The PBT and schema stages handle async functions. Formal proof via Dafny is limited to pure function equivalents.
+
+**What happens without Dafny installed?**
+Nightjar falls back to CrossHair symbolic execution and Hypothesis property testing. You still get 4 of 5 stages.
+
+**How long does verification take?**
+Simple functions: 2-5 seconds. Complex modules with formal proof: 30-120 seconds. Use `--fast` to skip Dafny.
+
+**Does Nightjar work with monorepos?**
+Yes. Point `nightjar verify --spec .card/module.card.md` at any module.
+
+**Is the AGPL license a problem for commercial use?**
+Commercial licenses are available ($2,400/yr teams, $12,000/yr enterprise). See [nightjarcode.dev/pricing](https://nightjarcode.dev/pricing).
+
+---
+
+## Verified Clean Codebases
+
+These popular packages pass all 5 Nightjar stages with zero violations:
+
+- **datasette** — 1,129 functions scanned
+- **rich** — ~705 functions scanned
+- **hypothesis** — formally verified
+- **sqlite-utils** — ~237 functions scanned

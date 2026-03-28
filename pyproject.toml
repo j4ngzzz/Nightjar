@@ -1,10 +1,23 @@
 [project]
 name = "nightjarzzz"
 version = "0.1.0"
-description = "Nightjar — formal verification CLI for AI-generated code"
+description = "Formal verification pipeline for AI-generated Python code — 5-stage proof from syntax to Dafny, with CVE scanning, property-based testing, and CEGIS retry loop."
 readme = "README.md"
 license = { text = "AGPL-3.0-only" }
 requires-python = ">=3.11"
+keywords = [
+    "formal-verification",
+    "ai-code",
+    "property-based-testing",
+    "dafny",
+    "crosshair",
+    "hypothesis",
+    "security",
+    "vibe-coding",
+    "code-verification",
+    "static-analysis",
+    "smt-solver",
+]
 authors = [
     { name = "Nightjar Contributors", email = "hello@nightjar.dev" },
 ]
@@ -14,12 +27,12 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: GNU Affero General Public License v3",
     "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: Software Development :: Testing",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
     "Typing :: Typed",
 ]
 dependencies = [
@@ -33,10 +46,12 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://nightjar.dev"
-Repository = "https://github.com/nightjar-dev/nightjar"
-Issues = "https://github.com/nightjar-dev/nightjar/issues"
-Changelog = "https://github.com/nightjar-dev/nightjar/blob/master/CHANGELOG.md"
+Homepage = "https://nightjarcode.dev"
+Documentation = "https://nightjarcode.dev/docs"
+Repository = "https://github.com/j4ngzzz/Nightjar"
+Changelog = "https://github.com/j4ngzzz/Nightjar/releases"
+"Bug Reports" = "https://github.com/j4ngzzz/Nightjar/issues"
+"Security Reports" = "https://nightjarcode.dev/bugs"
 
 [project.optional-dependencies]
 dev = [
