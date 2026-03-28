@@ -130,12 +130,47 @@ def extract_counterexample_from_stage(
     return None
 
 
+def _select_inspiration(
+    population: list[tuple["BFSNode", VerifyResult]],
+    parent: "BFSNode",
+) -> Optional["BFSNode"]:
+    """Select an inspiration node with a different failure mode than the parent.
+
+    Per AlphaEvolve (DeepMind, 2025): inspiration selection promotes semantic
+    diversity by preferring candidates that failed differently from the parent.
+    A node that failed with a different error type may have explored useful
+    patterns that the parent's repair can synthesise.
+
+    Args:
+        population: List of (BFSNode, VerifyResult) pairs from the ratchet pool.
+        parent: The current parent node being repaired.
+
+    Returns:
+        The highest-scoring node in the population whose error_hash differs
+        from parent.error_hash, or None if population has < 2 entries or no
+        diverse candidate exists.
+    """
+    if len(population) < 2:
+        return None
+
+    diverse = [
+        node
+        for node, _result in population
+        if node.error_hash != parent.error_hash
+    ]
+    if not diverse:
+        return None
+
+    return max(diverse, key=lambda n: n.score)
+
+
 def build_cegis_repair_prompt(
     spec: "CardSpec",
     failed_code: str,
     verify_result: VerifyResult,
     attempt: int,
     counterexample: Optional[dict[str, str]],
+    inspirations: Optional[list["BFSNode"]] = None,
 ) -> str:
     """Build CEGIS-style repair prompt per [REF-NEW-03] SpecLoop.
 
@@ -143,12 +178,20 @@ def build_cegis_repair_prompt(
     "Your spec fails on input X=5, Y=-3 because..." — more actionable than
     a raw SMT error message.
 
+    When inspiration nodes are provided (AlphaEvolve AE-2), an "Alternative
+    Approach" block is appended with a truncated code snippet from the
+    highest-scoring diverse candidate, giving the LLM a cross-pollination
+    signal without reproducing the full candidate.
+
     Args:
         spec: Original .card.md specification.
         failed_code: Code that failed verification.
         verify_result: The failed VerifyResult with error details.
         attempt: Current retry attempt number (1-based).
         counterexample: Parsed {variable: value} dict from Dafny, or None.
+        inspirations: Optional list of BFSNodes to use as alternative-approach
+            hints. Only the first node is used. Default None (no change to
+            existing behaviour).
 
     Returns:
         Formatted repair prompt string.
@@ -182,6 +225,26 @@ def build_cegis_repair_prompt(
             f"```json\n{failure_block}\n```\n"
         )
 
+    # ── AlphaEvolve inspiration block (AE-2) ─────────────────────────────────
+    # When a diverse population node is provided, append a truncated code
+    # snippet so the LLM can synthesise patterns from both failure modes.
+    # Truncation limit: 40 lines (~500 tokens) per AE-2 plan spec.
+    inspiration_section = ""
+    if inspirations:
+        insp = inspirations[0]
+        code_lines = insp.code.splitlines()
+        if len(code_lines) > 40:
+            truncated = "\n".join(code_lines[:40]) + "\n# ... (truncated)"
+        else:
+            truncated = insp.code
+        inspiration_section = (
+            f"\n### Alternative Approach (for inspiration only — do not copy directly)\n"
+            f"The following candidate achieved score {insp.score:.2f} but failed differently:\n"
+            f"Error type: {insp.error_hash}\n\n"
+            f"```python\n{truncated}\n```\n\n"
+            f"Synthesize useful patterns from both approaches to fix the current failure.\n"
+        )
+
     return f"""## CEGIS Repair Request — Attempt {attempt}
 
 ### Original Specification
@@ -193,7 +256,7 @@ Invariants:
 ```
 {failed_code}
 ```
-{counterexample_section}
+{counterexample_section}{inspiration_section}
 ### Instructions
 Fix the code so it satisfies ALL invariants. Return ONLY the corrected code.
 """
@@ -318,6 +381,7 @@ def _call_repair_llm(
     failed_code: str,
     verify_result: VerifyResult,
     attempt: int,
+    inspirations: Optional[list["BFSNode"]] = None,
 ) -> str:
     """Call LLM via litellm to repair failed code using CEGIS when possible.
 
@@ -329,11 +393,18 @@ def _call_repair_llm(
     Model selected from NIGHTJAR_MODEL env var. Temperature 0.2 for
     deterministic repair per ARCHITECTURE.md Section 4.
 
+    AlphaEvolve AE-2: accepts optional inspiration nodes. When provided,
+    forwards them to build_cegis_repair_prompt() so the LLM sees an
+    alternative-approach snippet from a diverse candidate.
+
     Args:
         spec: Original .card.md specification.
         failed_code: Code that failed verification.
         verify_result: Failed verification result with errors.
         attempt: Current attempt number.
+        inspirations: Optional list of BFSNodes with different failure modes
+            to use as cross-pollination hints. Default None (no change to
+            existing behaviour).
 
     Returns:
         Repaired code string from LLM.
@@ -348,7 +419,8 @@ def _call_repair_llm(
                 break
 
     prompt = build_cegis_repair_prompt(
-        spec, failed_code, verify_result, attempt, counterexample
+        spec, failed_code, verify_result, attempt, counterexample,
+        inspirations=inspirations,
     )
     return _call_llm_with_prompt(prompt)
 
@@ -775,8 +847,16 @@ def run_ratchet_search(
         # Select best parent from population
         best_node, best_result = max(population, key=lambda pair: pair[0].score)
 
-        # Generate one repair candidate
-        candidate_code = _call_repair_llm(spec, best_node.code, best_result, attempt)
+        # AlphaEvolve AE-2: select a diverse inspiration from the population
+        # (a node with a different error_hash — different failure mode).
+        # This gives the LLM a cross-pollination signal when available.
+        inspiration = _select_inspiration(population, best_node)
+
+        # Generate one repair candidate, optionally with inspiration
+        candidate_code = _call_repair_llm(
+            spec, best_node.code, best_result, attempt,
+            inspirations=[inspiration] if inspiration else None,
+        )
 
         # Verify immediately (verifier-in-the-loop)
         candidate_result = run_pipeline(spec, candidate_code)

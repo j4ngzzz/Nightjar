@@ -301,3 +301,148 @@ class TestCegisIntegrationInRetry:
         )
         ce = extract_counterexample_from_stage(stage)
         assert ce is None
+
+
+# ─── AE-2: AlphaEvolve Inspiration Injection ─────────────────────────────────
+# Tests for _select_inspiration(), build_cegis_repair_prompt(inspirations=...),
+# and _call_repair_llm(inspirations=...) added per alphaevolve-implementation-plan.md
+
+
+def _make_bfs_node(code: str, score: float, error_hash: str, depth: int = 0):
+    """Helper: construct a BFSNode without importing it at module level."""
+    from nightjar.retry import BFSNode
+    return BFSNode(code=code, score=score, depth=depth, error_hash=error_hash)
+
+
+def _make_fail_result() -> VerifyResult:
+    return VerifyResult(
+        verified=False,
+        stages=[StageResult(
+            stage=4, name="formal", status=VerifyStatus.FAIL,
+            errors=[{"type": "postcondition_failure", "message": "proof failed"}],
+        )],
+        total_duration_ms=100,
+    )
+
+
+class TestAlphaEvolveInspirationInjection:
+    """AE-2 tests — inspiration selection and prompt augmentation."""
+
+    # ── build_cegis_repair_prompt with inspirations ───────────────────────────
+
+    def test_prompt_with_inspiration_includes_alternative_approach_section(self):
+        """Prompt with inspirations contains 'Alternative Approach' section."""
+        from nightjar.retry import build_cegis_repair_prompt
+
+        spec = _make_spec()
+        insp = _make_bfs_node(code="alt_code", score=0.3, error_hash="abc12345")
+        prompt = build_cegis_repair_prompt(
+            spec=spec,
+            failed_code="def f(x): return x",
+            verify_result=_make_fail_result(),
+            attempt=1,
+            counterexample=None,
+            inspirations=[insp],
+        )
+        assert "Alternative Approach" in prompt
+
+    def test_prompt_without_inspiration_unchanged(self):
+        """Prompt with inspirations=None does NOT contain 'Alternative Approach'."""
+        from nightjar.retry import build_cegis_repair_prompt
+
+        spec = _make_spec()
+        prompt = build_cegis_repair_prompt(
+            spec=spec,
+            failed_code="def f(x): return x",
+            verify_result=_make_fail_result(),
+            attempt=1,
+            counterexample=None,
+            inspirations=None,
+        )
+        assert "Alternative Approach" not in prompt
+
+    def test_prompt_with_inspiration_truncates_long_code(self):
+        """Inspiration code with > 40 lines is truncated to 40 lines in prompt."""
+        from nightjar.retry import build_cegis_repair_prompt
+
+        spec = _make_spec()
+        # Build a 100-line inspiration code snippet
+        long_code = "\n".join(f"line_{i} = {i}" for i in range(100))
+        insp = _make_bfs_node(code=long_code, score=0.4, error_hash="def56789")
+        prompt = build_cegis_repair_prompt(
+            spec=spec,
+            failed_code="def f(x): return x",
+            verify_result=_make_fail_result(),
+            attempt=1,
+            counterexample=None,
+            inspirations=[insp],
+        )
+        # Truncation marker must appear
+        assert "# ... (truncated)" in prompt
+        # Lines 40+ must NOT appear (line_40 up to line_99 should be cut)
+        assert "line_40 = 40" not in prompt
+        assert "line_99 = 99" not in prompt
+        # The first 40 lines must be present
+        assert "line_0 = 0" in prompt
+        assert "line_39 = 39" in prompt
+
+    # ── _select_inspiration ───────────────────────────────────────────────────
+
+    def test_inspiration_selection_picks_different_error_type(self):
+        """_select_inspiration returns the highest-scoring node with different error_hash."""
+        from nightjar.retry import _select_inspiration
+
+        parent = _make_bfs_node(code="parent_code", score=0.5, error_hash="aaa11111")
+        node_same = _make_bfs_node(code="same_code", score=0.9, error_hash="aaa11111")
+        node_diff = _make_bfs_node(code="diff_code", score=0.7, error_hash="bbb22222")
+
+        # population contains two nodes: one with same hash, one different
+        population = [
+            (parent, _make_fail_result()),
+            (node_same, _make_fail_result()),
+            (node_diff, _make_fail_result()),
+        ]
+        result = _select_inspiration(population, parent)
+        assert result is not None
+        assert result.error_hash == "bbb22222"
+
+    def test_inspiration_selection_returns_none_when_all_same_error_hash(self):
+        """_select_inspiration returns None when all nodes share the parent's error_hash."""
+        from nightjar.retry import _select_inspiration
+
+        parent = _make_bfs_node(code="parent_code", score=0.5, error_hash="aaabbb11")
+        node_a = _make_bfs_node(code="code_a", score=0.6, error_hash="aaabbb11")
+        node_b = _make_bfs_node(code="code_b", score=0.4, error_hash="aaabbb11")
+
+        population = [
+            (parent, _make_fail_result()),
+            (node_a, _make_fail_result()),
+            (node_b, _make_fail_result()),
+        ]
+        result = _select_inspiration(population, parent)
+        assert result is None
+
+    def test_inspiration_selection_returns_none_for_single_element_population(self):
+        """_select_inspiration returns None when population has only 1 entry."""
+        from nightjar.retry import _select_inspiration
+
+        parent = _make_bfs_node(code="only_node", score=0.5, error_hash="abc12345")
+        population = [(parent, _make_fail_result())]
+        result = _select_inspiration(population, parent)
+        assert result is None
+
+    # ── _call_repair_llm signature ────────────────────────────────────────────
+
+    def test_call_repair_llm_accepts_inspirations_param(self):
+        """_call_repair_llm has an 'inspirations' parameter with default None."""
+        import inspect
+        from nightjar.retry import _call_repair_llm
+
+        sig = inspect.signature(_call_repair_llm)
+        assert "inspirations" in sig.parameters, (
+            "_call_repair_llm must have an 'inspirations' parameter"
+        )
+        default = sig.parameters["inspirations"].default
+        assert default is None, (
+            f"'inspirations' default must be None, got {default!r}"
+        )

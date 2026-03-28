@@ -37,6 +37,30 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 };
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Nightjar",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Linux, macOS, Windows",
+  "programmingLanguage": "Python",
+  "softwareVersion": "0.1.0",
+  "license": "https://spdx.org/licenses/AGPL-3.0.html",
+  "downloadUrl": "https://pypi.org/project/nightjarzzz/",
+  "codeRepository": "https://github.com/j4ngzzz/Nightjar",
+  "description": "Formal verification pipeline for AI-generated Python code.",
+  "url": "https://nightjarcode.dev",
+  "offers": {
+    "@type": "Offer",
+    "price": 0,
+    "priceCurrency": "USD",
+  },
+  "softwareHelp": {
+    "@type": "CreativeWork",
+    "url": "https://nightjarcode.dev/docs/quickstart",
+  },
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -48,6 +72,14 @@ export default function RootLayout({
       className={`${geistSans.variable} ${jetBrainsMono.variable} h-full`}
       suppressHydrationWarning
     >
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col antialiased">
         {children}
       </body>

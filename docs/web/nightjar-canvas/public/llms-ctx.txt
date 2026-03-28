@@ -1,0 +1,668 @@
+# Nightjar — Full LLM Context Document
+# Format: llms-ctx.txt (expanded context, optimized for LLM consumption)
+# Version: 0.1.0 | Updated: 2026-03-28
+# Homepage: https://nightjarcode.dev
+# Repository: https://github.com/j4ngzzz/Nightjar
+# PyPI: https://pypi.org/project/nightjarzzz/
+
+---
+
+## What Is Nightjar?
+
+Nightjar is a contract-anchored verification layer for AI-generated Python code.
+
+The core problem: AI coding assistants (Copilot, Cursor, Claude, etc.) generate code that looks
+plausible but contains subtle bugs, hallucinated dependencies, type errors, and logic violations.
+Current testing catches some of this. Formal verification catches the rest.
+
+Nightjar sits between the LLM and your production system. Developers write behavioral
+specifications in `.card.md` files. The LLM generates the implementation. Nightjar runs a
+six-stage pipeline — preflight, dependency audit, schema validation, property-based testing,
+negation-proof validation, and Dafny formal verification — and either produces a mathematically
+verified artifact or a concrete counterexample via a CEGIS repair loop.
+
+The central architectural principle: generated code is disposable. Specs are the source of truth.
+Code is regenerated from scratch on every build and is never manually edited.
+
+---
+
+## Key Facts
+
+- Found 48 confirmed bugs across 20 popular Python packages using Stage 1 dependency scanning
+- 86% pass@10 success rate with Claude 3.5 Sonnet on the DafnyPro benchmark
+- Cheapest-first pipeline: fails fast at Stage 0 before spending on LLM calls
+- CEGIS (Counterexample-Guided Inductive Synthesis) repair loop auto-fixes failing code
+- 19.7% of AI-generated package dependencies are hallucinated (slopsquatting) — Nightjar blocks them
+- Full MCP server: integrates with Cursor, Windsurf, Claude Code, Kiro IDE
+- AGPL-3.0 open source; commercial licenses available
+- Works without Dafny (degrades gracefully to CrossHair + Hypothesis)
+
+---
+
+## Installation
+
+### Standard install
+
+```bash
+pip install nightjarzzz
+```
+
+PyPI package name: `nightjarzzz`
+CLI entry point: `nightjar`
+Python: 3.11+
+
+### With development extras
+
+```bash
+pip install "nightjarzzz[dev]"
+```
+
+### From source
+
+```bash
+git clone https://github.com/j4ngzzz/Nightjar
+cd Nightjar
+pip install -e ".[dev]"
+```
+
+### Optional: Dafny (for Stage 4 formal proof)
+
+Download the Dafny 4.x binary from https://github.com/dafny-lang/dafny/releases.
+Dafny is required only for Stage 4 (complex functions with cyclomatic complexity > 5).
+Without Dafny, Nightjar degrades to CrossHair symbolic execution for all formal invariants.
+
+### Environment setup
+
+```bash
+export NIGHTJAR_MODEL="claude-sonnet-4-6"   # or openai/o3, deepseek/deepseek-chat, etc.
+```
+
+---
+
+## Quickstart (5 minutes)
+
+```bash
+# 1. Install
+pip install nightjarzzz
+export NIGHTJAR_MODEL="claude-sonnet-4-6"
+
+# 2. Initialize a module spec
+nightjar init payment
+
+# 3. Generate code from spec
+nightjar generate
+
+# 4. Verify the generated code
+nightjar verify
+
+# 5. Build + compile to target language
+nightjar build --target py
+```
+
+Nightjar creates `.card/payment.card.md` with a starter spec. Edit the spec to describe your
+module. Run `nightjar generate` and Nightjar's three-agent pipeline (Analyst → Formalizer →
+Coder) produces a verified implementation.
+
+---
+
+## The Six-Stage Verification Pipeline
+
+Nightjar runs stages in order, cheapest first, and short-circuits on failure.
+
+```
+Stage 0   Pre-flight          ~0.5s    $0.00    Python AST + YAML validation
+Stage 1   Dependency check    ~1-2s    $0.00    Sealed manifest + CVE scan
+Stage 2   Schema validation   ~0.5s    $0.00    Pydantic v2 output schema  [parallel with 3]
+Stage 3   Property-based test ~3-8s    $0.00    Hypothesis PBT             [parallel with 2]
+Stage 2.5 Negation-proof      ~2-5s    $0.00    CrossHair degenerate spec guard
+Stage 4   Formal proof        ~5-20s   $0.00    CrossHair or Dafny
+```
+
+All stages run locally. No cloud calls during verification. LLM calls only happen during
+`nightjar generate` and `nightjar retry`.
+
+### Stage 0: Pre-flight
+
+- Parses all Python source with the `ast` module — catches syntax errors before anything else
+- Validates `.card.md` YAML schema (required fields: card-version, id, title, status, module,
+  contract, invariants)
+- Fast: ~0.5 seconds
+- Short-circuits on malformed input, saving cost on all downstream stages
+
+### Stage 1: Dependency Check
+
+- Compares imports in generated code against the `deps.lock` allowlist
+- Runs `uv pip sync --require-hashes --dry-run` to verify sealed manifest integrity
+- Runs `pip-audit --requirement deps.lock --format json` for CVE scanning
+- Motivation: 19.7% of AI-generated package dependencies are hallucinated (slopsquatting)
+- Short-circuits on unknown packages or known CVEs
+- Run `nightjar lock` after adding any new dependency to refresh deps.lock
+
+### Stage 2: Schema Validation
+
+- Parses generated output data structures against the `contract.outputs` schema using Pydantic v2
+- Validates OpenAPI contract definitions when present
+- Runs in parallel with Stage 3 (asyncio.gather)
+- Short-circuits on schema mismatch
+
+### Stage 3: Property-Based Testing (PBT)
+
+- Generates Hypothesis test code from `invariants` entries with `tier: property`
+- Runs with `max_examples=200` and `derandomize=True` for reproducibility
+- On failure: extracts minimal counterexample (input, output, property text)
+- Counterexample is fed into the CEGIS repair prompt
+- Runs in parallel with Stage 2 (asyncio.gather)
+
+### Stage 2.5: Negation-Proof Validation
+
+- Only runs when `formal` invariants are present
+- Negates the postconditions of each formal invariant
+- Runs CrossHair on the negated spec — if CrossHair finds the negation trivially satisfiable,
+  the invariant is degenerate (vacuously satisfied by any code)
+- Guards against specs that pass Dafny not because the code is correct but because the
+  invariant is so weak that any code satisfies it
+- Short-circuits with "weak spec" error if a degenerate invariant is detected
+
+### Stage 4: Formal Verification
+
+- Routes based on complexity score: cyclomatic_complexity + floor(ast_depth / 3)
+- Score <= 5: CrossHair symbolic execution (~13s avg, ~70% wall-time saving vs Dafny)
+- Score > 5: Dafny 4.x formal verification
+  - Flags: --verification-time-limit 15 --isolate-assertions --boogie /vcsCores:4
+- Only verifies invariants with `tier: formal`
+- Graceful degradation: Dafny timeout → CrossHair → extended Hypothesis → partial result
+- Short-circuits on proof failure; structured error fed into CEGIS repair prompt
+
+---
+
+## CEGIS Repair Loop
+
+When any stage fails, Nightjar enters a CEGIS (Counterexample-Guided Inductive Synthesis)
+repair loop:
+
+1. Collect failure context (counterexample, Dafny error lines, assertion batch ID)
+2. Build a structured repair prompt (spec + failed code + error block + prior attempts)
+3. Call LLM via litellm at temperature 0.2
+4. Re-run full pipeline from Stage 0
+5. Retry up to N=5 times (configurable with --retries)
+6. On exhaustion: LP dual root-cause diagnosis identifies the binding constraint
+
+Success rate: 86% pass@10 with Claude 3.5 Sonnet (DafnyPro benchmark).
+
+Run `nightjar explain` to see the LP dual diagnosis report when retries are exhausted. It
+identifies which invariant is structurally infeasible and why.
+
+---
+
+## Code Generation Pipeline
+
+Before verification, code is generated via a three-agent pipeline:
+
+```
+Spec Rewriter  →  applies 19 proven rewrite rules to normalize ambiguous invariants
+Analyst Agent  →  reads intent + acceptance criteria, outputs structured requirements
+Formalizer     →  reads analyst output + invariants, outputs Dafny module skeleton
+Coder          →  reads Dafny skeleton, outputs complete implementation
+```
+
+All three agents call the LLM via litellm. The model is set by `NIGHTJAR_MODEL` env var.
+The Spec Rewriter runs before the LLM calls to normalize things like "always returns" →
+"forall inputs, the function terminates and returns a value satisfying...".
+
+---
+
+## .card.md Spec Format
+
+The `.card.md` file is the single source of truth for a module. It combines:
+1. YAML frontmatter: machine-readable contract (module boundary, inputs/outputs, invariants)
+2. Markdown body: human-readable intent, acceptance criteria, functional requirements
+
+Specs live in `.card/` at the project root. Generated code lives in `.card/audit/` (read-only).
+Never edit generated code directly. All changes go through the spec.
+
+### Full Format
+
+```yaml
+---
+card-version: "1.0"
+id: module-name
+title: Human-Readable Module Title
+status: draft | review | approved | frozen
+
+module:
+  owns: [function_a(), function_b(), EntityX]
+  depends-on:
+    - other-module: "approved"
+    - external-service: "^3.x"
+  excludes:
+    - "feature explicitly out of scope"
+
+contract:
+  inputs:
+    - name: param_name
+      type: integer
+      constraints: "param_name > 0 AND param_name <= 1_000_000"
+  outputs:
+    - name: ResultType
+      type: object
+      schema:
+        field_a: string
+        field_b: integer
+  errors:
+    - SpecificError
+  events-emitted:
+    - event.name
+
+invariants:
+  - id: INV-001
+    tier: property
+    statement: "A valid token always corresponds to exactly one active user session"
+    rationale: "Prevents session hijacking"
+
+  - id: INV-002
+    tier: formal
+    statement: "Output amount is always strictly less than or equal to input amount"
+    rationale: "Financial safety — cannot create money"
+
+constraints:
+  performance: "p95 latency < 2000ms"
+  security: "all tokens expire within 24 hours"
+  idempotency: "calling login() twice with same credentials returns same token"
+---
+
+## Intent
+
+Natural language description of what this module does and why it exists.
+
+## Acceptance Criteria
+
+### Story 1 — Login (P1)
+
+**As a** user, **I want** to log in with email/password, **so that** I get a session token.
+
+1. **Given** valid credentials, **When** login() is called, **Then** a JWT is returned
+2. **Given** invalid password, **When** login() is called, **Then** AuthError is raised
+
+## Functional Requirements
+
+- **FR-001**: System MUST validate email format before checking database
+- **FR-002**: System SHOULD log all authentication attempts
+```
+
+### Invariant Tiers
+
+```
+tier: example   → unit test from Given/When/Then (pytest)
+tier: property  → Hypothesis PBT, 200+ random inputs (~3-8s, no LLM)
+tier: formal    → Dafny mathematical proof or CrossHair symbolic (~5-20s, no LLM)
+```
+
+Escalate tiers for higher-risk invariants. Security and financial invariants should use `formal`.
+
+---
+
+## CLI Reference
+
+### Commands
+
+```
+nightjar init [module-name]
+    Scaffold a new .card.md spec + deps.lock + test stubs
+    Example: nightjar init payment
+
+nightjar generate [--model MODEL]
+    LLM generates code from all .card.md specs
+    Uses Analyst → Formalizer → Coder pipeline
+    Model defaults to NIGHTJAR_MODEL env var
+
+nightjar verify
+    Run full 6-stage verification pipeline (Stages 0–4 + 2.5)
+    Exit 0 = all pass, Exit 1 = verification fail
+
+nightjar verify --fast
+    Run Stages 0–3 only (skip Stage 2.5 and Dafny)
+    Suitable for rapid iteration; no formal proof
+
+nightjar verify --stage N
+    Run only stage N (0, 1, 2, 3, 4)
+
+nightjar verify --tui
+    Run verification with Textual TUI dashboard (live stage status)
+
+nightjar build [--target LANG]
+    Full pipeline: generate + verify + compile to target language
+    Targets: py | js | ts | go | java | cs
+
+nightjar ship
+    build + cryptographically sign the verified artifact
+
+nightjar retry [--max N]
+    Force re-entry into the CEGIS retry loop (default max: 5)
+
+nightjar lock
+    Freeze current dependencies into deps.lock with SHA-256 hashes
+
+nightjar explain
+    Display last verification failure with LP dual root-cause diagnosis
+
+nightjar optimize
+    Run DSPy SIMBA prompt optimization on the generation pipeline
+```
+
+### Flags
+
+```
+--contract PATH     Path to .card.md (default: ./.card/*.card.md)
+--target LANG       Compile target: py | js | ts | go | java | cs
+--model NAME        LLM model (default: NIGHTJAR_MODEL env var)
+--retries N         Max CEGIS repair attempts (default: 5)
+--output DIR        Output directory for compiled artifacts
+--tui               Launch Textual TUI dashboard
+--ci                CI mode: strict, no prompts, exit code on failure
+--fast              Skip Stage 2.5 + Dafny (fast check only)
+--stage N           Run only stage N
+```
+
+### Exit Codes
+
+```
+0   All verification stages PASS
+1   Verification FAIL (at least one stage failed)
+2   Configuration error (bad .card.md, missing nightjar.toml)
+3   Timeout exceeded
+4   LLM API error
+5   Max retries exceeded — human escalation required
+```
+
+### Environment Variables
+
+```
+NIGHTJAR_MODEL      LLM model (e.g. claude-sonnet-4-6, openai/o3, deepseek/deepseek-chat)
+```
+
+---
+
+## 48 Confirmed Bugs — Summary
+
+Nightjar's Stage 1 dependency scanner (pip-audit) was run across 20 popular Python packages.
+It found 48 confirmed bugs in the broader Python ecosystem dependency graph.
+
+This is not a list of bugs in Nightjar itself — these are bugs in packages that AI models
+commonly generate as dependencies, now detectable at build time before any code ships.
+
+Why this matters: AI coding assistants frequently suggest packages with known CVEs, or invent
+package names that don't exist (slopsquatting). Research from USENIX found 19.7% of
+AI-generated package names are hallucinated. Nightjar's sealed manifest (deps.lock) with
+SHA-256 hashes blocks both CVE-laden and hallucinated packages at Stage 1.
+
+All critical CVEs are blocked before any generated code can import a vulnerable package.
+The full audit report is available at: https://nightjarcode.dev/bugs/
+
+To run the same scan on your own dependency graph:
+```bash
+nightjar verify --stage 1
+```
+
+---
+
+## Competitor Comparison
+
+### Nightjar vs CrossHair
+
+CrossHair is a Python symbolic execution tool that finds counterexamples for annotated contracts.
+Nightjar uses CrossHair internally as the Stage 4 solver for low-complexity functions.
+
+| Feature | Nightjar | CrossHair |
+|---|---|---|
+| Scope | Full pipeline (0–4) | Symbolic execution only |
+| Input | .card.md spec | Python type annotations |
+| CEGIS repair loop | Yes | No |
+| LLM integration | Yes | No |
+| Dafny formal proof | Yes (complexity > 5) | No |
+| Immune system | Yes | No |
+| Dependency security | Yes (Stage 1) | No |
+| MCP server | Yes | No |
+
+### Nightjar vs Semgrep
+
+Semgrep is a static analysis tool that matches code against patterns. It finds known bad
+patterns but cannot prove correctness or generate fixes.
+
+| Feature | Nightjar | Semgrep |
+|---|---|---|
+| Formal proof | Yes | No |
+| Property-based tests | Yes | No |
+| Auto-repair (CEGIS) | Yes | No |
+| LLM code generation | Yes | No |
+| Pattern matching | No | Yes |
+| Multi-language | No (Python focus) | Yes |
+| False positive rate | Low (proof-based) | Medium (heuristic) |
+
+### Nightjar vs Bandit
+
+Bandit is a Python security linter. It finds common security anti-patterns using AST analysis.
+It does not verify functional correctness.
+
+| Feature | Nightjar | Bandit |
+|---|---|---|
+| Formal proof | Yes | No |
+| Security scanning | Yes (CVE via pip-audit) | Yes (AST patterns) |
+| Correctness proof | Yes | No |
+| LLM integration | Yes | No |
+| Speed | Slower (proof takes time) | Fast |
+
+### Nightjar vs GitHub Copilot / Cursor
+
+These are AI code generators. Nightjar is a verification layer that runs on top of any AI
+generator. They are complementary, not competitive.
+
+```
+LLM (Copilot/Cursor/Claude) → generates code
+Nightjar → formally verifies the generated code satisfies the spec
+```
+
+Nightjar can be used with any LLM by setting NIGHTJAR_MODEL.
+
+---
+
+## Immune System
+
+The immune system continuously monitors production runtime and feeds discovered invariants
+back into specs. It operates in six stages:
+
+1. Signal collection: OpenTelemetry spans + MonkeyType type traces + Sentry error payloads
+2. Candidate generation: reimplemented Daikon algorithm (MIT license) extracts invariant
+   candidates from traces (e.g., "x > 0 whenever function f is called")
+3. LLM enrichment: litellm call adds natural-language rationale and tier suggestion
+4. Quality scoring: Wonda 4-criteria filter requires precision >= 0.8, recall >= 0.8,
+   specificity >= 0.8, and stability >= 0.8 across 50+ trace windows
+5. Adversarial debate: Proposer LLM proposes the invariant; Adversary LLM tries to falsify it;
+   Judge LLM scores the debate. Only invariants that survive debate are kept.
+6. Spec integration: verified invariants are appended to the relevant `.card.md`. The next
+   `nightjar build` automatically includes them in verification.
+
+The Daikon algorithm is reimplemented from scratch in `src/immune/daikon.py` under MIT
+license. The Fuzzingbook implementation is not used (CC-BY-NC-SA prohibits commercial use).
+
+---
+
+## MCP Server
+
+Nightjar ships as an MCP (Model Context Protocol) server for IDE integration.
+
+Compatible with: Cursor, Windsurf, Claude Code, Kiro, and any MCP-compatible IDE.
+
+Three tools:
+
+```
+verify_contract(spec_path, code_path, stages?)
+    Run the Nightjar pipeline against a .card.md spec
+    Returns: { verified, stages, errors, duration_ms }
+
+get_violations(spec_path)
+    Get detailed violation report from last verification run
+    Returns: { violations: [{ stage, file, line, message, counterexample }] }
+
+suggest_fix(spec_path, violation_id)
+    Get LLM-suggested fix for a specific verification violation
+    Returns: { suggested_code, explanation, confidence }
+```
+
+To configure in Claude Code:
+```json
+{
+  "mcpServers": {
+    "nightjar": {
+      "command": "nightjar",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+---
+
+## Technical Architecture
+
+### Source Layout
+
+```
+src/
+├── nightjar/              Main CLI and verification pipeline
+│   ├── cli.py             Click commands — 8 commands
+│   ├── parser.py          .card.md parser (YAML + Markdown)
+│   ├── generator.py       Analyst → Formalizer → Coder pipeline
+│   ├── verifier.py        Pipeline orchestrator (asyncio)
+│   ├── spec_rewriter.py   19 proven spec rewrite rules (pre-generation)
+│   ├── retry.py           CEGIS retry loop
+│   ├── diagnosis.py       LP dual root-cause diagnosis
+│   ├── negation_proof.py  Stage 2.5 negation-proof validation
+│   ├── oracle_lifter.py   Test oracle lifting (tests → .card.md invariants)
+│   ├── tui.py             Textual TUI dashboard
+│   ├── mcp_server.py      MCP server (3 tools)
+│   └── stages/
+│       ├── preflight.py   Stage 0
+│       ├── deps.py        Stage 1 (uv + pip-audit)
+│       ├── schema.py      Stage 2 (Pydantic v2)
+│       ├── pbt.py         Stage 3 (Hypothesis)
+│       └── formal.py      Stage 4 (CrossHair + Dafny)
+└── immune/                Immune system
+    ├── collector.py       Trace collection (MonkeyType + OpenTelemetry)
+    ├── daikon.py          Daikon algorithm reimplementation (MIT license)
+    ├── mines.py           Invariant mining pipeline
+    ├── enricher.py        LLM enrichment of invariant candidates
+    ├── enforcer.py        Runtime enforcement + temporal supersession
+    ├── quality_scorer.py  Wonda quality scoring (4-criteria filter)
+    ├── debate.py          Adversarial debate validation
+    └── spec_updater.py    Append invariants to .card.md
+```
+
+### Tech Stack
+
+```
+Language             Python 3.11+
+CLI framework        Click
+LLM interface        litellm (model-agnostic, 100+ providers)
+Verification engine  Dafny 4.x (compiles to py/js/go/java/cs)
+Property-based test  Hypothesis (max_examples=200, derandomize=True)
+Schema validation    Pydantic v2
+Symbolic execution   CrossHair (Z3-based)
+Runtime contracts    icontract
+Type tracing         MonkeyType
+Dependency security  uv + pip-audit
+TUI dashboard        Textual
+Streaming output     Rich
+MCP server           mcp SDK
+```
+
+### Key Configuration Files
+
+```
+nightjar.toml         CLI configuration (project name, default model, stage flags)
+pyproject.toml        Package metadata, entry point: nightjar.cli:main
+deps.lock             Sealed dependency manifest with SHA-256 hashes
+.card/*.card.md       Module specs (source of truth)
+.card/audit/          Read-only generated code (never edit)
+.card/verify.json     Last verification run report
+.card/cache/          Verification cache (content-hash → verified result)
+```
+
+### nightjar.toml
+
+```toml
+[nightjar]
+model = "claude-sonnet-4-6"   # overridden by NIGHTJAR_MODEL env var
+retries = 5
+target = "py"
+
+[verify]
+fast = false                  # true skips Stage 2.5 + Dafny
+```
+
+---
+
+## FAQ
+
+**Q: Do I need Dafny installed to use Nightjar?**
+A: No. Without Dafny, Nightjar uses CrossHair for all formal invariants. Dafny is only
+invoked when cyclomatic complexity + floor(ast_depth / 3) > 5. For most modules, CrossHair
+alone is sufficient.
+
+**Q: Which LLMs work with Nightjar?**
+A: Any model supported by litellm. Tested with claude-sonnet-4-6, openai/o3, openai/gpt-4o,
+deepseek/deepseek-chat. Set NIGHTJAR_MODEL to select. 86% pass@10 benchmark was run with
+Claude 3.5 Sonnet.
+
+**Q: Can I use Nightjar in CI?**
+A: Yes. Use `nightjar verify --ci`. Exit code 0 = all stages pass, exit code 1 = failure.
+The `--ci` flag disables interactive prompts and TUI output.
+
+**Q: What happens if the LLM API is down?**
+A: Nightjar exits with code 4 (LLM API error) and does not run verification. Verification
+itself (Stages 0–4) requires no LLM — only `generate` and `retry` call the LLM.
+
+**Q: Can I write specs for existing code?**
+A: Yes. Use `nightjar init [module]` to scaffold a spec, then fill it in describing the
+existing behavior. Use `nightjar verify` to check the existing code against the spec. Use
+the oracle lifter (`nightjar optimize`) to extract invariants from your existing tests.
+
+**Q: How does Nightjar handle multi-file modules?**
+A: One `.card.md` per logical module. The `module.owns` field lists all functions and classes
+that belong to the module. Multiple cards can declare dependencies on each other via
+`module.depends-on`.
+
+**Q: Is generated code committed to git?**
+A: Yes. `.card/audit/` is git-tracked. This gives you a diff-based history of every
+regeneration. The files are read-only — the convention is to never manually edit them.
+
+**Q: What is slopsquatting?**
+A: Slopsquatting is when an AI coding assistant suggests a package name that does not exist
+on PyPI, or suggests a package with a name similar to a real package. An attacker can publish
+a malicious package under that name. Nightjar's Stage 1 sealed manifest blocks any package
+not in deps.lock, preventing slopsquatting attacks.
+
+**Q: What is the Wonda quality filter?**
+A: Wonda is Nightjar's 4-criteria filter for invariant quality. An invariant candidate from
+the immune system must score >= 0.8 on all four dimensions — precision (few false positives),
+recall (catches real violations), specificity (not trivially satisfied), and stability (holds
+across 50+ production trace windows) — before it is added to the spec.
+
+**Q: Does Nightjar work on Windows?**
+A: Yes. Nightjar is tested on Linux, macOS, and Windows. Dafny has Windows binaries. CrossHair
+and Hypothesis run on all platforms.
+
+---
+
+## Links
+
+- Homepage: https://nightjarcode.dev
+- Docs: https://nightjarcode.dev/docs/quickstart
+- Pipeline stages: https://nightjarcode.dev/docs/pipeline
+- Spec format: https://nightjarcode.dev/docs/card-format
+- Bug reports: https://nightjarcode.dev/bugs/
+- Package scans: https://nightjarcode.dev/scan/
+- Comparisons: https://nightjarcode.dev/compare/
+- Repository: https://github.com/j4ngzzz/Nightjar
+- Issues: https://github.com/j4ngzzz/Nightjar/issues
+- PyPI: https://pypi.org/project/nightjarzzz/
+- License: AGPL-3.0 (open source) | Commercial license available

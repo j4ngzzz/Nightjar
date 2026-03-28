@@ -17,9 +17,12 @@ References:
 - [REF-T16] litellm — model-agnostic LLM interface
 """
 
+import csv
 import os
 import re
+import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Optional
 
 import litellm
@@ -243,3 +246,326 @@ def enrich_invariants(
         candidates=candidates,
         raw_response=raw_response,
     )
+
+
+# ── Invariant Refinement Ratchet (AlphaEvolve style) ─────────────────────────
+
+
+_REFINEMENT_PROMPT_TEMPLATE = """\
+You are an invariant refinement agent. Given a Python invariant expression and its context, \
+propose ONE targeted improvement using SEARCH/REPLACE format:
+
+SEARCH: <exact substring to change>
+REPLACE: <improved version>
+
+Function: {function_sig}
+Current invariant: {expression}
+Current confidence: {confidence:.2f}
+
+Propose a refinement that tightens the bound, adds an upper bound, \
+or makes the constraint more specific. If no improvement is possible, return: NO_CHANGE
+"""
+
+_TSV_REFINEMENT_COLUMNS = (
+    "timestamp",
+    "function_sig",
+    "expression_before",
+    "expression_after",
+    "score_before",
+    "score_after",
+    "action",
+)
+
+
+def _log_refinement_to_tsv(log_path: str, row: dict) -> None:
+    """Append a refinement event row to the TSV log at log_path.
+
+    Columns: timestamp, function_sig, expression_before, expression_after,
+    score_before, score_after, action (KEEP/DISCARD/PLATEAU).
+
+    Non-fatal: all I/O errors are silently suppressed so a missing or
+    unwritable .card/ directory never crashes the verification pipeline.
+
+    References:
+        [REF-C06] LLM-Driven Invariant Enrichment
+    """
+    try:
+        file_exists = os.path.isfile(log_path)
+        with open(log_path, "a", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(
+                fh,
+                fieldnames=_TSV_REFINEMENT_COLUMNS,
+                delimiter="\t",
+                extrasaction="ignore",
+            )
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(row)
+    except Exception:
+        pass  # TSV logging is observability only — never fatal
+
+
+def _propose_refinement(
+    candidate: "CandidateInvariant",
+    function_sig: str,
+    model: Optional[str] = None,
+) -> Optional["CandidateInvariant"]:
+    """Propose a single targeted refinement for a candidate invariant.
+
+    Uses AlphaEvolve-style SEARCH/REPLACE diff format: the LLM identifies
+    one substring to change and provides the improved version.
+
+    Args:
+        candidate:    The invariant to refine.
+        function_sig: Python function signature providing context.
+        model:        Model override. Falls back to NIGHTJAR_MODEL env var.
+
+    Returns:
+        A new CandidateInvariant with the refined expression, or None if:
+        - The LLM returns NO_CHANGE
+        - The SEARCH string is not found in the original expression
+        - Any LLM or parse error occurs
+
+    References:
+        [REF-C06] LLM-Driven Invariant Enrichment
+    """
+    effective_model = model or os.environ.get("NIGHTJAR_MODEL", "deepseek/deepseek-chat")
+    prompt = _REFINEMENT_PROMPT_TEMPLATE.format(
+        function_sig=function_sig,
+        expression=candidate.expression,
+        confidence=candidate.confidence,
+    )
+
+    try:
+        response = litellm.completion(
+            model=effective_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a formal verification expert specializing in "
+                        "Python runtime invariants and contract generation."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=256,
+        )
+        raw = response.choices[0].message.content or ""
+    except Exception:
+        return None
+
+    raw = raw.strip()
+
+    # Fast-path: LLM says no improvement possible
+    if "NO_CHANGE" in raw:
+        return None
+
+    # Parse SEARCH / REPLACE lines
+    search_match = re.search(r"SEARCH:\s*(.+)", raw)
+    replace_match = re.search(r"REPLACE:\s*(.+)", raw)
+
+    if not search_match or not replace_match:
+        return None
+
+    search_str = search_match.group(1).strip()
+    replace_str = replace_match.group(1).strip()
+
+    if search_str not in candidate.expression:
+        return None
+
+    new_expression = candidate.expression.replace(search_str, replace_str, 1)
+
+    return CandidateInvariant(
+        expression=new_expression,
+        explanation=candidate.explanation,
+        confidence=candidate.confidence,
+    )
+
+
+def refine_invariants_ratchet(
+    candidates: list["CandidateInvariant"],
+    function_sig: str,
+    model: Optional[str] = None,
+    max_rounds: int = 3,
+    quality_threshold: float = 0.5,
+    budget_seconds: float = 60.0,
+) -> list["CandidateInvariant"]:
+    """Iteratively refine low-quality invariants using an LLM ratchet loop.
+
+    AlphaEvolve-inspired ratchet: accept a refinement only when it strictly
+    improves the quality score (monotone improvement guarantee). Plateau
+    detection stops early when two consecutive rounds yield no improvement.
+
+    Activation gate: returns candidates unchanged unless the environment
+    variable NIGHTJAR_ENABLE_EVOLUTION is set to "1".
+
+    Args:
+        candidates:         Invariant candidates to refine.
+        function_sig:       Python function signature (context for the LLM).
+        model:              Model override; defaults to NIGHTJAR_MODEL env var.
+        max_rounds:         Maximum refinement rounds (default: 3).
+        quality_threshold:  Candidates at or above this score are skipped
+                            (default: 0.5).
+        budget_seconds:     Wall-clock budget for the entire loop (default: 60s).
+
+    Returns:
+        List of CandidateInvariant with low-quality members replaced by their
+        refined versions where refinement improved the quality score.
+
+    References:
+        [REF-C06] LLM-Driven Invariant Enrichment
+    """
+    # Activation gate — opt-in only
+    if os.environ.get("NIGHTJAR_ENABLE_EVOLUTION", "0") != "1":
+        return candidates
+
+    # Lazy import to avoid circular dependency with quality_scorer
+    from immune.quality_scorer import score_candidate  # noqa: PLC0415
+
+    log_path = ".card/invariant_refinement.tsv"
+    result = list(candidates)
+    budget_start = time.monotonic()
+    consecutive_no_improvement = 0
+
+    for _round_idx in range(max_rounds):
+        if time.monotonic() - budget_start >= budget_seconds:
+            break
+
+        improved_any = False
+
+        for i, candidate in enumerate(result):
+            # Budget check inside inner loop too
+            if time.monotonic() - budget_start >= budget_seconds:
+                break
+
+            score_before = score_candidate(candidate).score
+
+            # Skip candidates that already meet the quality bar
+            if score_before >= quality_threshold:
+                continue
+
+            refined = _propose_refinement(candidate, function_sig, model)
+            if refined is None:
+                continue
+
+            score_after = score_candidate(refined).score
+
+            timestamp = datetime.now(tz=timezone.utc).isoformat()
+
+            if score_after > score_before:
+                result[i] = refined
+                improved_any = True
+                action = "KEEP"
+            else:
+                action = "DISCARD"
+
+            _log_refinement_to_tsv(
+                log_path,
+                {
+                    "timestamp": timestamp,
+                    "function_sig": function_sig,
+                    "expression_before": candidate.expression,
+                    "expression_after": refined.expression,
+                    "score_before": f"{score_before:.4f}",
+                    "score_after": f"{score_after:.4f}",
+                    "action": action,
+                },
+            )
+
+        if not improved_any:
+            consecutive_no_improvement += 1
+        else:
+            consecutive_no_improvement = 0
+
+        # Plateau detection — stop after two consecutive no-improvement rounds
+        if consecutive_no_improvement >= 2:
+            break
+
+    return result
+
+
+def enrich_with_inspiration(
+    candidate: "CandidateInvariant",
+    inspirations: list["CandidateInvariant"],
+    function_sig: str,
+    model: Optional[str] = None,
+) -> "CandidateInvariant":
+    """Enrich a single invariant candidate using AlphaEvolve inspiration context.
+
+    Injects high-quality invariant examples from similar functions into the
+    enrichment prompt so the LLM understands the desired level of specificity.
+    Falls back to the original enrich_invariants() behaviour when no
+    inspirations are provided.
+
+    Args:
+        candidate:    The invariant candidate to enrich.
+        inspirations: High-quality invariants from similar functions to use
+                      as examples. The top 2 (by confidence) are injected.
+        function_sig: Python function signature for context.
+        model:        Model override; defaults to NIGHTJAR_MODEL env var.
+
+    Returns:
+        A refined CandidateInvariant. If enrichment produces no candidates,
+        the original candidate is returned unchanged.
+
+    References:
+        [REF-C06] LLM-Driven Invariant Enrichment
+    """
+    # No inspirations — fall back to standard enrichment
+    if not inspirations:
+        result = enrich_invariants(
+            function_signature=function_sig,
+            observed_invariants=[candidate.expression],
+        )
+        if result.candidates:
+            return result.candidates[0]
+        return candidate
+
+    # Sort inspirations by confidence and take the top 2
+    top = sorted(inspirations, key=lambda c: c.confidence, reverse=True)[:2]
+    inspiration_lines = "\n".join(
+        f"  - {insp.expression}" + (f"  # {insp.explanation}" if insp.explanation else "")
+        for insp in top
+    )
+
+    effective_model = model or os.environ.get("NIGHTJAR_MODEL", "deepseek/deepseek-chat")
+
+    inspiration_suffix = (
+        "\n\nHere are high-quality invariants from similar functions:\n"
+        f"{inspiration_lines}\n"
+        "Use these as examples of the level of specificity to aim for."
+    )
+
+    prompt = (
+        build_enrichment_prompt(
+            function_signature=function_sig,
+            observed_invariants=[candidate.expression],
+        )
+        + inspiration_suffix
+    )
+
+    try:
+        raw_response = litellm.completion(
+            model=effective_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a formal verification expert specializing in "
+                        "Python runtime invariants and contract generation."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=512,
+        ).choices[0].message.content or ""
+    except Exception:
+        return candidate
+
+    parsed = _parse_assert_statements(raw_response, [candidate.expression])
+    if parsed:
+        return parsed[0]
+    return candidate
