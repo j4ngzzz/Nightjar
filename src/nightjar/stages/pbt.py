@@ -22,12 +22,15 @@ Assertion engine (two-tier):
   Tier B — LLM fallback: used when Tier A cannot match; gracefully skips on error.
 """
 
+import dataclasses
 import inspect
 import os
+import pathlib
 import re
 import time
 import textwrap
 import traceback
+import typing
 from typing import Any
 
 from hypothesis import given, settings, HealthCheck
@@ -36,6 +39,111 @@ from hypothesis import strategies as st
 from nightjar.types import (
     CardSpec, Invariant, InvariantTier, StageResult, VerifyStatus,
 )
+
+# Nightjar domain types — used as localns for get_type_hints() resolution
+_NIGHTJAR_LOCALNS: dict = {}
+
+
+def _build_nightjar_localns() -> dict:
+    """Build localns dict for resolving Nightjar type annotations."""
+    from nightjar.types import (
+        CardSpec, VerifyResult, StageResult, Invariant, InvariantTier,
+        Contract, ModuleBoundary, ContractInput, ContractOutput,
+        VerifyStatus, TrustLevel,
+    )
+    return {
+        "CardSpec": CardSpec, "VerifyResult": VerifyResult,
+        "StageResult": StageResult, "Invariant": Invariant,
+        "InvariantTier": InvariantTier, "Contract": Contract,
+        "ModuleBoundary": ModuleBoundary, "ContractInput": ContractInput,
+        "ContractOutput": ContractOutput, "VerifyStatus": VerifyStatus,
+        "TrustLevel": TrustLevel, "Path": pathlib.Path,
+    }
+
+
+def _strategy_for_annotation(ann: type | None) -> "st.SearchStrategy | None":
+    """Return a Hypothesis strategy for a type annotation, or None if unknown.
+
+    None = caller should SKIP this invariant rather than crash.
+    Handles: int, str, float, bool, list, dict, Path, dataclasses, Optional/List generics.
+    """
+    if ann is None or ann is inspect.Parameter.empty:
+        return st.integers()  # Default for unannotated params
+
+    # Unwrap Optional[X] → strategy for X (allow None too)
+    origin = getattr(ann, "__origin__", None)
+    args = getattr(ann, "__args__", ())
+
+    if origin is typing.Union:
+        # Optional[X] is Union[X, None]
+        non_none = [a for a in args if a is not type(None)]
+        if len(non_none) == 1:
+            inner = _strategy_for_annotation(non_none[0])
+            return st.one_of(st.none(), inner) if inner is not None else None
+        return None  # Complex Union — skip
+
+    if origin is list:
+        item_strat = _strategy_for_annotation(args[0]) if args else st.integers()
+        return st.lists(item_strat or st.integers(), max_size=5)
+
+    if origin is dict:
+        k_strat = _strategy_for_annotation(args[0]) if args else st.text(max_size=10)
+        v_strat = _strategy_for_annotation(args[1]) if len(args) > 1 else st.text(max_size=10)
+        return st.dictionaries(
+            k_strat or st.text(max_size=10),
+            v_strat or st.text(max_size=10),
+            max_size=3,
+        )
+
+    # Primitives
+    if ann is int:
+        return st.integers(min_value=-10_000, max_value=10_000)
+    if ann is str:
+        return st.text(max_size=50)
+    if ann is float:
+        return st.floats(allow_nan=False, allow_infinity=False, min_value=-1e6, max_value=1e6)
+    if ann is bool:
+        return st.booleans()
+    if ann is list:
+        return st.lists(st.integers(), max_size=5)
+    if ann is dict:
+        return st.dictionaries(st.text(max_size=10), st.text(max_size=10), max_size=3)
+    if ann is bytes:
+        return st.binary(max_size=50)
+
+    # pathlib.Path
+    if ann is pathlib.Path:
+        safe_chars = "abcdefghijklmnopqrstuvwxyz0123456789_-"
+        return st.builds(
+            pathlib.Path,
+            st.text(alphabet=safe_chars, min_size=1, max_size=20),
+        )
+
+    # Dataclasses (CardSpec, VerifyResult, Invariant, etc.)
+    if dataclasses.is_dataclass(ann) and isinstance(ann, type):
+        field_strategies = {}
+        for f in dataclasses.fields(ann):
+            # Resolve string annotations
+            resolved = None
+            try:
+                hints = typing.get_type_hints(ann, localns=_NIGHTJAR_LOCALNS)
+                resolved = hints.get(f.name)
+            except Exception:
+                resolved = None
+            strat = _strategy_for_annotation(resolved)
+            if strat is None:
+                strat = st.none()  # Use None for unresolvable fields with defaults
+            field_strategies[f.name] = strat
+        try:
+            return st.builds(ann, **field_strategies)
+        except Exception:
+            return None  # If builds fails (e.g. no-default required field), skip
+
+    # Enums
+    if isinstance(ann, type) and issubclass(ann, __import__("enum").Enum):
+        return st.sampled_from(list(ann))
+
+    return None  # Unknown type — caller should skip
 
 
 def _load_pbt_profile() -> str:
@@ -389,17 +497,56 @@ def _run_single_invariant(
     # all params (simplest approach) when there are 2+ required params.
     # Functions with 0 required params are called with no args.
 
+    # Build per-parameter strategies from type annotations
+    use_legacy_call = False
+    param_strategies: dict[str, Any] = {}
+    try:
+        if len(_NIGHTJAR_LOCALNS) == 0:
+            _NIGHTJAR_LOCALNS.update(_build_nightjar_localns())
+        hints: dict = {}
+        if resolved_func is not None:
+            try:
+                hints = typing.get_type_hints(resolved_func, localns=_NIGHTJAR_LOCALNS)
+            except Exception:
+                pass
+
+        skip_pbt = False
+        for param in required_params:
+            ann = hints.get(param.name)
+            strat = _strategy_for_annotation(ann)
+            if strat is None:
+                # Unknown type with no default — cannot test, skip gracefully
+                skip_pbt = True
+                break
+            param_strategies[param.name] = strat
+
+        if skip_pbt or not param_strategies:
+            # Fall back to single integer strategy for unannotated/unknown functions
+            param_strategies = {
+                "x": st.one_of(
+                    st.sampled_from(_BOUNDARY_EXAMPLES),
+                    st.integers(min_value=-10_000, max_value=10_000),
+                )
+            }
+            use_legacy_call = True
+        else:
+            use_legacy_call = False
+
+    except Exception:
+        param_strategies = {
+            "x": st.one_of(
+                st.sampled_from(_BOUNDARY_EXAMPLES),
+                st.integers(min_value=-10_000, max_value=10_000),
+            )
+        }
+        use_legacy_call = True
+
     # Build a Hypothesis test function dynamically from the invariant.
-    # Integer strategy now spans negatives -> zero -> positives so boundary
-    # conditions (division-by-zero, negative-input bugs) are exercised.
+    # When type annotations are available, use per-param strategies.
+    # Otherwise fall back to the legacy integer-only approach.
     @pbt_settings
-    @given(
-        x=st.one_of(
-            st.sampled_from(_BOUNDARY_EXAMPLES),
-            st.integers(min_value=-10_000, max_value=10_000),
-        )
-    )
-    def pbt_test(x: int) -> None:
+    @given(**param_strategies)
+    def pbt_test(**kwargs: Any) -> None:
         nonlocal error_result
         from hypothesis import assume  # noqa: PLC0415
 
@@ -409,46 +556,89 @@ def _run_single_invariant(
         if resolved is None:
             return
 
-        # Build the argument list based on how many params the function requires.
-        # Multi-param functions get the same value for all required params so
-        # we can at least exercise the function and catch obvious violations.
-        if num_required == 0:
-            call_args: tuple = ()
-        elif num_required == 1:
-            call_args = (x,)
+        if use_legacy_call:
+            # Legacy path: single integer param named "x"
+            x = kwargs.get("x", 0)
+            # Build the argument list based on how many params the function requires.
+            # Multi-param functions get the same value for all required params so
+            # we can at least exercise the function and catch obvious violations.
+            if num_required == 0:
+                call_args: tuple = ()
+            elif num_required == 1:
+                call_args = (x,)
+            else:
+                # Pass x for all required params — covers the common 2-param case
+                # (e.g. deduct(balance, amount)) without a raw TypeError.
+                call_args = tuple(x for _ in range(num_required))
+            try:
+                result = resolved(*call_args)
+            except (ValueError, TypeError):
+                assume(False)
+                return
+            except AssertionError:
+                raise
+            except Exception as e:
+                raise AssertionError(
+                    f"Invariant {invariant.id} violated: {e}"
+                ) from e
+            # expose x for assertion context
+            x_val = x
         else:
-            # Pass x for all required params — covers the common 2-param case
-            # (e.g. deduct(balance, amount)) without a raw TypeError.
-            call_args = tuple(x for _ in range(num_required))
-
-        try:
-            result = resolved(*call_args)
-        except (ValueError, TypeError) as precond_exc:
-            # The function raised a precondition-style exception for this
-            # input.  Use assume() to tell Hypothesis this example is
-            # outside the contract domain and should be skipped.
-            #
-            # If the function raises for EVERY input (Bug 7 pattern), Hypothesis
-            # will exhaust its filter budget and raise UnsatisfiedAssumption /
-            # Flaky/Unsatisfied error -- which propagates as an exception to the
-            # outer try/except and becomes a FAIL, preserving Bug 7 behaviour.
-            assume(False)
-            return  # unreachable; here for type-checker clarity
-        except AssertionError:
-            raise  # already a property violation -- propagate
-        except Exception as e:
-            # Non-precondition exceptions (ZeroDivisionError, AttributeError, ...)
-            # are genuine failures -- convert to AssertionError so Hypothesis
-            # can record them as counterexamples.
-            raise AssertionError(
-                f"Invariant {invariant.id} violated: {e}"
-            ) from e
+            # Type-aware path: kwargs match parameter names
+            x = next(iter(kwargs.values()), None)  # first param for assertion context
+            try:
+                result = resolved(**kwargs)
+            except (ValueError, TypeError):
+                # The function raised a precondition-style exception for this
+                # input.  Use assume() to tell Hypothesis this example is
+                # outside the contract domain and should be skipped.
+                #
+                # If the function raises for EVERY input (Bug 7 pattern), Hypothesis
+                # will exhaust its filter budget and raise UnsatisfiedAssumption /
+                # Flaky/Unsatisfied error -- which propagates as an exception to the
+                # outer try/except and becomes a FAIL, preserving Bug 7 behaviour.
+                assume(False)
+                return
+            except AssertionError:
+                raise  # already a property violation -- propagate
+            except Exception as e:
+                # Non-precondition exceptions (ZeroDivisionError, AttributeError, ...)
+                # are genuine failures -- convert to AssertionError so Hypothesis
+                # can record them as counterexamples.
+                raise AssertionError(
+                    f"Invariant {invariant.id} violated: {e}"
+                ) from e
+            x_val = x
 
         # Two-tier assertion engine -- run only when the function returned normally
         if assertion_code is not None:
             try:
-                # Build a minimal execution context for exec
-                _ctx = {"result": result, "x": x}
+                import os as _os, sys as _sys, shutil as _shutil, subprocess as _subprocess
+                # Build execution context for eval — includes stdlib modules
+                _ctx = {
+                    "result": result,
+                    "x": x_val,
+                    "os": _os,
+                    "sys": _sys,
+                    "shutil": _shutil,
+                    "subprocess": _subprocess,
+                    "TimeoutExpired": _subprocess.TimeoutExpired,
+                    "Path": pathlib.Path,
+                    "len": len,
+                    "abs": abs,
+                    "isinstance": isinstance,
+                    "type": type,
+                    "list": list,
+                    "dict": dict,
+                    "set": set,
+                    "str": str,
+                    "int": int,
+                    "float": float,
+                    "bool": bool,
+                    "None": None,
+                    "True": True,
+                    "False": False,
+                }
                 exec(assertion_code, _ctx)  # noqa: S102
             except AssertionError:
                 raise  # property violation -- propagate
