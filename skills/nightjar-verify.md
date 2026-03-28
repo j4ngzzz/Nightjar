@@ -23,10 +23,18 @@ AI-generated code has a 2.74x higher vulnerability rate. Nightjar runs a 5-stage
    ```
 
 2. If no spec, create one:
+   No spec found. Use the nightjar-spec skill to create one interactively (reads your code, suggests invariants, asks a few questions), or run `nightjar scan <file>` for auto-generation from type hints and guard clauses.
    ```bash
+   # Option A: interactive skill — no YAML knowledge required
+   # Invoke the nightjar-spec skill in Claude Code
+
+   # Option B: auto-generate from existing code
+   nightjar scan <file>
+
+   # Option C: start from a blank template
    nightjar init <module_name>
+   # Then edit .card/<module_name>.card.md to add invariants
    ```
-   Then edit `.card/<module_name>.card.md` to add invariants describing what the code MUST do.
 
 3. Run verification:
    ```bash
