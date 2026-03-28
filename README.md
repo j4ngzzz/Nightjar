@@ -1,15 +1,15 @@
-<div align="center">
-  <pre>
-    ╔╗╔╦╔═╗╦ ╦╔╦╗ ╦╔═╗╦═╗
-    ║║║║║ ╦╠═╣ ║  ║╠═╣╠╦╝
-    ╝╚╝╩╚═╝╩ ╩ ╩╚╝╩╩ ╩╩╚═
-  </pre>
-  <p><strong>Your LLM writes code. Nightjar proves it.</strong></p>
-  <p><em>Not tested. Proved.</em></p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/banner.svg">
+  <img alt="Nightjar — Formally verify AI-generated code" src="assets/banner-light.svg" width="100%">
+</picture>
 
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License" /></a>
-  <a href="#quick-start"><img src="https://img.shields.io/badge/python-3.11+-blue" alt="Python" /></a>
-  <a href="https://pypi.org/project/nightjarzzz/"><img src="https://img.shields.io/pypi/v/nightjarzzz" alt="PyPI" /></a>
+<div align="center">
+
+[![PyPI version](https://img.shields.io/pypi/v/nightjarzzz.svg?style=for-the-badge&labelColor=000000&color=D4920A)](https://pypi.org/project/nightjarzzz/)
+[![Python](https://img.shields.io/badge/python-3.11+-informational?style=for-the-badge&labelColor=000000&color=D4920A)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-informational?style=for-the-badge&labelColor=000000&color=D4920A)](LICENSE)
+[![Verified with Dafny](https://img.shields.io/badge/verified_with-Dafny_4.x-informational?style=for-the-badge&labelColor=000000&color=D4920A)](https://github.com/dafny-lang/dafny)
+
 </div>
 
 <br>
@@ -95,11 +95,32 @@ Python 3.11+. [Dafny 4.x](https://github.com/dafny-lang/dafny/releases) is optio
 
 You write a `.card.md` spec describing what your code must do. An LLM generates the implementation. Nightjar runs five verification stages, cheapest first, and short-circuits on the first failure. Either you get a proof certificate or you get the exact counterexample that broke it.
 
+```mermaid
+graph LR
+    A["Stage 0<br/>Preflight"] --> B["Stage 1<br/>Deps"]
+    B --> C["Stage 2<br/>Schema"]
+    C --> D["Stage 2.5<br/>Negation Proof"]
+    D --> E["Stage 3<br/>Property Tests"]
+    E --> F["Stage 4<br/>Formal Proof"]
+    F -->|"Pass ✓"| G["Verified"]
+    F -->|"Fail ✗"| H["CEGIS Retry"]
+    H --> C
+    style A fill:#1a1409,color:#D4920A,stroke:#D4920A
+    style B fill:#1a1409,color:#D4920A,stroke:#D4920A
+    style C fill:#1a1409,color:#D4920A,stroke:#D4920A
+    style D fill:#1a1409,color:#D4920A,stroke:#D4920A
+    style E fill:#1a1409,color:#D4920A,stroke:#D4920A
+    style F fill:#1a1409,color:#F5B93A,stroke:#F5B93A
+    style G fill:#1a1409,color:#FFD060,stroke:#FFD060
+    style H fill:#1a1409,color:#C84B2F,stroke:#C84B2F
+```
+
 | Stage | What | Time |
 |-------|------|------|
 | 0. Preflight | Syntax, imports | <100ms |
 | 1. Dependencies | CVE scan | <500ms |
 | 2. Schema | Pydantic v2 type check | <200ms |
+| 2.5. Negation Proof | CrossHair counterexample search | <2s |
 | 3. Property | Hypothesis PBT | 300ms–8s |
 | 4. Formal | Dafny / CrossHair | 1–30s |
 
@@ -209,6 +230,10 @@ nightjar immune           Run invariant mining cycle
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
 - [Security](SECURITY.md)
+
+> **Repo maintainers:** set the social preview image at `assets/social-preview.png` via
+> Repository Settings → General → Social preview. This is the image shown when the repo URL
+> is shared on Twitter, LinkedIn, Slack, and Discord.
 
 ---
 

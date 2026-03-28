@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="240" viewBox="0 0 1200 240">
+  <!-- Background: warm near-black -->
+  <rect width="1200" height="240" fill="#0D0B09"/>
+
+  <!-- Subtle ambient glow -->
+  <radialGradient id="bannerGlow" cx="50%" cy="50%" r="55%">
+    <stop offset="0%" stop-color="#D4920A" stop-opacity="0.08"/>
+    <stop offset="100%" stop-color="#D4920A" stop-opacity="0"/>
+  </radialGradient>
+  <rect width="1200" height="240" fill="url(#bannerGlow)"/>
+
+  <!-- Top accent line -->
+  <rect x="0" y="0" width="1200" height="2" fill="#D4920A" opacity="0.7"/>
+  <!-- Bottom accent line -->
+  <rect x="0" y="238" width="1200" height="2" fill="#D4920A" opacity="0.3"/>
+
+  <!-- Left accent bar -->
+  <rect x="60" y="48" width="3" height="144" fill="#D4920A" opacity="0.8"/>
+
+  <!-- Nightjar wordmark -->
+  <text x="84" y="128"
+        font-family="'JetBrains Mono', 'Courier New', monospace"
+        font-size="72"
+        font-weight="600"
+        fill="#D4920A"
+        letter-spacing="-1">NIGHTJAR</text>
+
+  <!-- Tagline -->
+  <text x="86" y="172"
+        font-family="'JetBrains Mono', 'Courier New', monospace"
+        font-size="20"
+        font-weight="400"
+        fill="#F5F0E8"
+        opacity="0.85">Formally verify AI-generated code — not tested, proved.</text>
+
+  <!-- Right side: small seal icon -->
+  <polygon points="1120,60 1166,86 1166,138 1120,164 1074,138 1074,86"
+           fill="none" stroke="#D4920A" stroke-width="1.2" opacity="0.7"/>
+  <polygon points="1120,76 1152,94 1152,130 1120,148 1088,130 1088,94"
+           fill="none" stroke="#D4920A" stroke-width="0.5" opacity="0.3"/>
+  <circle cx="1120" cy="112" r="14" fill="#141109" stroke="#F5B93A" stroke-width="1.5"/>
+  <circle cx="1120" cy="112" r="8" fill="#D4920A" opacity="0.9"/>
+</svg>
