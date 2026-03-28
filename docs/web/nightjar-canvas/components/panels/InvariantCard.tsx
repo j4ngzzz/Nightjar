@@ -100,7 +100,18 @@ export function InvariantCard({ invariant, className }: InvariantCardProps) {
 
   return (
     <motion.div
-      className={cn("relative rounded-md p-3 cursor-default select-none", className)}
+      className={cn(
+        "relative rounded-md p-3 cursor-default select-none",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4920A]",
+        "focus-visible:ring-offset-1 focus-visible:ring-offset-[#141109]",
+        className
+      )}
+      tabIndex={0}
+      role="article"
+      // aria-label is intentionally omitted: the visible description text,
+      // formal expression, badges, and confidence % are already read by
+      // screen readers in document order. An aria-label would cause
+      // the content to be read twice.
       style={{
         background: "#141109",
         border: "1px solid #2A2315",

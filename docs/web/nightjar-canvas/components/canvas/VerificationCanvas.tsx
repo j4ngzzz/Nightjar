@@ -16,11 +16,12 @@
  *
  * IMPORTANT: nodeTypes and edgeTypes are declared OUTSIDE the component
  * to prevent React Flow from re-registering types on every render.
+ * @xyflow/react/dist/style.css is imported once in globals.css — do NOT
+ * re-import it here.
  */
 
-import "@xyflow/react/dist/style.css";
-
 import { useEffect, useState, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import {
   ReactFlow,
   Background,
@@ -41,7 +42,7 @@ import {
   BlockedEdge,
   type AmberEdgeType,
 } from "./AmberEdge";
-import { ProofTreeCanvas } from "./ProofTreeCanvas";
+import type { ProofTreeCanvasProps } from "./ProofTreeCanvas";
 import { applyElkLayout, buildFallbackPositions, NODE_WIDTH, NODE_HEIGHT } from "./elkLayout";
 import {
   type StageState,
@@ -49,7 +50,22 @@ import {
 } from "./crystallization";
 
 // ---------------------------------------------------------------------------
-// nodeTypes + edgeTypes — MUST be outside component (React Flow requirement)
+// ProofTreeCanvas — dynamically imported (lazy-loaded on first Formal click)
+// ssr: false — React Flow requires a browser DOM, cannot SSR.
+// ---------------------------------------------------------------------------
+
+const ProofTreeCanvas = dynamic<ProofTreeCanvasProps>(
+  () => import("./ProofTreeCanvas").then((m) => m.ProofTreeCanvas),
+  {
+    ssr: false,
+    loading: () => null,
+  }
+);
+
+// ---------------------------------------------------------------------------
+// nodeTypes + edgeTypes — MUST be outside component (React Flow requirement).
+// Defining these inside the component creates a new object on every render,
+// causing React Flow to re-register and flash all custom nodes.
 // ---------------------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -114,8 +130,14 @@ export interface VerificationCanvasProps {
   durationMap?: StageDurationMap;
   /** Per-stage findings counts */
   findingsMap?: StageFindingsMap;
-  /** Canvas height (default: 280px) */
+  /**
+   * Canvas height in px (default: 280px).
+   * Pass 220 when embedding inside VerificationLayout's mobile slot
+   * for a more compact single-column layout.
+   */
   height?: number;
+  /** Optional extra className applied to the outer wrapper div. */
+  className?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -172,6 +194,7 @@ export function VerificationCanvas({
   durationMap = {},
   findingsMap = {},
   height = 280,
+  className,
 }: VerificationCanvasProps) {
   const [proofTreeVisible, setProofTreeVisible] = useState(false);
 
@@ -222,14 +245,25 @@ export function VerificationCanvas({
   }, []);
 
   return (
-    <div className="flex flex-col gap-3 w-full">
-      {/* Main pipeline canvas */}
+    /*
+     * Responsive outer wrapper.
+     * The canvas itself is always full-width; the parent page is responsible
+     * for placing it within a multi-column grid at wider breakpoints.
+     * See: VerificationLayout for the three-column shell.
+     */
+    <div className={`flex flex-col gap-3 w-full ${className ?? ""}`}>
+      {/* Main pipeline canvas — height controlled by prop (default 280px).
+          Pinch-zoom on mobile via touch-action: pan-x pan-y pinch-zoom.
+          Pass height={220} from VerificationLayout's mobile slot for compact view.
+      */}
       <div
         className="w-full rounded-lg overflow-hidden border"
         style={{
           height,
           borderColor: "#2A2315",
           backgroundColor: "#0D0B09",
+          // Enable pinch-zoom on mobile while still allowing React Flow pan
+          touchAction: "pan-x pan-y pinch-zoom",
         }}
       >
         <ReactFlow
@@ -245,6 +279,23 @@ export function VerificationCanvas({
           nodesConnectable={false}
           proOptions={{ hideAttribution: true }}
           style={{ backgroundColor: "#0D0B09" }}
+          // ── Accessibility props ──────────────────────────────────────────
+          // nodesFocusable: Tab key can focus individual stage nodes.
+          // edgesFocusable: false — edges carry no actionable content.
+          // disableKeyboardA11y: false — keep default keyboard shortcuts.
+          // aria-label: describes the entire DAG canvas to screen readers.
+          // ariaLabelConfig: overrides the default "Press Enter to select"
+          //   message to use domain language ("expand stage details").
+          nodesFocusable={true}
+          edgesFocusable={false}
+          disableKeyboardA11y={false}
+          aria-label="Verification pipeline with 6 stages"
+          ariaLabelConfig={{
+            "node.a11yDescription.default":
+              "Press Enter to expand stage details",
+            "node.a11yDescription.keyboardDisabled":
+              "Keyboard navigation is disabled",
+          }}
         >
           <Background
             variant={BackgroundVariant.Dots}
@@ -284,7 +335,7 @@ export function VerificationCanvas({
         </ReactFlow>
       </div>
 
-      {/* ProofTreeCanvas — expands below on Formal node click */}
+      {/* ProofTreeCanvas — lazy-loaded, expands below on Formal node click */}
       <ProofTreeCanvas
         visible={proofTreeVisible}
         onClose={handleCloseProofTree}

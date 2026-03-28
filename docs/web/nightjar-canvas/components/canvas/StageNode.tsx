@@ -16,7 +16,7 @@
  * Running state: pulsing amber ring via CSS keyframes.
  */
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useCallback } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { motion } from "motion/react";
 import {
@@ -61,6 +61,16 @@ const STAGE_META: Record<
   pbt: { label: "PBT", icon: FlaskConical, index: 3 },
   negation: { label: "NEGATION", icon: Sigma, index: 4 },
   formal: { label: "FORMAL", icon: BookOpen, index: 5 },
+};
+
+/** Human-readable status labels for screen readers — module-scoped constant. */
+const STATUS_ARIA_LABELS: Record<StageState, string> = {
+  pending: "pending",
+  running: "running",
+  pbt_pass: "PBT pass",
+  formal_pass: "formal pass",
+  proven: "proven",
+  failed: "failed",
 };
 
 // ---------------------------------------------------------------------------
@@ -191,6 +201,17 @@ function StageNodeInner({ data, selected }: NodeProps<Node<StageNodeData>>) {
     [onClick, stage, state]
   );
 
+  // Keyboard handler: Enter or Space activates the node (same as click)
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if ((e.key === "Enter" || e.key === " ") && onClick) {
+        e.preventDefault();
+        onClick(stage, state);
+      }
+    },
+    [onClick, stage, state]
+  );
+
   const borderStyle = useMemo(() => {
     const base = {
       borderColor: colors.border,
@@ -211,10 +232,16 @@ function StageNodeInner({ data, selected }: NodeProps<Node<StageNodeData>>) {
       transition={{ delay: staggerDelay(staggerIndex) }}
       style={{ width: 200, height: 110 }}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      role={onClick ? "button" : undefined}
+      aria-label={`Stage: ${meta.label}, status: ${STATUS_ARIA_LABELS[state as StageState]}`}
+      tabIndex={onClick ? 0 : undefined}
       className={cn(
         "relative flex flex-col rounded-lg cursor-default select-none",
         "transition-shadow duration-300",
-        onClick && "cursor-pointer"
+        onClick && "cursor-pointer",
+        // Amber focus ring — only visible on keyboard focus, not mouse click
+        onClick && "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4920A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0D0B09]"
       )}
       // Override motion style with dynamic border + fill
       // (motion.div merges style prop with its own)

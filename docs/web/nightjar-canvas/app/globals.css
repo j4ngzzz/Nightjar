@@ -1,4 +1,5 @@
 @import "../styles/amber-tokens.css";
+@import "@xyflow/react/dist/style.css";
 
 @tailwind base;
 @tailwind components;
@@ -48,6 +49,57 @@
 }
 
 @layer utilities {
+  /* ── Accessibility ──────────────────────────────────────────────────────── */
+
+  /**
+   * Amber focus ring — WCAG AA compliant (7.8:1 contrast on #0D0B09).
+   * Applied to interactive elements that need a non-Tailwind focus ring.
+   * Mouse clicks never show this ring (focus-visible semantics).
+   */
+  .focus-ring-amber {
+    outline: none;
+  }
+  .focus-ring-amber:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #0D0B09, 0 0 0 4px #D4920A;
+  }
+
+  /**
+   * Override the browser default blue :focus-visible ring for Nightjar UI
+   * elements that do not already carry a Tailwind focus-visible:ring-* class.
+   *
+   * Scoped to interactive HTML elements to avoid colliding with React Flow's
+   * own internal focus styling on the canvas pane and minimap.
+   * Components that DO use Tailwind's focus-visible utilities are unaffected
+   * because their more-specific class declarations win the cascade.
+   */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid #D4920A;
+    outline-offset: 2px;
+  }
+
+  /**
+   * Screen-reader-only — mirrors Tailwind's built-in .sr-only for
+   * components that use the class without the Tailwind purge picking it up
+   * (e.g., aria-live status spans rendered conditionally).
+   */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
   /* Amber glow utilities */
   .glow-amber {
     box-shadow: var(--glow-amber);

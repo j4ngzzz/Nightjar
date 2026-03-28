@@ -110,7 +110,27 @@ function StatusBadge({ status }: { status: StageStatus }) {
 }
 
 // ---------------------------------------------------------------------------
-// Log line with slide+fade animation
+// Log virtualization constants
+// ---------------------------------------------------------------------------
+
+/**
+ * When log count exceeds this threshold, switch from animated motion.div
+ * rendering to a simple fixed-height windowed list. This prevents layout
+ * thrashing and animation overhead with 500+ log lines.
+ */
+const LOG_VIRTUALIZE_THRESHOLD = 500;
+
+/** Fixed row height in px — must match the row height in VirtualLogList */
+const LOG_ROW_HEIGHT = 20;
+
+/** Visible container height in px — matches maxHeight on the log container */
+const LOG_PANEL_HEIGHT = 160;
+
+/** Extra rows rendered above/below visible window to prevent pop-in */
+const LOG_OVERSCAN = 5;
+
+// ---------------------------------------------------------------------------
+// Log line with slide+fade animation (used when < LOG_VIRTUALIZE_THRESHOLD)
 // ---------------------------------------------------------------------------
 
 interface LogLineProps {
@@ -165,6 +185,130 @@ function LogLine({ line, index }: LogLineProps) {
 }
 
 // ---------------------------------------------------------------------------
+// VirtualLogList — windowed renderer for 500+ log lines.
+//
+// No external dependency. A fixed-height scroll container wraps a tall inner
+// div (height = total rows * LOG_ROW_HEIGHT). Only rows in the current scroll
+// viewport — plus LOG_OVERSCAN rows above/below — are mounted. Each row is
+// absolutely positioned at top = rowIndex * LOG_ROW_HEIGHT.
+//
+// On each scroll event, scrollTop is captured in state; React re-renders only
+// the changed slice. Overscan prevents pop-in during fast scrolling.
+// ---------------------------------------------------------------------------
+
+interface VirtualLogListProps {
+  logs: StageLogLine[];
+  /** Changing this value triggers a scroll-to-bottom (pass logs.length) */
+  scrollToBottomDep?: number;
+}
+
+function VirtualLogList({ logs, scrollToBottomDep }: VirtualLogListProps) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = React.useState(0);
+
+  // Auto-scroll to bottom whenever new lines arrive.
+  // scrollToBottomDep (= logs.length) is the sole dep; containerRef is a
+  // stable ref object and intentionally omitted per React ref conventions.
+  React.useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [scrollToBottomDep]);
+
+  const handleScroll = React.useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      setScrollTop((e.currentTarget as HTMLDivElement).scrollTop);
+    },
+    []
+  );
+
+  const totalHeight = logs.length * LOG_ROW_HEIGHT;
+  const visibleStart = Math.max(
+    0,
+    Math.floor(scrollTop / LOG_ROW_HEIGHT) - LOG_OVERSCAN
+  );
+  const visibleEnd = Math.min(
+    logs.length,
+    Math.ceil((scrollTop + LOG_PANEL_HEIGHT) / LOG_ROW_HEIGHT) + LOG_OVERSCAN
+  );
+
+  const visibleLogs = logs.slice(visibleStart, visibleEnd);
+
+  return (
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      // aria-live intentionally omitted — screen readers must not announce
+      // DOM mutations caused by scroll-driven virtualization. The parent
+      // section heading already identifies this region to AT users.
+      aria-label="Stage log output"
+      role="log"
+      style={{
+        height: LOG_PANEL_HEIGHT,
+        overflowY: "scroll",
+        position: "relative",
+      }}
+    >
+      {/* Spacer gives the container its full scrollable height */}
+      <div style={{ height: totalHeight, position: "relative" }}>
+        {visibleLogs.map((line, i) => {
+          const rowIndex = visibleStart + i;
+          const textColor =
+            line.level === "error"
+              ? "#C84B2F"
+              : line.level === "warn"
+              ? "#D4920A"
+              : "#9A8E78";
+
+          return (
+            <div
+              key={line.id}
+              style={{
+                position: "absolute",
+                top: rowIndex * LOG_ROW_HEIGHT,
+                left: 0,
+                right: 0,
+                height: LOG_ROW_HEIGHT,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                overflow: "hidden",
+              }}
+            >
+              {line.ts !== undefined && (
+                <span
+                  className="flex-shrink-0 tabular-nums select-none"
+                  style={{
+                    color: "#6E6860",
+                    fontFamily: "var(--font-jetbrains-mono)",
+                    fontSize: 10,
+                    minWidth: "4ch",
+                  }}
+                >
+                  {new Date(line.ts * 1000).toISOString().slice(11, 19)}
+                </span>
+              )}
+              <span
+                style={{
+                  color: textColor,
+                  fontFamily: "var(--font-jetbrains-mono)",
+                  fontSize: 12,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {line.text}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Section heading
 // ---------------------------------------------------------------------------
 
@@ -183,33 +327,40 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 // Close button
 // ---------------------------------------------------------------------------
 
-function CloseButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex h-6 w-6 items-center justify-center rounded transition-colors"
-      style={{ color: "#9A8E78" }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.color = "#F5F0E8";
-        (e.currentTarget as HTMLButtonElement).style.background = "rgba(212,146,10,0.1)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.color = "#9A8E78";
-        (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-      }}
-      aria-label="Close stage detail panel"
-    >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
-        <path
-          d="M1 1L11 11M11 1L1 11"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    </button>
-  );
-}
+const CloseButton = React.forwardRef<HTMLButtonElement, { onClick: () => void }>(
+  function CloseButton({ onClick }, ref) {
+    return (
+      <button
+        ref={ref}
+        onClick={onClick}
+        className={[
+          "flex h-6 w-6 items-center justify-center rounded transition-colors",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4920A]",
+          "focus-visible:ring-offset-1 focus-visible:ring-offset-[#0D0B09]",
+        ].join(" ")}
+        style={{ color: "#9A8E78" }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.color = "#F5F0E8";
+          (e.currentTarget as HTMLButtonElement).style.background = "rgba(212,146,10,0.1)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.color = "#9A8E78";
+          (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+        }}
+        aria-label="Close stage detail panel"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+          <path
+            d="M1 1L11 11M11 1L1 11"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+    );
+  }
+);
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -221,6 +372,7 @@ export function StageDetailPanel({
   className,
 }: StageDetailPanelProps) {
   const logsEndRef = React.useRef<HTMLDivElement>(null);
+  const closeButtonRef = React.useRef<HTMLButtonElement>(null);
   const [showExplanation, setShowExplanation] = React.useState(false);
 
   // Reset explanation when stage changes
@@ -234,6 +386,24 @@ export function StageDetailPanel({
       logsEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [stage?.logs.length]);
+
+  // Move focus into the panel when it opens, restore on close
+  React.useEffect(() => {
+    if (stage && closeButtonRef.current) {
+      closeButtonRef.current.focus();
+    }
+  }, [stage?.stageName]);
+
+  // Keyboard: Escape closes the panel
+  React.useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && stage) {
+        onClose();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [stage, onClose]);
 
   const hasFailed = stage?.status === "failed";
   const hasCounterexample = hasFailed && Boolean(stage?.counterexample);
@@ -279,6 +449,7 @@ export function StageDetailPanel({
             }}
             role="complementary"
             aria-label={`Stage detail: ${stage.stageName}`}
+            aria-modal="false"
           >
             {/* ── Header ───────────────────────────────────────────────── */}
             <div
@@ -298,11 +469,15 @@ export function StageDetailPanel({
                 </span>
                 <StatusBadge status={stage.status} />
               </div>
-              <CloseButton onClick={onClose} />
+              <CloseButton ref={closeButtonRef} onClick={onClose} />
             </div>
 
             {/* ── Scrollable body ───────────────────────────────────────── */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+            <div
+              className="flex-1 overflow-y-auto px-4 py-4 space-y-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4920A] focus-visible:ring-inset"
+              tabIndex={0}
+              aria-label="Stage detail content"
+            >
 
               {/* Stats row */}
               <div className="grid grid-cols-2 gap-2">
@@ -345,21 +520,47 @@ export function StageDetailPanel({
               {/* Log output */}
               {stage.logs.length > 0 && (
                 <div>
-                  <SectionHeading>Log Output</SectionHeading>
+                  <SectionHeading>
+                    Log Output
+                    {stage.logs.length > LOG_VIRTUALIZE_THRESHOLD && (
+                      <span
+                        className="ml-2 normal-case font-normal"
+                        style={{ color: "#6E6860" }}
+                      >
+                        ({stage.logs.length} lines)
+                      </span>
+                    )}
+                  </SectionHeading>
                   <div
-                    className="rounded overflow-y-auto px-3 py-2.5 space-y-0.5"
+                    className="rounded px-3 py-2.5"
                     style={{
                       background: "#141109",
                       border: "1px solid #2A2315",
-                      maxHeight: 160,
                     }}
-                    aria-live="polite"
-                    aria-label="Stage log output"
                   >
-                    {stage.logs.map((line, idx) => (
-                      <LogLine key={line.id} line={line} index={idx} />
-                    ))}
-                    <div ref={logsEndRef} />
+                    {stage.logs.length > LOG_VIRTUALIZE_THRESHOLD ? (
+                      // Windowed virtual list — only renders visible rows.
+                      // Handles 1000+ lines without animation overhead.
+                      <VirtualLogList
+                        logs={stage.logs}
+                        scrollToBottomDep={stage.logs.length}
+                      />
+                    ) : (
+                      // Animated list for smaller log sets.
+                      // maxHeight matches LOG_PANEL_HEIGHT — single source of truth.
+                      <div
+                        className="overflow-y-auto space-y-0.5"
+                        style={{ maxHeight: LOG_PANEL_HEIGHT }}
+                        aria-live="polite"
+                        aria-label="Stage log output"
+                        role="log"
+                      >
+                        {stage.logs.map((line, idx) => (
+                          <LogLine key={line.id} line={line} index={idx} />
+                        ))}
+                        <div ref={logsEndRef} />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -425,7 +626,11 @@ export function StageDetailPanel({
                 style={{ borderTop: "1px solid #2A2315" }}
               >
                 <button
-                  className="w-full rounded px-3 py-2 text-[12px] font-medium transition-colors"
+                  className={[
+                    "w-full rounded px-3 py-2 text-[12px] font-medium transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4920A]",
+                    "focus-visible:ring-offset-1 focus-visible:ring-offset-[#0D0B09]",
+                  ].join(" ")}
                   style={{
                     background: "rgba(212,146,10,0.1)",
                     border: "1px solid #D4920A",
@@ -442,6 +647,7 @@ export function StageDetailPanel({
                     (e.currentTarget as HTMLButtonElement).style.background =
                       "rgba(212,146,10,0.1)";
                   }}
+                  aria-label={`Explain stage ${stage.stageName}`}
                 >
                   ◈ Explain this stage
                 </button>

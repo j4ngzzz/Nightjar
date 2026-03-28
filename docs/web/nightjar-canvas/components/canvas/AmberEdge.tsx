@@ -12,6 +12,7 @@
  * SVG animateMotion is used directly (no external animation lib needed for edges).
  */
 
+import { memo } from "react";
 import {
   BaseEdge,
   getBezierPath,
@@ -49,7 +50,7 @@ function useEdgePath(props: EdgeProps) {
 //    3 SVG circles staggered along the path via animateMotion
 // ---------------------------------------------------------------------------
 
-export function AmberParticleEdge(props: EdgeProps) {
+function AmberParticleEdgeInner(props: EdgeProps) {
   const { id, markerEnd, style } = props;
   const edgePath = useEdgePath(props);
   const pathId = `particle-path-${id}`;
@@ -94,11 +95,14 @@ export function AmberParticleEdge(props: EdgeProps) {
   );
 }
 
+export const AmberParticleEdge = memo(AmberParticleEdgeInner);
+AmberParticleEdge.displayName = "AmberParticleEdge";
+
 // ---------------------------------------------------------------------------
 // 2. AmberCompletedEdge — solid gold gradient when upstream complete
 // ---------------------------------------------------------------------------
 
-export function AmberCompletedEdge(props: EdgeProps) {
+function AmberCompletedEdgeInner(props: EdgeProps) {
   const { id, markerEnd, style } = props;
   const edgePath = useEdgePath(props);
   const gradientId = `amber-grad-${id}`;
@@ -142,11 +146,14 @@ export function AmberCompletedEdge(props: EdgeProps) {
   );
 }
 
+export const AmberCompletedEdge = memo(AmberCompletedEdgeInner);
+AmberCompletedEdge.displayName = "AmberCompletedEdge";
+
 // ---------------------------------------------------------------------------
 // 3. BlockedEdge — dashed dark line when downstream of failure
 // ---------------------------------------------------------------------------
 
-export function BlockedEdge(props: EdgeProps) {
+function BlockedEdgeInner(props: EdgeProps) {
   const { id, markerEnd, style } = props;
   const edgePath = useEdgePath(props);
 
@@ -165,6 +172,9 @@ export function BlockedEdge(props: EdgeProps) {
     />
   );
 }
+
+export const BlockedEdge = memo(BlockedEdgeInner);
+BlockedEdge.displayName = "BlockedEdge";
 
 // ---------------------------------------------------------------------------
 // Edge type registry — export for use in edgeTypes map

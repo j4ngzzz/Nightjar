@@ -15,7 +15,7 @@
  * Entry: crystallize animation with shorter stagger (20ms)
  */
 
-import { useMemo, useCallback } from "react";
+import { memo, useMemo, useCallback } from "react";
 import {
   ReactFlow,
   Background,
@@ -64,7 +64,7 @@ const STATUS_BORDER: Record<ProofNodeData["status"], string> = {
 // ProofTreeNode — custom node for proof items
 // ---------------------------------------------------------------------------
 
-function ProofTreeNode({ data }: NodeProps<Node<ProofNodeData>>) {
+function ProofTreeNodeInner({ data }: NodeProps<Node<ProofNodeData>>) {
   const { kind, status, label } = data as ProofNodeData;
   const accentColor = KIND_COLORS[kind];
   const borderColor = STATUS_BORDER[status];
@@ -110,6 +110,11 @@ function ProofTreeNode({ data }: NodeProps<Node<ProofNodeData>>) {
   );
 }
 
+// Memoized — proof nodes are static once tree is built; skip re-renders
+const ProofTreeNode = memo(ProofTreeNodeInner);
+ProofTreeNode.displayName = "ProofTreeNode";
+
+// nodeTypes OUTSIDE component so React Flow doesn't re-register on each render
 const proofNodeTypes = {
   proofNode: ProofTreeNode,
 };

@@ -62,23 +62,35 @@ function CopyLinkButton({ url }: { url: string }) {
   }
 
   return (
-    <button
-      onClick={handleCopy}
-      className={cn(
-        "flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all duration-200",
-        "border border-[#2A2315] bg-[#141109] text-[#F0EBE3]",
-        "hover:border-[#D4920A] hover:text-[#F5B93A]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4920A]"
-      )}
-      aria-label={copied ? "Link copied!" : "Copy link to clipboard"}
-    >
-      {copied ? (
-        <Check size={15} style={{ color: "#F5B93A" }} aria-hidden="true" />
-      ) : (
-        <Link2 size={15} aria-hidden="true" />
-      )}
-      <span>{copied ? "Copied!" : "Copy link"}</span>
-    </button>
+    <>
+      {/* aria-live region announces clipboard status to screen readers */}
+      <span
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {copied ? "Link copied to clipboard" : ""}
+      </span>
+      <button
+        onClick={handleCopy}
+        className={cn(
+          "flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all duration-200",
+          "border border-[#2A2315] bg-[#141109] text-[#F0EBE3]",
+          "hover:border-[#D4920A] hover:text-[#F5B93A]",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4920A]",
+          "focus-visible:ring-offset-2 focus-visible:ring-offset-[#0D0B09]"
+        )}
+        aria-label={copied ? "Link copied to clipboard" : "Copy link to clipboard"}
+      >
+        {copied ? (
+          <Check size={15} style={{ color: "#F5B93A" }} aria-hidden="true" />
+        ) : (
+          <Link2 size={15} aria-hidden="true" />
+        )}
+        <span>{copied ? "Copied!" : "Copy link"}</span>
+      </button>
+    </>
   );
 }
 

@@ -14,9 +14,16 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // Experiment: optimize package imports for better tree-shaking
+  // Experiment: optimize package imports for better tree-shaking.
+  // These packages export many modules; Next.js only bundles what's used.
+  // motion/react is the correct specifier for the motion package's React entry.
   experimental: {
-    optimizePackageImports: ["lucide-react", "@xyflow/react"],
+    optimizePackageImports: [
+      "lucide-react",
+      "@xyflow/react",
+      "motion/react",
+      "recharts",
+    ],
   },
 };
 
