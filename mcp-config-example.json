@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "nightjar": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "nightjar.mcp_server"],
+      "env": {
+        "NIGHTJAR_MODEL": "deepseek/deepseek-chat"
+      }
+    }
+  }
+}
