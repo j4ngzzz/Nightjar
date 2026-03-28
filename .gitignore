@@ -48,6 +48,15 @@ contractd.toml
 # Mutation testing sandbox — disposable, never commit
 mutation-lab/
 
+# Scan-lab cloned repos — result .md files are committed, repos are not
+scan-lab/mirofish/
+scan-lab/hermes/
+scan-lab/deerflow/
+scan-lab/openswe/
+scan-lab/minbpe/
+scan-lab/makemore/
+scan-lab/*.card.md
+
 # PyPI upload instructions (contains credential guidance)
 PYPI_UPLOAD.md
 
