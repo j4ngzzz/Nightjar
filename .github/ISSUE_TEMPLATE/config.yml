@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/j4ngzzz/Nightjar/discussions
+    about: Ask questions, share findings, or discuss how you're using Nightjar
+  - name: Security vulnerability
+    url: https://github.com/j4ngzzz/Nightjar/security/advisories/new
+    about: Report a security vulnerability in Nightjar itself (not bugs it found in other packages)

@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: "If you use Nightjar in research, please cite it."
+title: "Nightjar: Formal Verification for AI-Generated Code"
+type: software
+authors:
+  - name: "Nightjar Contributors"
+license: AGPL-3.0-only
+repository-code: "https://github.com/j4ngzzz/Nightjar"
+version: "0.1.0"
+date-released: "2026-03-28"
+abstract: >
+  Nightjar is a contract-anchored verification layer for AI-generated code.
+  Developers write specs (.card.md files). An LLM generates the implementation.
+  Nightjar runs a six-stage pipeline — preflight, dependency audit, schema
+  validation, negation proof, property-based testing, and formal verification
+  with Dafny 4.x — and either produces a proof certificate or a concrete
+  counterexample via a CEGIS retry loop.
+keywords:
+  - formal-verification
+  - property-based-testing
+  - ai-generated-code
+  - dafny
+  - cegis
+  - hypothesis
+  - specification
+references:
+  - type: article
+    title: "Program Synthesis"
+    authors:
+      - family-names: Solar-Lezama
+        given-names: Armando
+    notes: "CEGIS (Counterexample-Guided Inductive Synthesis) — the basis for Nightjar's retry loop [REF-NEW-02]"
+  - type: software
+    title: "Dafny: A Language and Program Verifier for Functional Correctness"
+    url: "https://github.com/dafny-lang/dafny"
+    notes: "[REF-T01]"
+  - type: software
+    title: "Hypothesis: Property-Based Testing for Python"
+    url: "https://hypothesis.readthedocs.io"
+    notes: "[REF-T03]"
