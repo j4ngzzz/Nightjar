@@ -319,7 +319,8 @@ def run_pipeline(
             and on_pipeline_complete(VerifyResult). Defaults to NullDisplay.
 
     Returns:
-        VerifyResult with verified=True if all stages pass/skip.
+        VerifyResult with verified=True if at least one stage passes and no stage fails.
+        All-SKIP (nothing tested) returns verified=False.
     """
     from nightjar.display import NullDisplay
     display = display_callback if display_callback is not None else NullDisplay()
@@ -411,7 +412,9 @@ def run_pipeline(
     # Sort stages by stage number so list is always in sequential order (0,1,2,3,...)
     stages.sort(key=lambda s: s.stage)
 
-    verified = _stage_ok(result_4)
+    has_active_pass = any(s.status == VerifyStatus.PASS for s in stages)
+    no_failures = _stage_ok(result_4)
+    verified = has_active_pass and no_failures
     result = _build_result(stages, start, verified=verified)
     display.on_pipeline_complete(result)
     return result
@@ -694,7 +697,8 @@ def run_pipeline_parallel(
         spec_path: Optional path to the .card.md file (for preflight).
 
     Returns:
-        VerifyResult with verified=True only if all stages pass/skip.
+        VerifyResult with verified=True if at least one stage passes and no stage fails.
+        All-SKIP (nothing tested) returns verified=False.
     """
     import os as _os
     if _os.environ.get("NIGHTJAR_PARALLEL") != "1":
@@ -736,7 +740,9 @@ def run_pipeline_parallel(
     # Merge in canonical order 0,1,2,3,4 regardless of completion order
     stages.extend([result_2, result_3, result_4])
 
-    verified = _stage_ok(result_2) and _stage_ok(result_3) and _stage_ok(result_4)
+    has_active_pass = any(s.status == VerifyStatus.PASS for s in stages)
+    no_failures = _stage_ok(result_2) and _stage_ok(result_3) and _stage_ok(result_4)
+    verified = has_active_pass and no_failures
     return _build_result(stages, start, verified=verified)
 
 
