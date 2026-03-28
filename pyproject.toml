@@ -47,6 +47,10 @@ dev = [
 fast = [
     "watchfiles>=0.21",  # Rust-backed watcher — 10x faster than watchdog for nightjar watch
 ]
+canvas = [
+    "fastapi>=0.100",    # Verification Canvas REST + SSE API
+    "uvicorn>=0.23",     # ASGI server for nightjar serve
+]
 compliance = [
     "cyclonedx-bom>=4.0",  # CycloneDX SBOM generation for EU CRA compliance reports
 ]

@@ -18,7 +18,7 @@ jobs:
           python-version: '3.11'
       - run: pip install -e ".[dev]"
       - name: Run unit tests
-        run: python -m pytest tests/unit/ -m "not integration" -q
+        run: python -m pytest tests/unit/ -m "not integration" --tb=short -v
       - name: Verify Nightjar specs (dogfooding)
         run: |
           python -c "
