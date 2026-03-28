@@ -1,0 +1,171 @@
+# action.yml — Nightjar GitHub Action
+# Composite action for formal contract verification with SARIF upload.
+#
+# Usage:
+#   - name: Run Nightjar
+#     uses: j4ngzzz/Nightjar@v1
+#     with:
+#       fast: "false"
+#       upload-sarif: "true"
+#
+# Requires `permissions: security-events: write` in your workflow to enable SARIF upload.
+
+name: Nightjar Contract Verification
+description: "Verify AI-generated Python code against formal specs using the Nightjar pipeline"
+author: "Nightjar"
+
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  spec-path:
+    description: "Path to .card/ specs directory"
+    required: false
+    default: ".card"
+  fast:
+    description: "Run in fast mode (skip Dafny and negation-proof stages — recommended for PRs)"
+    required: false
+    default: "false"
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.11"
+  nightjar-version:
+    description: "Nightjar version to install (default: latest)"
+    required: false
+    default: "latest"
+  upload-sarif:
+    description: "Upload results to GitHub Code Scanning as SARIF (requires security-events: write permission)"
+    required: false
+    default: "true"
+  dafny-version:
+    description: "Dafny version to install via dotnet tool (leave empty or set fast=true to skip)"
+    required: false
+    default: "4.9.0"
+  fail-on-violation:
+    description: "Fail the workflow step if Nightjar finds contract violations"
+    required: false
+    default: "true"
+
+outputs:
+  result:
+    description: "Verification result: pass or fail"
+    value: ${{ steps.verify.outputs.result }}
+  sarif-file:
+    description: "Path to generated SARIF file (empty if not produced)"
+    value: ${{ steps.verify.outputs.sarif-file }}
+  violation-count:
+    description: "Number of violations found (0 on pass)"
+    value: ${{ steps.verify.outputs.violation-count }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-nightjar-${{ inputs.nightjar-version }}-py${{ inputs.python-version }}
+        restore-keys: |
+          ${{ runner.os }}-pip-nightjar-
+
+    - name: Install Nightjar
+      shell: bash
+      run: |
+        if [[ "${{ inputs.nightjar-version }}" == "latest" ]]; then
+          pip install nightjar
+        else
+          pip install "nightjar==${{ inputs.nightjar-version }}"
+        fi
+
+    - name: Set up .NET (required for Dafny)
+      if: ${{ inputs.dafny-version != '' && inputs.fast != 'true' }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "8.0.x"
+
+    - name: Cache Dafny dotnet tool
+      if: ${{ inputs.dafny-version != '' && inputs.fast != 'true' }}
+      id: cache-dafny
+      uses: actions/cache@v4
+      with:
+        path: ~/.dotnet/tools
+        key: dafny-dotnet-tool-${{ inputs.dafny-version }}-${{ runner.os }}
+
+    - name: Install Dafny
+      if: ${{ inputs.dafny-version != '' && inputs.fast != 'true' && steps.cache-dafny.outputs.cache-hit != 'true' }}
+      shell: bash
+      run: |
+        dotnet tool install --global Dafny --version "${{ inputs.dafny-version }}"
+        echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+    - name: Add dotnet tools to PATH (cache hit)
+      if: ${{ inputs.dafny-version != '' && inputs.fast != 'true' && steps.cache-dafny.outputs.cache-hit == 'true' }}
+      shell: bash
+      run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+    - name: Run Nightjar verification
+      id: verify
+      shell: bash
+      env:
+        # Pass inputs via env vars to prevent GitHub Actions script injection.
+        # See: https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions
+        NJ_FAST: ${{ inputs.fast }}
+        NJ_SPEC_PATH: ${{ inputs.spec-path }}
+        NJ_FAIL_ON_VIOLATION: ${{ inputs.fail-on-violation }}
+      run: |
+        EXTRA_FLAGS=""
+        if [[ "$NJ_FAST" == "true" ]]; then
+          EXTRA_FLAGS="--fast"
+        fi
+
+        set +e
+        nightjar verify $EXTRA_FLAGS --spec-path "$NJ_SPEC_PATH" --output-sarif nightjar.sarif
+        EXIT_CODE=$?
+        set -e
+
+        # Extract violation count from SARIF if it exists
+        VIOLATION_COUNT=0
+        if [[ -f nightjar.sarif ]]; then
+          VIOLATION_COUNT=$(python3 -c "
+        import json, sys
+        try:
+            data = json.load(open('nightjar.sarif'))
+            count = sum(len(run.get('results', [])) for run in data.get('runs', []))
+            print(count)
+        except Exception:
+            print(0)
+        " 2>/dev/null || echo "0")
+        fi
+
+        if [[ $EXIT_CODE -eq 0 ]]; then
+          echo "result=pass" >> "$GITHUB_OUTPUT"
+        else
+          echo "result=fail" >> "$GITHUB_OUTPUT"
+        fi
+
+        echo "violation-count=$VIOLATION_COUNT" >> "$GITHUB_OUTPUT"
+
+        if [[ -f nightjar.sarif ]]; then
+          echo "sarif-file=nightjar.sarif" >> "$GITHUB_OUTPUT"
+        else
+          echo "sarif-file=" >> "$GITHUB_OUTPUT"
+        fi
+
+        # Respect fail-on-violation setting
+        if [[ $EXIT_CODE -ne 0 && "$NJ_FAIL_ON_VIOLATION" == "true" ]]; then
+          exit $EXIT_CODE
+        fi
+
+    - name: Upload SARIF to GitHub Code Scanning
+      if: ${{ inputs.upload-sarif == 'true' && hashFiles('nightjar.sarif') != '' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: nightjar.sarif
+        category: nightjar-formal-verification

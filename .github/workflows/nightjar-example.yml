@@ -1,0 +1,84 @@
+# .github/workflows/nightjar-example.yml
+#
+# Example workflow showing how to integrate Nightjar into CI.
+# Copy this file into your repository's .github/workflows/ directory.
+#
+# REQUIRED: Add this permission block to your workflow so SARIF upload works:
+#
+#   permissions:
+#     contents: read
+#     security-events: write   # required for GitHub Code Scanning / SARIF upload
+#
+# After merging, violations appear inline on PRs under the Security tab.
+
+name: Nightjar Verification
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "src/**"
+      - "**.py"
+      - ".card/**"
+      - "*.toml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "**.py"
+      - ".card/**"
+      - "*.toml"
+  workflow_dispatch:
+    inputs:
+      fast:
+        description: "Run in fast mode (skip Dafny)"
+        required: false
+        default: "false"
+        type: boolean
+
+# Required for SARIF upload to GitHub Code Scanning
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # --- Fast verification on every PR (no Dafny) ---
+  verify-fast:
+    name: Nightjar (fast)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Nightjar (fast mode)
+        uses: j4ngzzz/Nightjar@v1
+        with:
+          fast: "true"
+          upload-sarif: "true"
+          fail-on-violation: "true"
+
+  # --- Full pipeline (with Dafny) on push to main ---
+  verify-full:
+    name: Nightjar (full)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Nightjar (full pipeline)
+        id: nightjar
+        uses: j4ngzzz/Nightjar@v1
+        with:
+          fast: ${{ inputs.fast || 'false' }}
+          upload-sarif: "true"
+          fail-on-violation: "true"
+          dafny-version: "4.9.0"
+
+      - name: Report verification result
+        if: always()
+        shell: bash
+        run: |
+          echo "Result:     ${{ steps.nightjar.outputs.result }}"
+          echo "Violations: ${{ steps.nightjar.outputs.violation-count }}"
+          echo "SARIF:      ${{ steps.nightjar.outputs.sarif-file }}"

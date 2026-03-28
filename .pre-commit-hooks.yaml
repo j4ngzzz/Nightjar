@@ -1,0 +1,32 @@
+# .pre-commit-hooks.yaml
+# Nightjar pre-commit hooks — add to your .pre-commit-config.yaml:
+#
+#   repos:
+#     - repo: https://github.com/j4ngzzz/Nightjar
+#       rev: v0.1.0
+#       hooks:
+#         - id: nightjar-verify
+#
+# See https://nightjarcode.dev/docs/ci for full documentation.
+
+- id: nightjar-verify
+  name: Nightjar Verify
+  description: "Run Nightjar formal verification on staged Python changes (fast mode — skips Dafny and negation-proof for speed)"
+  entry: nightjar verify --fast
+  language: python
+  types: [python]
+  pass_filenames: false
+  require_serial: true
+  additional_dependencies: []
+  minimum_pre_commit_version: "2.9.2"
+
+- id: nightjar-scan
+  name: Nightjar Scan
+  description: "Scan Python files for invariant violations using Nightjar Stage 0 preflight checks (no LLM required)"
+  entry: nightjar scan
+  language: python
+  types: [python]
+  pass_filenames: true
+  require_serial: true
+  additional_dependencies: []
+  minimum_pre_commit_version: "2.9.2"
