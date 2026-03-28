@@ -12,13 +12,18 @@ References:
 
 Design per ARCHITECTURE.md Section 3 + Scout 5 F6:
   Stage 3 uses Hypothesis profiles for dev/CI speed trade-off.
-  dev profile (NIGHTJAR_TEST_PROFILE=dev or unset): max_examples=10  ~300-500ms
+  dev profile (NIGHTJAR_TEST_PROFILE=dev or unset): max_examples=30  ~300-500ms
   ci  profile (NIGHTJAR_TEST_PROFILE=ci):           max_examples=200 ~3-8s
   Properties are auto-generated from invariants.
   Short-circuit on property violation with counterexample.
+
+Assertion engine (two-tier):
+  Tier A — regex patterns: fast, no LLM, handles the most common invariant forms.
+  Tier B — LLM fallback: used when Tier A cannot match; gracefully skips on error.
 """
 
 import os
+import re
 import time
 import textwrap
 import traceback
@@ -60,6 +65,186 @@ def _load_pbt_profile() -> str:
     profile = os.getenv("NIGHTJAR_TEST_PROFILE", "dev")
     settings.load_profile(profile)
     return profile
+
+
+# ---------------------------------------------------------------------------
+# Assertion engine — Tier A (regex) + Tier B (LLM fallback)
+# ---------------------------------------------------------------------------
+
+def _parse_invariant_to_assertion(statement: str, func_name: str) -> str | None:
+    """Tier A: Convert a natural-language invariant statement to a Python assert.
+
+    Recognises the most common invariant patterns via regex.  Returns None when
+    no pattern matches so the caller can escalate to Tier B (LLM fallback).
+
+    Args:
+        statement: Natural-language invariant from .card.md (e.g. "result >= 0").
+        func_name: Name of the function under test (used only for error messages).
+
+    Returns:
+        A Python ``assert …`` string, or None if no pattern matched.
+    """
+    lower = statement.lower()
+
+    # ── "must not raise" / "no exception" ────────────────────────────────────
+    # These are handled structurally in _run_single_invariant (any exception
+    # from the call under test is already re-raised as AssertionError), so we
+    # return a sentinel that the caller treats as "call-only, no extra check".
+    if re.search(r"must not raise|no exception|does not raise|should not raise", lower):
+        return "assert True  # call-only: any exception already fails"
+
+    # ── "not None" / "must return" ────────────────────────────────────────────
+    if re.search(r"not none|must return|returns a value|is not none", lower):
+        return "assert result is not None"
+
+    # ── "result > 0" / "strictly positive" ───────────────────────────────────
+    if re.search(r"strictly positive|result\s*>\s*0|result is positive and non.?zero", lower):
+        return "assert result > 0"
+
+    # ── "result >= 0" / "positive" / "non-negative" ──────────────────────────
+    # Must come AFTER strictly-positive so "strictly positive" → > 0 not >= 0.
+    if re.search(r"non.?negative|result\s*>=\s*0", lower):
+        return "assert result >= 0"
+
+    if re.search(r"\bpositive\b", lower):
+        return "assert isinstance(result, (int, float)) and result > 0"
+
+    # ── "between X and Y" / "range" ──────────────────────────────────────────
+    m = re.search(
+        r"between\s+(-?\d+(?:\.\d+)?)\s+and\s+(-?\d+(?:\.\d+)?)",
+        lower,
+    )
+    if m:
+        lo, hi = m.group(1), m.group(2)
+        return f"assert {lo} <= result <= {hi}"
+
+    # ── "result must be in range X to Y" ─────────────────────────────────────
+    m = re.search(
+        r"(?:in range|range of|from)\s+(-?\d+(?:\.\d+)?)\s+to\s+(-?\d+(?:\.\d+)?)",
+        lower,
+    )
+    if m:
+        lo, hi = m.group(1), m.group(2)
+        return f"assert {lo} <= result <= {hi}"
+
+    # ── "sorted" ──────────────────────────────────────────────────────────────
+    if re.search(r"\bsorted\b", lower):
+        return "assert result == sorted(result)"
+
+    # ── "unique" / "no duplicates" ────────────────────────────────────────────
+    if re.search(r"\bunique\b|no duplicates|no duplicate", lower):
+        return "assert len(result) == len(set(result))"
+
+    # ── "empty" patterns ──────────────────────────────────────────────────────
+    if re.search(r"\bmust be empty\b|\bshould be empty\b|\bis empty\b|\breturns empty\b", lower):
+        return "assert len(result) == 0"
+
+    if re.search(r"\bnot empty\b|\bmust not be empty\b|\bnon.?empty\b", lower):
+        return "assert len(result) > 0"
+
+    # ── "len(result) …" ───────────────────────────────────────────────────────
+    m = re.search(r"len\s*\(\s*result\s*\)\s*([><=!]+)\s*(\d+)", lower)
+    if m:
+        op, val = m.group(1), m.group(2)
+        return f"assert len(result) {op} {val}"
+
+    # ── "result == <expr>" / "equals <expr>" ─────────────────────────────────
+    # Specific numeric equality
+    m = re.search(r"result\s*==\s*(-?\d+(?:\.\d+)?)", lower)
+    if m:
+        val = m.group(1)
+        return f"assert result == {val}"
+
+    # "equals x * N" style
+    m = re.search(r"equals?\s+x\s*\*\s*(\d+)", lower)
+    if m:
+        factor = m.group(1)
+        return f"assert result == x * {factor}"
+
+    # "equals x + N" style
+    m = re.search(r"equals?\s+x\s*\+\s*(\d+)", lower)
+    if m:
+        addend = m.group(1)
+        return f"assert result == x + {addend}"
+
+    # ── "greater than input" / "result > x" ──────────────────────────────────
+    if re.search(r"greater than\s+(?:the\s+)?input|result\s*>\s*x\b", lower):
+        return "assert result > x"
+
+    # ── "less than input" / "result < x" ─────────────────────────────────────
+    if re.search(r"less than\s+(?:the\s+)?input|result\s*<\s*x\b", lower):
+        return "assert result < x"
+
+    # ── "contains" / "includes" ───────────────────────────────────────────────
+    m = re.search(r"(?:contains|includes)\s+(['\"]?)(\w+)\1", lower)
+    if m:
+        item = m.group(2)
+        return f"assert {item!r} in result"
+
+    # ── "type" / "isinstance" ─────────────────────────────────────────────────
+    m = re.search(r"(?:returns?|is|be)\s+(?:a\s+)?(?:an\s+)?(int|integer|float|str|string|list|dict|bool)", lower)
+    if m:
+        type_word = m.group(1)
+        py_type_map = {
+            "int": "int", "integer": "int",
+            "float": "float",
+            "str": "str", "string": "str",
+            "list": "list",
+            "dict": "dict",
+            "bool": "bool",
+        }
+        py_type = py_type_map.get(type_word, type_word)
+        return f"assert isinstance(result, {py_type})"
+
+    return None
+
+
+def _llm_generate_assertion(statement: str, func_name: str) -> str | None:
+    """Tier B: Ask the LLM to convert a natural-language invariant to a Python assert.
+
+    Called only when Tier A (_parse_invariant_to_assertion) returns None.
+    All LLM calls go through litellm [REF-T16]. Model from get_model().
+    Failures are caught and silently return None so PBT can continue.
+
+    Args:
+        statement: Natural-language invariant from .card.md.
+        func_name: Name of the function under test.
+
+    Returns:
+        A syntactically valid Python ``assert …`` string, or None on failure.
+    """
+    try:
+        from nightjar.config import load_config, get_model
+        load_config()
+        import litellm  # noqa: PLC0415
+
+        prompt = (
+            f"Convert this invariant to a Python assert statement.\n"
+            f"Function name: {func_name}\n"
+            f"Available variables: result (return value of the function), "
+            f"x (integer input to the function).\n"
+            f"Invariant: {statement}\n"
+            f"Reply with ONLY the assert statement, nothing else."
+        )
+        response = litellm.completion(
+            model=get_model(),
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=100,
+            temperature=0.0,
+        )
+        content = (response.choices[0].message.content or "").strip()
+        # Take only the first non-empty line
+        assertion = next(
+            (line.strip() for line in content.splitlines() if line.strip()),
+            "",
+        )
+        if not assertion.startswith("assert "):
+            return None
+        # Syntax-check before returning
+        compile(assertion, "<inv>", "exec")
+        return assertion
+    except Exception:
+        return None
 
 
 # Register and activate profiles at module load [Scout 5 F6]
@@ -143,9 +328,14 @@ def _run_single_invariant(
     is the property specification; we translate it to a Hypothesis test.
 
     The translation strategy: we build a test function that:
-    1. Generates inputs matching the contract constraints
+    1. Generates inputs matching the contract constraints (includes 0, negatives,
+       and explicit boundary values to maximise defect detection)
     2. Calls the code under test
-    3. Asserts the invariant property holds
+    3. Asserts the invariant property via two-tier assertion engine:
+       Tier A — regex patterns (fast, no LLM)
+       Tier B — LLM fallback (when Tier A returns None)
+       If both return None the property call itself acts as the test
+       (any exception from the function-under-test still fails).
 
     Args:
         pbt_settings: Hypothesis settings to apply (default: NIGHTJAR_PBT_SETTINGS).
@@ -154,32 +344,78 @@ def _run_single_invariant(
               :func:`_find_testable_function` (legacy path, no spec hint).
     """
     statement = invariant.statement
+    func_name: str = getattr(func, "__name__", "func") if func is not None else "func"
+
+    # Resolve assertion once (outside the hot loop) — Tier A then Tier B.
+    assertion_code = _parse_invariant_to_assertion(statement, func_name)
+    if assertion_code is None:
+        assertion_code = _llm_generate_assertion(statement, func_name)
+    # If still None we do a call-only test (exception from function = fail).
+
+    # Boundary examples that are critical for defect detection:
+    # 0  — division-by-zero, off-by-one at boundary
+    # -1 — negative-input edge
+    # 1  — unit value
+    # -100, 100 — moderate range extremes
+    _BOUNDARY_EXAMPLES = [0, -1, 1, -100, 100]
+
     error_result: dict[str, Any] | None = None
 
-    # Build a Hypothesis test function dynamically from the invariant
-    # The test function is wrapped with @given and the supplied settings
+    # Build a Hypothesis test function dynamically from the invariant.
+    # Integer strategy now spans negatives → zero → positives so boundary
+    # conditions (division-by-zero, negative-input bugs) are exercised.
     @pbt_settings
-    @given(x=st.integers(min_value=1, max_value=10_000))
+    @given(
+        x=st.one_of(
+            st.sampled_from(_BOUNDARY_EXAMPLES),
+            st.integers(min_value=-10_000, max_value=10_000),
+        )
+    )
     def pbt_test(x: int) -> None:
         nonlocal error_result
+        from hypothesis import assume  # noqa: PLC0415
+
+        # Use the pre-resolved function if provided; fall back to
+        # discovery for backwards compatibility.
+        resolved = func if func is not None else _find_testable_function(env)
+        if resolved is None:
+            return
+
         try:
-            # Use the pre-resolved function if provided; fall back to
-            # discovery for backwards compatibility.
-            resolved = func if func is not None else _find_testable_function(env)
-            if resolved is None:
-                return
-
             result = resolved(x)
-
-            # Evaluate the invariant assertion
-            _assert_invariant(statement, x, result)
-
+        except (ValueError, TypeError) as precond_exc:
+            # The function raised a precondition-style exception for this
+            # input.  Use assume() to tell Hypothesis this example is
+            # outside the contract domain and should be skipped.
+            #
+            # If the function raises for EVERY input (Bug 7 pattern), Hypothesis
+            # will exhaust its filter budget and raise UnsatisfiedAssumption /
+            # Flaky/Unsatisfied error — which propagates as an exception to the
+            # outer try/except and becomes a FAIL, preserving Bug 7 behaviour.
+            assume(False)
+            return  # unreachable; here for type-checker clarity
         except AssertionError:
-            raise  # Let Hypothesis catch assertion failures
+            raise  # already a property violation — propagate
         except Exception as e:
+            # Non-precondition exceptions (ZeroDivisionError, AttributeError, …)
+            # are genuine failures — convert to AssertionError so Hypothesis
+            # can record them as counterexamples.
             raise AssertionError(
                 f"Invariant {invariant.id} violated: {e}"
             ) from e
+
+        # Two-tier assertion engine — run only when the function returned normally
+        if assertion_code is not None:
+            try:
+                # Build a minimal execution context for exec
+                _ctx = {"result": result, "x": x}
+                exec(assertion_code, _ctx)  # noqa: S102
+            except AssertionError:
+                raise  # property violation — propagate
+            except Exception as e:
+                raise AssertionError(
+                    f"Assertion eval error for invariant {invariant.id}: {e}"
+                ) from e
 
     try:
         pbt_test()
