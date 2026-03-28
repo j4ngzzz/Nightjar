@@ -44,3 +44,14 @@ docs/superpowers/
 
 # Deprecated config
 contractd.toml
+
+# Mutation testing sandbox — disposable, never commit
+mutation-lab/
+
+# Agent temp artifacts — screenshots, HTML validation pages, output files
+*.output
+w3-*.png
+verify-results-*.png
+.card/*.html
+.card/*.png
+
