@@ -34,6 +34,7 @@ classifiers = [
     "Topic :: Software Development :: Testing",
     "Topic :: Security",
     "Typing :: Typed",
+    "Framework :: Pytest",
 ]
 dependencies = [
     "click>=8.0",
@@ -72,6 +73,9 @@ compliance = [
 
 [project.scripts]
 nightjar = "nightjar.cli:main"
+
+[project.entry-points.pytest11]
+nightjar = "nightjar.pytest_plugin"
 
 [build-system]
 requires = ["setuptools>=68.0"]
