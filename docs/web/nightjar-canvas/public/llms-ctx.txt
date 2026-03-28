@@ -4,12 +4,13 @@
 # Homepage: https://nightjarcode.dev
 # Repository: https://github.com/j4ngzzz/Nightjar
 # PyPI: https://pypi.org/project/nightjarzzz/
+# Tagline: AI writes the code. Nightjar proves it's correct.
 
 ---
 
 ## What Is Nightjar?
 
-Nightjar is a contract-anchored verification layer for AI-generated Python code.
+AI writes the code. Nightjar proves it's correct. Nightjar is a contract-anchored verification layer for AI-generated Python code.
 
 The core problem: AI coding assistants (Copilot, Cursor, Claude, etc.) generate code that looks
 plausible but contains subtle bugs, hallucinated dependencies, type errors, and logic violations.
@@ -28,6 +29,7 @@ Code is regenerated from scratch on every build and is never manually edited.
 
 ## Key Facts
 
+- Built in 62 hours by a 19yo CS student using Claude Code
 - Found 48 confirmed bugs across 20 popular Python packages using Stage 1 dependency scanning
 - 86% pass@10 success rate with Claude 3.5 Sonnet on the DafnyPro benchmark
 - Cheapest-first pipeline: fails fast at Stage 0 before spending on LLM calls

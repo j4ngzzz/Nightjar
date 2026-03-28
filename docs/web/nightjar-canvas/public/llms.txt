@@ -1,6 +1,6 @@
 # Nightjar
 
-> Nightjar is a formal verification tool for AI-generated Python code. It runs a 5-stage pipeline — preflight, dependencies, schema validation, property-based testing, and formal proof via Dafny/CrossHair — to mathematically prove code satisfies specifications.
+> AI writes the code. Nightjar proves it's correct.
 
 ## Documentation
 - [Getting Started](https://nightjarcode.dev/docs/quickstart): Install and run your first verification
@@ -19,6 +19,7 @@ pip install nightjarzzz
 
 ## Key Facts
 - Found 48 confirmed bugs across 20 popular Python packages
+- Built in 62 hours by a 19yo CS student; found 48 real bugs in 20 popular Python packages
 - 5-stage cheapest-first pipeline: preflight → deps → schema → PBT → formal proof
 - CEGIS retry loop repairs failing code using counterexamples
 - AGPL-3.0 open source, commercial licenses available

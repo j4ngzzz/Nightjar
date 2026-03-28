@@ -2,14 +2,15 @@
 # Format: llms.txt (structured plaintext optimized for LLM consumption)
 # Version: 0.1.0 | Updated: 2026-03-28
 # Source: https://github.com/nightjar-dev/nightjar
+# Tagline: AI writes the code. Nightjar proves it's correct.
 
 ---
 
 ## Overview
 
-Nightjar is a contract-anchored verification layer for AI-generated code. Developers write
-behavioral specifications in `.card.md` files — YAML frontmatter plus Markdown body. An LLM
-generates the implementation. Nightjar runs a six-stage pipeline (preflight, dependency audit,
+AI writes the code. Nightjar proves it's correct. Nightjar is a contract-anchored verification
+layer for AI-generated code. Developers write behavioral specifications in `.card.md` files —
+YAML frontmatter plus Markdown body. An LLM generates the implementation. Nightjar runs a six-stage pipeline (preflight, dependency audit,
 schema validation, property-based testing, negation-proof validation, and Dafny formal
 verification) and either produces a mathematically verified artifact or a concrete counterexample
 via a CEGIS (Counterexample-Guided Inductive Synthesis) retry loop. Code is regenerated from
