@@ -48,6 +48,9 @@ contractd.toml
 # Mutation testing sandbox — disposable, never commit
 mutation-lab/
 
+# PyPI upload instructions (contains credential guidance)
+PYPI_UPLOAD.md
+
 # Agent temp artifacts — screenshots, HTML validation pages, output files
 *.output
 w3-*.png

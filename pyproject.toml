@@ -2,7 +2,26 @@
 name = "nightjar"
 version = "0.1.0"
 description = "Nightjar — formal verification CLI for AI-generated code"
+readme = "README.md"
+license = { text = "AGPL-3.0-only" }
 requires-python = ">=3.11"
+authors = [
+    { name = "Nightjar Contributors", email = "hello@nightjar.dev" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
 dependencies = [
     "click>=8.0",
     "litellm>=1.0",
@@ -12,6 +31,12 @@ dependencies = [
     "rich>=13.0",
     "textual>=0.47.0",
 ]
+
+[project.urls]
+Homepage = "https://nightjar.dev"
+Repository = "https://github.com/nightjar-dev/nightjar"
+Issues = "https://github.com/nightjar-dev/nightjar/issues"
+Changelog = "https://github.com/nightjar-dev/nightjar/blob/master/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
