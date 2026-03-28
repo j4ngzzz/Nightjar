@@ -1,0 +1,90 @@
+@import "../styles/amber-tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Remove default blue-tinted selection, use amber */
+  ::selection {
+    background-color: rgba(212, 146, 10, 0.3);
+    color: var(--color-text-primary);
+  }
+
+  /* Scrollbars — warm dark with amber accent */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--color-bg);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-inactive);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-amber);
+  }
+}
+
+@layer utilities {
+  /* Amber glow utilities */
+  .glow-amber {
+    box-shadow: var(--glow-amber);
+  }
+
+  .glow-gold {
+    box-shadow: var(--glow-gold);
+  }
+
+  .glow-peak {
+    box-shadow: var(--glow-peak);
+  }
+
+  /* Flat card style — no glassmorphism, 1px solid border */
+  .card-flat {
+    background-color: var(--color-bg-raised);
+    border: 1px solid var(--color-border-inactive);
+    border-radius: var(--radius);
+  }
+
+  .card-flat-active {
+    background-color: var(--color-bg-raised);
+    border: 1px solid var(--color-border-active);
+    border-radius: var(--radius);
+  }
+
+  /* Monospace for proof identifiers */
+  .font-proof {
+    font-family: var(--font-jetbrains-mono), monospace;
+  }
+
+  /* VERIFIED label style — wide tracking, heavier weight */
+  .label-verified {
+    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-peak);
+  }
+}

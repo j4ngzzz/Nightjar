@@ -1,0 +1,105 @@
+/**
+ * Nightjar Verification Canvas — Amber Design Tokens
+ *
+ * Visual Soul: candlelight in a precision instrument shop
+ * Amber = material of preservation = frozen correctness
+ *
+ * Source: phase6-visual-soul.md, Part II
+ */
+
+:root {
+  /* Surfaces */
+  --color-bg: #0D0B09;
+  --color-bg-raised: #141109;
+
+  /* Borders */
+  --color-border-inactive: #2A2315;
+  --color-border-active: #D4920A;
+
+  /* Amber proof spectrum (dim → luminous = evaluated → mathematically proven) */
+  --color-amber: #D4920A;
+  --color-gold: #F5B93A;
+  --color-peak: #FFD060;
+
+  /* Proof state colors */
+  --color-pbt-pass: #A87020;
+  --color-formal-pass: #F5B93A;
+  --color-full-verify: #FFD060;
+  --color-pending-state: #3A2E10;
+
+  /* Text */
+  --color-text-primary: #F0EBE3;
+  --color-text-secondary: #8B8579;
+
+  /* Status */
+  --color-error: #F85149;
+  --color-pass: #3FB950;
+  --color-pending: #58A6FF;
+  --color-skip: #6E6860;
+
+  /* Shadows + glows */
+  --glow-amber: 0 0 8px rgba(212, 146, 10, 0.4);
+  --glow-gold: 0 0 12px rgba(245, 185, 58, 0.5);
+  --glow-peak: 0 0 20px rgba(255, 208, 96, 0.6);
+
+  /* Border radius */
+  --radius: 0.5rem;
+
+  /* shadcn/ui CSS variable aliases — mapped to amber tokens */
+  --background: #0D0B09;
+  --foreground: #F0EBE3;
+  --card: #141109;
+  --card-foreground: #F0EBE3;
+  --popover: #141109;
+  --popover-foreground: #F0EBE3;
+  --primary: #D4920A;
+  --primary-foreground: #0D0B09;
+  --secondary: #141109;
+  --secondary-foreground: #F0EBE3;
+  --muted: #141109;
+  --muted-foreground: #8B8579;
+  --accent: #F5B93A;
+  --accent-foreground: #0D0B09;
+  --destructive: #F85149;
+  --destructive-foreground: #F0EBE3;
+  --border: #2A2315;
+  --input: #2A2315;
+  --ring: #D4920A;
+
+  /* Crystallization easing */
+  --ease-crystallize: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Proof state utility classes */
+.proof-pending {
+  border-color: var(--color-pending-state);
+  color: var(--color-text-secondary);
+}
+
+.proof-running {
+  border-color: var(--color-amber);
+  color: var(--color-amber);
+  box-shadow: var(--glow-amber);
+}
+
+.proof-pbt-pass {
+  border-color: var(--color-pbt-pass);
+  color: var(--color-pbt-pass);
+}
+
+.proof-formal-pass {
+  border-color: var(--color-formal-pass);
+  color: var(--color-formal-pass);
+  box-shadow: var(--glow-gold);
+}
+
+.proof-verified {
+  border-color: var(--color-peak);
+  color: var(--color-peak);
+  box-shadow: var(--glow-peak);
+}
+
+.proof-failed {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}

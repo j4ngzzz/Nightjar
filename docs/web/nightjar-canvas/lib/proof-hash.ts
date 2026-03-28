@@ -28,9 +28,10 @@ export async function sha256Hex(input: string): Promise<string> {
   const data = encoder.encode(input);
 
   // Prefer the standards-compliant Web Crypto API
-  const subtle: SubtleCrypto =
+  const subtle: SubtleCrypto | undefined =
     (typeof globalThis !== "undefined" && globalThis.crypto?.subtle) ||
-    (typeof crypto !== "undefined" && (crypto as Crypto).subtle);
+    (typeof crypto !== "undefined" && (crypto as Crypto).subtle) ||
+    undefined;
 
   if (subtle) {
     const hashBuffer = await subtle.digest("SHA-256", data);
