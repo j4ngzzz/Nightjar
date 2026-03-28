@@ -287,7 +287,11 @@ class TestStageNegproof:
         from nightjar.verifier import run_pipeline
         from nightjar.types import StageResult, VerifyStatus
 
-        spec = _make_spec()
+        # Spec must have at least one invariant so the empty-spec guard does not
+        # short-circuit before negproof runs (Bug 7 fix).
+        spec = _make_spec(invariants=[
+            Invariant(id="INV-1", tier=InvariantTier.FORMAL, statement="result >= 0"),
+        ])
         pass_result = StageResult(stage=0, name="test", status=VerifyStatus.PASS)
 
         with patch("nightjar.verifier._run_stage_0", return_value=pass_result), \
@@ -308,7 +312,11 @@ class TestStageNegproof:
         from nightjar.verifier import run_pipeline
         from nightjar.types import StageResult, VerifyStatus
 
-        spec = _make_spec()
+        # Spec must have at least one invariant so the empty-spec guard does not
+        # short-circuit before negproof runs (Bug 7 fix).
+        spec = _make_spec(invariants=[
+            Invariant(id="INV-1", tier=InvariantTier.FORMAL, statement="result >= 0"),
+        ])
         pass_result = StageResult(stage=0, name="test", status=VerifyStatus.PASS)
         fail_result = StageResult(
             stage=5, name="negation_proof", status=VerifyStatus.FAIL,

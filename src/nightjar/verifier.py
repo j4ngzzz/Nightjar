@@ -327,12 +327,36 @@ def run_pipeline(
     start = time.monotonic()
     stages: list[StageResult] = []
 
-    # Stage 0: Pre-flight — sequential
+    # Stage 0: Pre-flight -- sequential
     display.on_stage_start(0, "preflight")
     result_0 = _run_stage_0(spec, code, spec_path=spec_path)
     stages.append(result_0)
     display.on_stage_complete(result_0)
     if not _stage_ok(result_0):
+        result = _build_result(stages, start, verified=False)
+        display.on_pipeline_complete(result)
+        return result
+
+    # Guard: a spec with zero invariants is vacuously unverifiable.
+    # Returning verified=True with no invariants is misleading -- there is
+    # nothing to prove.  Append an explicit FAIL stage so the user knows
+    # to add invariants, not to interpret silence as safety.
+    # This runs AFTER stage 0 so the preflight result is always recorded.
+    if not spec.invariants:
+        empty_stage = StageResult(
+            stage=1,
+            name="no_invariants",
+            status=VerifyStatus.FAIL,
+            duration_ms=0,
+            errors=[{
+                "type": "no_invariants",
+                "message": (
+                    "Spec has no invariants -- nothing to verify. "
+                    "Add at least one 'property' or 'formal' tier invariant."
+                ),
+            }],
+        )
+        stages.append(empty_stage)
         result = _build_result(stages, start, verified=False)
         display.on_pipeline_complete(result)
         return result

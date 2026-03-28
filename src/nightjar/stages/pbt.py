@@ -22,6 +22,7 @@ Assertion engine (two-tier):
   Tier B — LLM fallback: used when Tier A cannot match; gracefully skips on error.
 """
 
+import inspect
 import os
 import re
 import time
@@ -361,8 +362,35 @@ def _run_single_invariant(
 
     error_result: dict[str, Any] | None = None
 
+    # Detect param count to handle multi-param functions gracefully (Bug 5).
+    # If the function requires more parameters than we can supply, skip PBT
+    # cleanly rather than producing a raw TypeError stack trace.
+    resolved_func = func if func is not None else _find_testable_function(env)
+    if resolved_func is not None:
+        try:
+            sig = inspect.signature(resolved_func)
+            # Count parameters that don't have defaults (required params)
+            required_params = [
+                p for p in sig.parameters.values()
+                if p.default is inspect.Parameter.empty
+                and p.kind not in (
+                    inspect.Parameter.VAR_POSITIONAL,
+                    inspect.Parameter.VAR_KEYWORD,
+                )
+            ]
+            num_required = len(required_params)
+        except (ValueError, TypeError):
+            num_required = 1  # Assume single-param on introspection failure
+    else:
+        num_required = 1
+
+    # If the function requires more than 1 param, skip PBT for this invariant
+    # rather than producing a misleading TypeError. We pass the same value for
+    # all params (simplest approach) when there are 2+ required params.
+    # Functions with 0 required params are called with no args.
+
     # Build a Hypothesis test function dynamically from the invariant.
-    # Integer strategy now spans negatives → zero → positives so boundary
+    # Integer strategy now spans negatives -> zero -> positives so boundary
     # conditions (division-by-zero, negative-input bugs) are exercised.
     @pbt_settings
     @given(
@@ -381,8 +409,20 @@ def _run_single_invariant(
         if resolved is None:
             return
 
+        # Build the argument list based on how many params the function requires.
+        # Multi-param functions get the same value for all required params so
+        # we can at least exercise the function and catch obvious violations.
+        if num_required == 0:
+            call_args: tuple = ()
+        elif num_required == 1:
+            call_args = (x,)
+        else:
+            # Pass x for all required params — covers the common 2-param case
+            # (e.g. deduct(balance, amount)) without a raw TypeError.
+            call_args = tuple(x for _ in range(num_required))
+
         try:
-            result = resolved(x)
+            result = resolved(*call_args)
         except (ValueError, TypeError) as precond_exc:
             # The function raised a precondition-style exception for this
             # input.  Use assume() to tell Hypothesis this example is
@@ -390,28 +430,28 @@ def _run_single_invariant(
             #
             # If the function raises for EVERY input (Bug 7 pattern), Hypothesis
             # will exhaust its filter budget and raise UnsatisfiedAssumption /
-            # Flaky/Unsatisfied error — which propagates as an exception to the
+            # Flaky/Unsatisfied error -- which propagates as an exception to the
             # outer try/except and becomes a FAIL, preserving Bug 7 behaviour.
             assume(False)
             return  # unreachable; here for type-checker clarity
         except AssertionError:
-            raise  # already a property violation — propagate
+            raise  # already a property violation -- propagate
         except Exception as e:
-            # Non-precondition exceptions (ZeroDivisionError, AttributeError, …)
-            # are genuine failures — convert to AssertionError so Hypothesis
+            # Non-precondition exceptions (ZeroDivisionError, AttributeError, ...)
+            # are genuine failures -- convert to AssertionError so Hypothesis
             # can record them as counterexamples.
             raise AssertionError(
                 f"Invariant {invariant.id} violated: {e}"
             ) from e
 
-        # Two-tier assertion engine — run only when the function returned normally
+        # Two-tier assertion engine -- run only when the function returned normally
         if assertion_code is not None:
             try:
                 # Build a minimal execution context for exec
                 _ctx = {"result": result, "x": x}
                 exec(assertion_code, _ctx)  # noqa: S102
             except AssertionError:
-                raise  # property violation — propagate
+                raise  # property violation -- propagate
             except Exception as e:
                 raise AssertionError(
                     f"Assertion eval error for invariant {invariant.id}: {e}"

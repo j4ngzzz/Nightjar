@@ -17,8 +17,21 @@
 <br>
 
 <div align="center">
-  <img src="demo/nightjar-demo.gif" alt="Nightjar 60-second demo" width="700" />
-  <br>
+
+```
+$ nightjar verify --spec .card/payment.card.md
+
+  Stage 0 (preflight)    PASS    12ms
+  Stage 1 (deps)         PASS    45ms
+  Stage 2 (schema)       PASS    23ms
+  Stage 3 (pbt)          FAIL    340ms
+    INV-01 violated: counterexample x=0 -> ZeroDivisionError
+  Stage 4 (formal)       SKIP
+
+  Result: 1 violation found
+  Trust: PROPERTY_VERIFIED (0.60)
+```
+
   <sub>Generate, verify, prove. In 60 seconds.</sub>
 </div>
 
@@ -50,7 +63,7 @@ Nightjar's job is to make that culture change unnecessary. Vericoding — formal
 
 ```bash
 pip install nightjar
-nightjar verify payment.py
+nightjar verify --spec .card/payment.card.md
 ```
 
 Five verification stages, cheapest first, short-circuit on failure:
@@ -79,7 +92,7 @@ pip install nightjar
 nightjar auto "payment processor that charges credit cards"
 
 # Verify the generated code
-nightjar verify
+nightjar verify --spec .card/payment.card.md
 
 # Or leave it running in the background
 nightjar watch
@@ -92,22 +105,17 @@ You need Python 3.11+ and optionally [Dafny 4.x](https://github.com/dafny-lang/d
 ## See it work
 
 ```bash
-# Here's some insecure code
-$ cat demo/payment.py
-def deduct(balance, amount):
-    return balance - amount   # BUG: allows negative balance
-
-# Nightjar catches it with a concrete counterexample
-$ nightjar verify -c demo/payment.card.md
-Stage 4 FAIL: counterexample balance=0.01, amount=50 -> -49.99
-
 # Generate a safe spec from plain English
 $ nightjar auto "payment processor with balance >= 0 invariant"
 Created spec: .card/payment.card.md (8 invariants, 6 approved)
 
-# Now it passes
-$ nightjar verify -c .card/payment.card.md
-VERIFIED -- all stages passed (confidence: 85/100)
+# Verify the generated code
+$ nightjar verify --spec .card/payment.card.md
+VERIFIED -- all stages passed
+
+# Fast check (skip Dafny)
+$ nightjar verify --spec .card/payment.card.md --fast
+VERIFIED -- all stages passed
 ```
 
 ---
@@ -368,7 +376,7 @@ pip install nightjar
 nightjar auto "支付处理器，余额不能为负"
 
 # 验证生成的代码
-nightjar verify
+nightjar verify --spec .card/payment.card.md
 
 # 后台持续监控
 nightjar watch

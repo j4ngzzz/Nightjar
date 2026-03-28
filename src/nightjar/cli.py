@@ -1,4 +1,4 @@
-"""nightjar CLI — Contract-Anchored Regenerative Development.
+"""nightjar CLI - Contract-Anchored Regenerative Development.
 
 Reference: [REF-T17] Click CLI framework
 Architecture: docs/ARCHITECTURE.md Section 8
@@ -101,7 +101,7 @@ Describe what the {module_id} module does and why it exists.
 
 ## Acceptance Criteria
 
-### Story 1 — Description (P1)
+### Story 1 - Description (P1)
 
 **As a** user, **I want** capability, **so that** benefit.
 
@@ -409,7 +409,7 @@ def verify(
 ) -> None:
     """Run the 5-stage verification pipeline.
 
-    Stages: preflight → deps → schema → property-tests → formal-proof.
+    Stages: preflight -> deps -> schema -> property-tests -> formal-proof.
     Architecture: docs/ARCHITECTURE.md Section 3.
     """
     config = ctx.obj["config"]
