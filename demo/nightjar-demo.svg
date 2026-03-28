@@ -1,0 +1,242 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 480" width="760" height="480">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap');
+
+      text {
+        font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+        font-size: 13px;
+      }
+
+      .cmd      { fill: #f0f6fc; font-weight: bold; }
+      .prompt   { fill: #58a6ff; }
+      .header   { fill: #d2a8ff; font-weight: bold; font-size: 14px; }
+      .sub      { fill: #8b949e; font-size: 12px; }
+      .pass     { fill: #3fb950; font-weight: bold; }
+      .fail     { fill: #f85149; font-weight: bold; }
+      .skip     { fill: #d29922; font-weight: bold; }
+      .muted    { fill: #6e7681; }
+      .dim      { fill: #484f58; font-size: 12px; }
+      .err-line { fill: #ff7b72; font-size: 12px; }
+      .err-hint { fill: #8b949e; font-size: 11.5px; font-style: italic; }
+      .trust    { fill: #58a6ff; font-weight: bold; }
+      .normal   { fill: #c9d1d9; }
+      .badge-fail-txt { fill: #fff; font-weight: bold; font-size: 11px; letter-spacing: 0.05em; }
+      .badge-trust-txt { fill: #58a6ff; font-weight: bold; font-size: 11px; letter-spacing: 0.05em; }
+      .cursor   { fill: #f0f6fc; }
+
+      /* Each line fades in at its own delay */
+      .line-00 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 0.2s; }
+      .line-01 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 0.9s; }
+      .line-02 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 1.2s; }
+      .line-03 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 1.7s; }
+      .line-04 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 2.2s; }
+      .line-05 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 2.7s; }
+      .line-06 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 3.1s; }
+      .line-07 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 3.5s; }
+      .line-08 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 3.8s; }
+      .line-09 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 4.0s; }
+      .line-10 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 4.4s; }
+      .line-11 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 4.7s; }
+      .line-12 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 5.0s; }
+      .line-13 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 5.3s; }
+      .line-14 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 5.8s; }
+      .line-15 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 6.1s; }
+      .line-16 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 6.4s; }
+      .line-17 { opacity: 0; animation: fade-in 0.3s ease forwards; animation-delay: 6.8s; }
+
+      /* Cursor blink until typing starts */
+      .cursor-blink {
+        opacity: 1;
+        animation: blink 1s step-end infinite, cursor-hide 0.1s ease forwards;
+        animation-delay: 0s, 0.8s;
+      }
+
+      /* Result block slides in */
+      .result-group {
+        opacity: 0;
+        animation: fade-in 0.5s ease forwards;
+        animation-delay: 6.8s;
+      }
+
+      @keyframes fade-in {
+        from { opacity: 0; transform: translateY(4px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50%       { opacity: 0; }
+      }
+
+      @keyframes cursor-hide {
+        to { opacity: 0; }
+      }
+
+      /* Typing effect: text grows via clip-path */
+      .typing {
+        clip-path: inset(0 100% 0 0);
+        animation: type-reveal 0.6s steps(40, end) forwards;
+        animation-delay: 0.2s;
+      }
+
+      @keyframes type-reveal {
+        from { clip-path: inset(0 100% 0 0); }
+        to   { clip-path: inset(0 0% 0 0); }
+      }
+    </style>
+
+    <!-- Arrow marker for none -->
+    <clipPath id="terminal-clip">
+      <rect x="0" y="40" width="760" height="440" rx="0"/>
+    </clipPath>
+  </defs>
+
+  <!-- Terminal background -->
+  <rect width="760" height="480" rx="12" fill="#0d1117"/>
+
+  <!-- Title bar -->
+  <rect width="760" height="40" rx="12" fill="#161b22"/>
+  <rect y="28" width="760" height="12" fill="#161b22"/>
+  <rect y="39" width="760" height="1" fill="#21262d"/>
+
+  <!-- Traffic lights -->
+  <circle cx="20" cy="20" r="6" fill="#ff5f57"/>
+  <circle cx="40" cy="20" r="6" fill="#ffbd2e"/>
+  <circle cx="60" cy="20" r="6" fill="#28c840"/>
+
+  <!-- Title bar text -->
+  <text x="80" y="24" class="sub">nightjar — formal verification pipeline</text>
+
+  <!-- Content area (all lines, each with its animation class) -->
+  <g clip-path="url(#terminal-clip)">
+
+    <!-- Line 00: prompt + command (typing animation) -->
+    <g class="line-00" transform="translate(26, 70)">
+      <text x="0"  y="0" class="prompt">$</text>
+      <text x="14" y="0" class="cmd typing">nightjar verify --spec .card/payment.card.md</text>
+    </g>
+
+    <!-- Blinking cursor before command appears -->
+    <rect class="cursor-blink" x="40" y="58" width="8" height="14"/>
+
+    <!-- Line 01: blank + header -->
+    <g class="line-01" transform="translate(26, 97)">
+      <text x="0" y="0" class="header">Nightjar Verification Pipeline</text>
+    </g>
+    <g class="line-02" transform="translate(26, 115)">
+      <text x="0" y="0" class="sub">Spec: payment  ·  3 invariants  ·  model: claude-sonnet-4-6</text>
+    </g>
+
+    <!-- Divider line -->
+    <g class="line-03">
+      <rect x="26" y="127" width="708" height="1" fill="#21262d" opacity="0">
+        <animate attributeName="opacity" from="0" to="1" dur="0.3s" begin="1.7s" fill="freeze"/>
+      </rect>
+    </g>
+
+    <!-- Stage 0 -->
+    <g class="line-04" transform="translate(26, 148)">
+      <text x="0"   y="0" class="pass">PASS</text>
+      <text x="52"  y="0" class="normal">Stage 0  </text>
+      <text x="134" y="0" class="muted">(preflight)</text>
+      <text x="266" y="0" class="dim">12ms</text>
+    </g>
+
+    <!-- Stage 1 -->
+    <g class="line-05" transform="translate(26, 170)">
+      <text x="0"   y="0" class="pass">PASS</text>
+      <text x="52"  y="0" class="normal">Stage 1  </text>
+      <text x="134" y="0" class="muted">(deps)</text>
+      <text x="266" y="0" class="dim">8ms</text>
+    </g>
+
+    <!-- Stage 2 -->
+    <g class="line-06" transform="translate(26, 192)">
+      <text x="0"   y="0" class="pass">PASS</text>
+      <text x="52"  y="0" class="normal">Stage 2  </text>
+      <text x="134" y="0" class="muted">(schema)</text>
+      <text x="266" y="0" class="dim">15ms</text>
+    </g>
+
+    <!-- Stage 3 FAIL label -->
+    <g class="line-07" transform="translate(26, 214)">
+      <text x="0"   y="0" class="fail">FAIL</text>
+      <text x="52"  y="0" class="normal">Stage 3  </text>
+      <text x="134" y="0" class="muted">(property-tests)</text>
+      <text x="266" y="0" class="dim">340ms</text>
+    </g>
+
+    <!-- Error block background (Stage 3) -->
+    <g class="line-08">
+      <rect x="32" y="220" width="680" height="38" rx="3" fill="rgba(248,81,73,0.06)" opacity="0">
+        <animate attributeName="opacity" from="0" to="1" dur="0.3s" begin="3.8s" fill="freeze"/>
+      </rect>
+      <rect x="32" y="220" width="3" height="38" fill="#f85149" opacity="0">
+        <animate attributeName="opacity" from="0" to="1" dur="0.3s" begin="3.8s" fill="freeze"/>
+      </rect>
+    </g>
+    <g class="line-08" transform="translate(42, 235)">
+      <text x="0" y="0" class="err-line">INV-01 violated:  result must be non-negative</text>
+    </g>
+    <g class="line-09" transform="translate(42, 251)">
+      <text x="0" y="0" class="err-hint">counterexample: apply_discount(-1) → -0.9  (negative input produces negative result)</text>
+    </g>
+
+    <!-- Error block 2 background -->
+    <g class="line-10">
+      <rect x="32" y="260" width="680" height="38" rx="3" fill="rgba(248,81,73,0.06)" opacity="0">
+        <animate attributeName="opacity" from="0" to="1" dur="0.3s" begin="4.4s" fill="freeze"/>
+      </rect>
+      <rect x="32" y="260" width="3" height="38" fill="#f85149" opacity="0">
+        <animate attributeName="opacity" from="0" to="1" dur="0.3s" begin="4.4s" fill="freeze"/>
+      </rect>
+    </g>
+    <g class="line-10" transform="translate(42, 275)">
+      <text x="0" y="0" class="err-line">INV-02 violated:  result must be less than x</text>
+    </g>
+    <g class="line-11" transform="translate(42, 291)">
+      <text x="0" y="0" class="err-hint">counterexample: apply_discount(0) → 0.0  (zero input: 0.0 is not less than 0)</text>
+    </g>
+
+    <!-- Stage 4 SKIP -->
+    <g class="line-12" transform="translate(26, 316)">
+      <text x="0"   y="0" class="skip">SKIP</text>
+      <text x="52"  y="0" class="normal">Stage 4  </text>
+      <text x="134" y="0" class="muted">(formal-proof)</text>
+      <text x="266" y="0" class="dim">—</text>
+    </g>
+    <g class="line-13" transform="translate(32, 332)">
+      <text x="0" y="0" class="dim">Skipped — Stage 3 must pass before Dafny proof</text>
+    </g>
+
+    <!-- Divider before result -->
+    <g class="line-14">
+      <rect x="26" y="344" width="708" height="1" fill="#21262d" opacity="0">
+        <animate attributeName="opacity" from="0" to="1" dur="0.3s" begin="5.8s" fill="freeze"/>
+      </rect>
+    </g>
+
+    <!-- Result block -->
+    <g class="result-group">
+      <!-- Result box background -->
+      <rect x="26" y="352" width="708" height="92" rx="6" fill="rgba(248,81,73,0.06)" stroke="rgba(248,81,73,0.25)" stroke-width="1"/>
+
+      <!-- Result row -->
+      <text x="42" y="377" class="sub">Result</text>
+      <!-- FAIL badge -->
+      <rect x="652" y="362" width="68" height="22" rx="4" fill="#da3633"/>
+      <text x="686" y="377" text-anchor="middle" class="badge-fail-txt">2 VIOLATIONS</text>
+
+      <!-- Trust row -->
+      <text x="42" y="405" class="sub">Trust level</text>
+      <!-- SCHEMA_VERIFIED badge -->
+      <rect x="578" y="390" width="142" height="22" rx="4" fill="#1f3a5c" stroke="#1d4070" stroke-width="1"/>
+      <text x="649" y="405" text-anchor="middle" class="badge-trust-txt">SCHEMA_VERIFIED (0.40)</text>
+
+      <!-- Duration note -->
+      <text x="42" y="430" class="dim">Total: 382ms  ·  Hypothesis found counterexamples in property-based test stage</text>
+    </g>
+
+  </g>
+</svg>
