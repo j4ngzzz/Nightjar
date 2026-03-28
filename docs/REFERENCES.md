@@ -589,3 +589,29 @@
 - URL: https://digital-strategy.ec.europa.eu/en/policies/cyber-resilience-act
 - What: EU regulation requiring manufacturers of products with digital elements to maintain security throughout the lifecycle. Enforced from September 2026.
 - How Nightjar uses it: Compliance positioning — Nightjar's formal verification pipeline provides an audit trail satisfying CRA software supply-chain requirements.
+
+**[REF-NEW-16]** NL2Contract: "Beyond Postconditions: Can LLMs infer Formal Contracts?"
+- URL: https://arxiv.org/abs/2510.12702
+- What: Prompt template and evaluation framework for using LLMs to generate Python preconditions and postconditions as assert expressions. Evaluates CrossHair soundness and mutation completeness. Key finding: structured JSON output format with explicit pre/post split significantly reduces hallucinations.
+- How Nightjar uses it: `src/nightjar/inferrer.py` — `_build_generate_prompt()` follows the NL2Contract system prompt pattern; CrossHair verification via `_run_crosshair()`.
+
+**[REF-NEW-17]** "Automatic Generation of Formal Specification and Verification Annotations"
+- URL: https://arxiv.org/abs/2601.12845
+- What: Multi-model LLM approach achieving 98.2% correctness on 110 programs within 8 repair iterations. Demonstrates that feeding CrossHair counterexamples back to the LLM for repair converges rapidly (most programs fix within 3 iterations). Also introduces test oracle lifting as an initialization strategy.
+- How Nightjar uses it: `src/nightjar/inferrer.py` — the generate → CrossHair verify → repair loop in `infer_contracts()` follows the §7.9 iteration bound. `src/nightjar/oracle_lifter.py` — test oracle lifting.
+
+**[REF-NEW-18]** Clover: "Closed-Loop Verifiable Code Generation"
+- URL: https://arxiv.org/abs/2310.17807
+- Key Finding: GEN_SPEC_FROM_DOC prompt pattern — generate specifications from docstrings rather than from implementation. Consistency checker validates that code, docstring, and spec are mutually consistent.
+- How Nightjar uses it: `src/nightjar/inferrer.py` — `_build_generate_prompt()` includes function docstring in the prompt. The closed-loop pattern informs the overall `infer_contracts()` repair architecture.
+
+**[REF-NEW-19]** PropertyGPT: RAG over verified contracts for few-shot prompting
+- URL: https://arxiv.org/abs/2405.02580
+- What: Retrieval-augmented generation approach: embed a library of verified contract expressions, retrieve semantically similar examples at inference time, and use them as few-shot demonstrations. Reduces hallucinations by anchoring LLM output to known-correct patterns.
+- How Nightjar uses it: `src/nightjar/contract_library.py` — `retrieve_examples()` keyword-based retrieval of domain contract patterns as few-shot examples. `src/nightjar/cli.py` — `infer` command passes retrieved examples to `infer_contracts()`.
+
+**[REF-NEW-20]** CrossHair: symbolic execution for Python contracts
+- URL: https://github.com/pschanely/CrossHair
+- License: MIT
+- What: SMT-backed symbolic execution tool for Python. Verifies assert-based contracts by exploring the symbolic state space; reports counterexamples with concrete input values when a contract is violated. Integrates as a subprocess via `python -m crosshair check <file>`.
+- How Nightjar uses it: `src/nightjar/inferrer.py` — `_run_crosshair()` runs CrossHair on a temp file with embedded contracts. `src/nightjar/verifier.py` — Stage 4 complexity routing (SafePilot pattern) uses CrossHair for simple functions.

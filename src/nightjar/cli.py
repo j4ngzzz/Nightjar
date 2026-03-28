@@ -12,6 +12,7 @@ Commands:
     lock        Freeze dependencies into deps.lock with hashes
     explain     Show last verification failure in human-readable form
     scan        Scan a Python file and generate a .card.md spec
+    infer       Infer contracts for a Python function via LLM + CrossHair
 
 Exit Codes:
     0  All stages PASS
@@ -942,6 +943,208 @@ def scan(ctx: click.Context, file_path: str, llm: bool, output: Optional[str], r
             return
 
     ctx.exit(EXIT_PASS)
+
+
+@main.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--function", "function_name", default=None, help="Function name to infer contracts for.")
+@click.option("--no-verify", "skip_verify", is_flag=True, default=False, help="Skip CrossHair verification (fast mode).")
+@click.option("--append-to-card", is_flag=True, default=False, help="Append inferred contracts to matching .card.md spec.")
+@click.option("--model", default=None, help="LLM model (default: NIGHTJAR_MODEL env or config).")
+@click.option("--max-iterations", default=5, show_default=True, help="Maximum CrossHair repair iterations.")
+@click.pass_context
+def infer(
+    ctx: click.Context,
+    file_path: str,
+    function_name: Optional[str],
+    skip_verify: bool,
+    append_to_card: bool,
+    model: Optional[str],
+    max_iterations: int,
+) -> None:
+    """Infer contracts for a Python function via LLM + CrossHair verification.
+
+    Reads FILE_PATH, extracts function(s), calls the LLM to generate
+    preconditions and postconditions, then symbolically verifies them with
+    CrossHair in a generate → verify → repair loop.
+
+    If --function is omitted, infers contracts for every top-level function
+    in the file.
+
+    References: [REF-NEW-08] NL2Contract, [REF-NEW-09] 98.2% repair loop,
+    [REF-NEW-11] Clover, [REF-T09] CrossHair, [REF-T16] litellm.
+
+    Examples:
+        nightjar infer src/payment.py --function charge
+        nightjar infer src/payment.py --no-verify
+        nightjar infer src/payment.py --append-to-card
+    """
+    config = ctx.obj["config"]
+    resolved_model = _get_model(model, config)
+
+    # Lazy imports — keep startup time low
+    try:
+        from nightjar.inferrer import infer_contracts, InferredContract
+        from nightjar.contract_library import retrieve_examples
+    except ImportError as e:
+        click.echo(f"Error: inferrer module not available ({e})", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
+    # Read source
+    try:
+        source = Path(file_path).read_text(encoding="utf-8")
+    except OSError as e:
+        click.echo(f"Error reading {file_path}: {e}", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
+    # Determine which functions to infer contracts for
+    import ast as _ast
+    if function_name:
+        function_names: list[str] = [function_name]
+    else:
+        try:
+            tree = _ast.parse(source)
+            function_names = [
+                node.name
+                for node in _ast.walk(tree)
+                if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef))
+                and not node.name.startswith("_")
+            ]
+        except SyntaxError as e:
+            click.echo(f"Syntax error in {file_path}: {e}", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
+
+    if not function_names:
+        click.echo(f"No public functions found in {file_path}.")
+        ctx.exit(EXIT_FAIL)
+        return
+
+    click.echo(
+        f"Inferring contracts for {len(function_names)} function(s) in {file_path} "
+        f"[model: {resolved_model}, max-iterations: {max_iterations}]"
+    )
+
+    results: list[InferredContract] = []
+    any_verified = False
+    any_counterexample = False
+
+    for fn_name in function_names:
+        # Retrieve few-shot examples from contract_library [REF-NEW-12/PropertyGPT]
+        try:
+            _ast_tree = _ast.parse(source)
+            param_names: list[str] = []
+            for node in _ast.walk(_ast_tree):
+                if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)) and node.name == fn_name:
+                    param_names = [
+                        arg.arg for arg in node.args.args if arg.arg != "self"
+                    ]
+                    break
+        except Exception:
+            param_names = []
+
+        examples = retrieve_examples(fn_name, param_names, top_k=3)
+
+        click.echo(f"\n  [{fn_name}] Generating contracts...")
+        contract = infer_contracts(
+            source=source,
+            function_name=fn_name,
+            model=resolved_model,
+            max_iterations=max_iterations,
+            use_crosshair=not skip_verify,
+            retrieved_examples=examples,
+        )
+        results.append(contract)
+
+        # Display result
+        status_label = {
+            "verified": "VERIFIED",
+            "unverified": "unverified",
+            "counterexample": "COUNTEREXAMPLE",
+            "timeout": "timeout",
+            "not_installed": "CrossHair not installed",
+            "error": "error",
+        }.get(contract.verification_status, contract.verification_status)
+
+        click.echo(f"  [{fn_name}] Status: {status_label}  confidence: {contract.confidence:.0%}  iterations: {contract.iterations_used}")
+
+        for pre in contract.preconditions:
+            click.echo(f"    PRE:  {pre}")
+        for post in contract.postconditions:
+            click.echo(f"    POST: {post}")
+
+        if contract.counterexample:
+            raw = contract.counterexample.get("counterexample_text") or contract.counterexample.get("raw", "")
+            if raw:
+                click.echo(f"    Counterexample: {raw[:200]}")
+
+        if contract.verification_status == "verified":
+            any_verified = True
+        if contract.verification_status == "counterexample":
+            any_counterexample = True
+
+    # Append to .card.md if requested
+    if append_to_card and results:
+        _append_inferred_contracts_to_card(file_path, results, config)
+
+    # Summary
+    total = len(results)
+    verified_count = sum(1 for r in results if r.verification_status == "verified")
+    click.echo(f"\nInference complete: {verified_count}/{total} function(s) verified.")
+
+    if any_counterexample:
+        ctx.exit(EXIT_FAIL)
+    else:
+        ctx.exit(EXIT_PASS)
+
+
+def _append_inferred_contracts_to_card(
+    file_path: str, results: list, config: dict
+) -> None:
+    """Append inferred contracts as invariants to a matching .card.md spec.
+
+    Looks for a .card.md file whose module_id matches the stem of file_path
+    in the specs directory. If found, appends the inferred contracts as
+    new invariant blocks. If not found, prints a warning.
+
+    Args:
+        file_path: Path to the Python source file that was analyzed.
+        results:   List of InferredContract objects from infer_contracts().
+        config:    Loaded nightjar config dict.
+    """
+    module_id = Path(file_path).stem
+    specs_dir = _get_specs_dir(config)
+    card_path = Path(specs_dir) / f"{module_id}.card.md"
+
+    if not card_path.exists():
+        click.echo(
+            f"  Note: no matching spec found at {card_path}. "
+            "Use 'nightjar scan' to create one first, or specify --output.",
+            err=True,
+        )
+        return
+
+    lines_to_append: list[str] = ["\n## Inferred Contracts\n\n"]
+    for contract in results:
+        if not contract.preconditions and not contract.postconditions:
+            continue
+        lines_to_append.append(f"### {contract.function_name}\n\n")
+        lines_to_append.append(f"- verification_status: {contract.verification_status}\n")
+        lines_to_append.append(f"- confidence: {contract.confidence:.2f}\n")
+        for pre in contract.preconditions:
+            lines_to_append.append(f"- pre: `{pre}`\n")
+        for post in contract.postconditions:
+            lines_to_append.append(f"- post: `{post}`\n")
+        lines_to_append.append("\n")
+
+    try:
+        with card_path.open("a", encoding="utf-8") as f:
+            f.writelines(lines_to_append)
+        click.echo(f"  Contracts appended to {card_path}")
+    except OSError as e:
+        click.echo(f"  Error appending to spec: {e}", err=True)
 
 
 def _run_scan_approval_loop(candidates: list) -> list:
