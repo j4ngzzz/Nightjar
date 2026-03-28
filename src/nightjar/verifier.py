@@ -237,14 +237,50 @@ def _run_crosshair_symbolic(spec: CardSpec, code: str) -> StageResult:
         f.write(code)
         tmp_path = f.name
     try:
+        # --report_all: emit a summary line for every path checked, enabling
+        # path-count extraction for graduated confidence display.
+        # Graceful: if CrossHair doesn't support --report_all, we re-run without it.
+        cmd_with_report = [sys.executable, "-m", "crosshair", "check", "--report_all", tmp_path]
         result = subprocess.run(
-            [sys.executable, "-m", "crosshair", "check", tmp_path],
+            cmd_with_report,
             capture_output=True, text=True, timeout=120,
         )
+        # Detect unsupported flag: CrossHair prints "unrecognized arguments" or
+        # returns exit code 2 (argparse error) when the flag is unknown.
+        _report_all_supported = not (
+            result.returncode == 2
+            or "unrecognized" in (result.stderr or "").lower()
+            or "no such option" in (result.stderr or "").lower()
+        )
+        if not _report_all_supported:
+            # Re-run without --report_all (graceful degradation)
+            result = subprocess.run(
+                [sys.executable, "-m", "crosshair", "check", tmp_path],
+                capture_output=True, text=True, timeout=120,
+            )
+
         duration = int((_time.monotonic() - start) * 1000)
-        if result.returncode == 0:
-            return StageResult(stage=4, name="formal", status=VerifyStatus.PASS, duration_ms=duration)
+
+        # ── Parse path count from CrossHair output ────────────────────────
+        # CrossHair emits lines like: "Confirmed over all paths" or
+        # "All N paths confirmed" when it has exhausted the path space.
+        import re as _re
         output = result.stdout + result.stderr
+        paths_exhausted = 0
+        for line in output.splitlines():
+            m = _re.search(r"(\d+)\s+path", line, _re.IGNORECASE)
+            if m:
+                paths_exhausted += int(m.group(1))
+            elif _re.search(r"confirmed over all paths", line, _re.IGNORECASE):
+                paths_exhausted = paths_exhausted or 1  # at least 1 path confirmed
+        coverage_note = f"{paths_exhausted} paths exhausted" if paths_exhausted else ""
+        # ─────────────────────────────────────────────────────────────────
+
+        if result.returncode == 0:
+            return StageResult(
+                stage=4, name="formal", status=VerifyStatus.PASS,
+                duration_ms=duration, coverage_note=coverage_note,
+            )
         violations = [
             {"type": "crosshair_violation", "message": line.strip()}
             for line in output.splitlines()
@@ -253,6 +289,7 @@ def _run_crosshair_symbolic(spec: CardSpec, code: str) -> StageResult:
         return StageResult(
             stage=4, name="formal", status=VerifyStatus.FAIL, duration_ms=duration,
             errors=violations or [{"type": "crosshair_error", "message": output.strip()[:500]}],
+            coverage_note=coverage_note,
         )
     except subprocess.TimeoutExpired:
         duration = int((_time.monotonic() - start) * 1000)

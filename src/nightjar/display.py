@@ -131,6 +131,7 @@ class RichStreamingDisplay:
         self.stage_status: dict[int, "str | VerifyStatus"] = {}
         self.stage_names: dict[int, str] = {}
         self.stage_durations: dict[int, int] = {}
+        self.stage_coverage_notes: dict[int, str] = {}
         self.pipeline_done: bool = False
         self.pipeline_verified: bool = False
         self.pipeline_trust_level: Optional[TrustLevel] = None
@@ -172,6 +173,8 @@ class RichStreamingDisplay:
         self.stage_status[result.stage] = result.status
         self.stage_names[result.stage] = result.name
         self.stage_durations[result.stage] = result.duration_ms
+        if result.coverage_note:
+            self.stage_coverage_notes[result.stage] = result.coverage_note
         self._refresh()
 
     def on_pipeline_complete(self, result: VerifyResult) -> None:
@@ -245,8 +248,12 @@ class RichStreamingDisplay:
                     confidence_str = f" ({self.pipeline_confidence_val:.2f})"
                 else:
                     confidence_str = ""
+                coverage_parts = [
+                    note for note in self.stage_coverage_notes.values() if note
+                ]
+                coverage_detail = (" — " + " | ".join(coverage_parts)) if coverage_parts else ""
                 trust_text = Text(
-                    f"Trust: {self.pipeline_trust_level.value}{confidence_str}",
+                    f"Trust: {self.pipeline_trust_level.value}{confidence_str}{coverage_detail}",
                     style=style,
                     justify="center",
                 )
@@ -280,8 +287,12 @@ class RichStreamingDisplay:
                     confidence_str = f" ({self.pipeline_confidence_val:.2f})"
                 else:
                     confidence_str = ""
+                coverage_parts = [
+                    note for note in self.stage_coverage_notes.values() if note
+                ]
+                coverage_detail = (" — " + " | ".join(coverage_parts)) if coverage_parts else ""
                 lines.append(
-                    f"Trust: {self.pipeline_trust_level.value}{confidence_str}"
+                    f"Trust: {self.pipeline_trust_level.value}{confidence_str}{coverage_detail}"
                 )
         return "\n".join(lines)
 
@@ -389,8 +400,10 @@ def format_verify_result(result: VerifyResult) -> None:
             confidence_str = f" ({result.confidence.total / 100.0:.2f})"
         else:
             confidence_str = ""
+        coverage_parts = [s.coverage_note for s in result.stages if s.coverage_note]
+        coverage_detail = (" — " + " | ".join(coverage_parts)) if coverage_parts else ""
         trust_line = Text(
-            f"Trust: {result.trust_level.value}{confidence_str}",
+            f"Trust: {result.trust_level.value}{confidence_str}{coverage_detail}",
             style=style,
         )
         console.print(trust_line)
@@ -467,7 +480,9 @@ def _format_verify_result_plain(result: VerifyResult) -> None:
             confidence_str = f" ({result.confidence.total / 100.0:.2f})"
         else:
             confidence_str = ""
-        print(f"Trust: {result.trust_level.value}{confidence_str}")
+        coverage_parts = [s.coverage_note for s in result.stages if s.coverage_note]
+        coverage_detail = (" — " + " | ".join(coverage_parts)) if coverage_parts else ""
+        print(f"Trust: {result.trust_level.value}{confidence_str}{coverage_detail}")
 
     for stage in result.stages:
         print(format_stage_result(stage))

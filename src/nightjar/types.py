@@ -108,6 +108,7 @@ class StageResult:
     duration_ms: int = 0
     errors: list[dict] = field(default_factory=list)
     counterexample: Optional[dict] = None
+    coverage_note: str = ""  # graduated confidence detail (e.g. "200 examples, 0 violations (87% at p=1%)")
 
 
 @dataclass

@@ -933,6 +933,25 @@ def _run_pbt_core(
             }],
         )
 
+    # ── Hypothesis observability callback for example counting ───────────────
+    # Tracks total examples run across all invariants so we can compute
+    # mathematical confidence bounds: 1 - (1 - p_defect)^n
+    # Compatible with Hypothesis 6.x+; silently skipped on older versions.
+    _total_examples: list[int] = [0]  # mutable container for closure capture
+
+    def _observability_cb(result: dict) -> None:  # type: ignore[type-arg]
+        """Increment example counter on each Hypothesis test call."""
+        _total_examples[0] += 1
+
+    try:
+        from hypothesis import event as _hyp_event  # noqa: F401 — just check availability
+        from hypothesis.extra.observability import add_observability_callback  # type: ignore[import]
+        _obs_registered = True
+        add_observability_callback(_observability_cb)
+    except (ImportError, AttributeError):
+        _obs_registered = False
+    # ─────────────────────────────────────────────────────────────────────────
+
     errors: list[dict] = []
     for inv in pbt_invariants:
         error = _run_single_invariant(
@@ -941,8 +960,40 @@ def _run_pbt_core(
         if error is not None:
             errors.append(error)
 
+    # ── Remove observability callback after loop (avoid cross-test leakage) ──
+    if _obs_registered:
+        try:
+            from hypothesis.extra.observability import remove_observability_callback  # type: ignore[import]
+            remove_observability_callback(_observability_cb)
+        except (ImportError, AttributeError):
+            pass
+    # ─────────────────────────────────────────────────────────────────────────
+
     duration = int((time.monotonic() - start) * 1000)
     status = VerifyStatus.FAIL if errors else VerifyStatus.PASS
+
+    # ── Graduated confidence: 1 - (1-p)^n where p=0.01 (1% defect rate) ────
+    # If the observability callback did not fire (older Hypothesis), fall back
+    # to the max_examples setting value as a conservative estimate.
+    n_examples = _total_examples[0]
+    if n_examples == 0:
+        # Fallback: read max_examples from the active Hypothesis settings profile
+        try:
+            n_examples = settings().max_examples * len(pbt_invariants)
+        except Exception:
+            n_examples = 0
+
+    n_violations = len(errors)
+    if n_examples > 0:
+        p_defect = 0.01  # assume 1% defect rate per example
+        confidence_pct = int((1.0 - (1.0 - p_defect) ** n_examples) * 100)
+        coverage_note = (
+            f"{n_examples} examples, {n_violations} violations "
+            f"({confidence_pct}% at p=1%)"
+        )
+    else:
+        coverage_note = f"{n_violations} violations"
+    # ─────────────────────────────────────────────────────────────────────────
 
     return StageResult(
         stage=3,
@@ -951,6 +1002,7 @@ def _run_pbt_core(
         duration_ms=duration,
         errors=errors,
         counterexample=errors[0] if errors else None,
+        coverage_note=coverage_note,
     )
 
 
