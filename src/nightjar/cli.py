@@ -11,6 +11,7 @@ Commands:
     retry       Force retry with LLM repair loop
     lock        Freeze dependencies into deps.lock with hashes
     explain     Show last verification failure in human-readable form
+    scan        Scan a Python file and generate a .card.md spec
 
 Exit Codes:
     0  All stages PASS
@@ -819,3 +820,176 @@ def badge(ctx: click.Context, fmt: str, report: str) -> None:
     except Exception as e:
         click.echo(f"Badge error: {e}", err=True)
         ctx.exit(EXIT_CONFIG_ERROR)
+
+
+@main.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--llm", is_flag=True, default=False, help="Enhance with LLM suggestions.")
+@click.option("--output", "-o", default=None, help="Output path for .card.md (default: .card/<module>.card.md)")
+@click.option("--verify", "run_verify", is_flag=True, default=False, help="Run verification after generating spec.")
+@click.option("--approve-all", is_flag=True, default=False, help="Auto-approve all candidates without prompting.")
+@click.pass_context
+def scan(ctx: click.Context, file_path: str, llm: bool, output: Optional[str], run_verify: bool, approve_all: bool) -> None:
+    """Scan a Python file and generate a .card.md spec from its structure.
+
+    Extracts invariants from type hints, guard clauses, docstrings, and
+    assertions. No LLM needed by default. Add --llm for enhanced suggestions.
+
+    Examples:
+        nightjar scan src/payment.py
+        nightjar scan src/payment.py --llm --verify
+    """
+    config = ctx.obj["config"]
+
+    # Import scanner lazily (Agent 2 module)
+    try:
+        from nightjar.scanner import scan_file, enhance_with_llm, write_scan_card_md
+        from nightjar.scanner import ScanCandidate
+    except ImportError as e:
+        click.echo(f"Error: scanner module not available ({e})", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
+    # Step 1: Scan the file
+    try:
+        result = scan_file(file_path)
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+    except Exception as e:
+        click.echo(f"Scan error: {e}", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
+    candidates = result.candidates
+
+    # Show signal strength warning
+    if result.signal_strength == "low":
+        click.echo(
+            f"Warning: low signal in {file_path} — fewer than 2 invariants found. "
+            "Consider adding type hints, docstrings, or assertions for better results.",
+            err=True,
+        )
+
+    click.echo(
+        f"Scanned {file_path}: {len(candidates)} candidate(s) found "
+        f"[signal: {result.signal_strength}]"
+    )
+
+    # Step 2: LLM enhancement (optional)
+    if llm:
+        try:
+            source_text = Path(file_path).read_text(encoding="utf-8")
+            click.echo("Enhancing with LLM suggestions...")
+            candidates = enhance_with_llm(candidates, source_text)
+            new_count = len(candidates) - len(result.candidates)
+            if new_count:
+                click.echo(f"LLM added {new_count} additional candidate(s).")
+        except Exception as e:
+            click.echo(f"LLM enhancement failed (continuing without): {e}", err=True)
+
+    if not candidates:
+        click.echo("No invariant candidates found. Spec not written.")
+        ctx.exit(EXIT_FAIL)
+        return
+
+    # Step 3: Approval loop
+    if approve_all:
+        approved = candidates
+        click.echo(f"Auto-approved all {len(approved)} candidate(s).")
+    else:
+        approved = _run_scan_approval_loop(candidates)
+
+    if not approved:
+        click.echo("All candidates rejected. Spec not written.")
+        ctx.exit(EXIT_FAIL)
+        return
+
+    # Step 4: Resolve output path
+    if output is None:
+        specs_dir = _get_specs_dir(config)
+        output = str(Path(specs_dir) / f"{result.module_id}.card.md")
+
+    # Step 5: Write the .card.md file
+    try:
+        written_path = write_scan_card_md(output, approved, result.module_id)
+        click.echo(f"Spec written: {written_path}")
+        approved_count = len(approved)
+        skipped_count = len(candidates) - approved_count
+        click.echo(f"Invariants: {len(candidates)} suggested, {approved_count} added, {skipped_count} skipped")
+    except Exception as e:
+        click.echo(f"Error writing spec: {e}", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
+    # Step 6: Optional verification
+    if run_verify:
+        click.echo(f"Running verification on {written_path}...")
+        try:
+            verify_result = _run_verify(written_path, config=config)
+            if verify_result.verified:
+                click.echo("VERIFIED -- all stages passed")
+            else:
+                click.echo("FAILED -- verification did not pass")
+                ctx.exit(EXIT_FAIL)
+                return
+        except SystemExit:
+            raise
+        except Exception as e:
+            click.echo(f"Verification error: {e}", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
+
+    ctx.exit(EXIT_PASS)
+
+
+def _run_scan_approval_loop(candidates: list) -> list:
+    """Present scan candidates for Y/n/modify approval.
+
+    Mirrors the auto._run_approval_loop pattern. User can:
+      y  — accept as-is
+      n  — reject (skip)
+      m  — modify the text, then accept
+
+    Returns:
+        List of approved ScanCandidate objects (accepted or modified).
+    """
+    import threading
+
+    approved = []
+    for i, candidate in enumerate(candidates, 1):
+        click.echo(
+            f"\n[{i}/{len(candidates)}] [{candidate.tier.upper()}] {candidate.statement}"
+        )
+        click.echo(
+            f"  Source: {candidate.source} (line {candidate.source_line})"
+            f"  |  Function: {candidate.function_name or '<module>'}"
+            f"  |  Confidence: {candidate.confidence:.0%}"
+        )
+
+        try:
+            choice = click.prompt(
+                "  Accept? [y/n/m=modify]",
+                default="y",
+                show_default=True,
+            )
+        except (EOFError, Exception):
+            choice = "y"
+
+        if choice.lower() == "n":
+            continue
+        elif choice.lower() == "m":
+            try:
+                modified = click.prompt(
+                    "  Enter modified statement", default=candidate.statement
+                )
+            except (EOFError, Exception):
+                modified = candidate.statement
+            # Return a copy with modified statement
+            from dataclasses import replace as dc_replace
+            approved.append(dc_replace(candidate, statement=modified.strip() or candidate.statement))
+        else:
+            approved.append(candidate)
+
+    return approved
