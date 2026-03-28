@@ -308,3 +308,179 @@ class TestCrossHairBackend:
         assert s.max_examples == 200, (
             "_make_pbt_settings must return fresh settings() respecting active profile"
         )
+
+
+# ── AE-5: PBT Strategy Template Database [AlphaEvolve arXiv:2506.13131] ──────
+
+
+class TestStrategyRecord:
+    """Tests for StrategyRecord dataclass defaults."""
+
+    def test_strategy_record_defaults(self):
+        """StrategyRecord has correct default values for optional fields."""
+        from nightjar.strategy_db import StrategyRecord
+        record = StrategyRecord(
+            invariant_type="numeric_bound",
+            template_name="numeric_bound",
+            template_code="st.integers()",
+        )
+        assert record.counterexample_found_rate == 0.0
+        assert record.avg_examples_to_find == 100.0
+        assert record.run_count == 0
+
+
+class TestStrategyDB:
+    """Tests for StrategyDB — load, seed, query, update."""
+
+    def test_strategy_db_seeds_six_templates(self, tmp_path):
+        """StrategyDB seeds with exactly 6 initial templates when no file exists."""
+        from nightjar.strategy_db import StrategyDB
+        db = StrategyDB(db_path=str(tmp_path / "strategy_db.json"))
+        assert len(db.records) == 6
+
+    def test_strategy_db_get_best_returns_highest_rate(self, tmp_path):
+        """get_best_for_type returns the record with the highest counterexample_found_rate."""
+        from nightjar.strategy_db import StrategyDB, StrategyRecord
+        db = StrategyDB(db_path=str(tmp_path / "strategy_db.json"))
+        # Override with two records of known rates
+        db.records = [
+            StrategyRecord(
+                invariant_type="numeric_bound",
+                template_name="low_rate",
+                template_code="st.integers()",
+                counterexample_found_rate=0.1,
+            ),
+            StrategyRecord(
+                invariant_type="numeric_bound",
+                template_name="high_rate",
+                template_code="st.integers(min_value=0)",
+                counterexample_found_rate=0.9,
+            ),
+        ]
+        best = db.get_best_for_type("numeric_bound")
+        assert best is not None
+        assert best.template_name == "high_rate"
+
+    def test_strategy_db_get_diverse_returns_lowest_count(self, tmp_path):
+        """get_diverse_for_type returns the record with the lowest run_count."""
+        from nightjar.strategy_db import StrategyDB, StrategyRecord
+        db = StrategyDB(db_path=str(tmp_path / "strategy_db.json"))
+        db.records = [
+            StrategyRecord(
+                invariant_type="numeric_bound",
+                template_name="well_used",
+                template_code="st.integers()",
+                run_count=50,
+            ),
+            StrategyRecord(
+                invariant_type="numeric_bound",
+                template_name="least_used",
+                template_code="st.integers(min_value=0)",
+                run_count=2,
+            ),
+        ]
+        diverse = db.get_diverse_for_type("numeric_bound")
+        assert diverse is not None
+        assert diverse.template_name == "least_used"
+
+    def test_record_outcome_updates_ema(self, tmp_path):
+        """record_outcome updates counterexample_found_rate via EMA (0.7 old + 0.3 new)."""
+        from nightjar.strategy_db import StrategyDB, StrategyRecord
+        db = StrategyDB(db_path=str(tmp_path / "strategy_db.json"))
+        db.records = [
+            StrategyRecord(
+                invariant_type="numeric_bound",
+                template_name="t1",
+                template_code="st.integers()",
+                counterexample_found_rate=0.0,
+                avg_examples_to_find=100.0,
+                run_count=0,
+            ),
+        ]
+        db.record_outcome("numeric_bound", "t1", found_counterexample=True, examples_taken=50)
+        record = db.records[0]
+        # EMA: 0.7 * 0.0 + 0.3 * 1.0 = 0.3
+        assert abs(record.counterexample_found_rate - 0.3) < 1e-9
+        # EMA: 0.7 * 100.0 + 0.3 * 50.0 = 85.0
+        assert abs(record.avg_examples_to_find - 85.0) < 1e-9
+        assert record.run_count == 1
+
+    def test_strategy_db_save_load_roundtrip(self, tmp_path):
+        """save() then load() from same path preserves all records."""
+        from nightjar.strategy_db import StrategyDB
+        db_path = str(tmp_path / "strategy_db.json")
+        db1 = StrategyDB(db_path=db_path)
+        # Mutate one record so we can verify persistence
+        db1.records[0].run_count = 42
+        db1.save()
+
+        db2 = StrategyDB(db_path=db_path)
+        assert len(db2.records) == len(db1.records)
+        # The first record should have run_count=42
+        assert db2.records[0].run_count == 42
+
+    def test_strategy_db_get_best_returns_none_for_unknown_type(self, tmp_path):
+        """get_best_for_type returns None when no records match the type."""
+        from nightjar.strategy_db import StrategyDB
+        db = StrategyDB(db_path=str(tmp_path / "strategy_db.json"))
+        result = db.get_best_for_type("nonexistent_type_xyz")
+        assert result is None
+
+    def test_strategy_db_get_diverse_returns_none_for_unknown_type(self, tmp_path):
+        """get_diverse_for_type returns None when no records match the type."""
+        from nightjar.strategy_db import StrategyDB
+        db = StrategyDB(db_path=str(tmp_path / "strategy_db.json"))
+        result = db.get_diverse_for_type("nonexistent_type_xyz")
+        assert result is None
+
+
+class TestClassifyInvariantType:
+    """Tests for classify_invariant_type() regex classification."""
+
+    def test_classify_invariant_type_numeric_bound(self):
+        """Statements with >= 0 or > 0 classify as numeric_bound."""
+        from nightjar.strategy_db import classify_invariant_type
+        assert classify_invariant_type("result >= 0") == "numeric_bound"
+        assert classify_invariant_type("value > 0 for all inputs") == "numeric_bound"
+
+    def test_classify_invariant_type_string_format(self):
+        """Statements with email or @ classify as string_format."""
+        from nightjar.strategy_db import classify_invariant_type
+        assert classify_invariant_type("email matches RFC 5321") == "string_format"
+        assert classify_invariant_type("must contain @ symbol") == "string_format"
+
+    def test_classify_invariant_type_unknown(self):
+        """Statements that match no pattern classify as unknown."""
+        from nightjar.strategy_db import classify_invariant_type
+        assert classify_invariant_type("complex business rule about transactions") == "unknown"
+
+    def test_classify_invariant_type_collection_size(self):
+        """Statements with len() or size classify as collection_size."""
+        from nightjar.strategy_db import classify_invariant_type
+        assert classify_invariant_type("len(result) > 0") == "collection_size"
+        assert classify_invariant_type("output size must be positive") == "collection_size"
+
+    def test_classify_invariant_type_boolean_flag(self):
+        """Statements with True/False/bool classify as boolean_flag."""
+        from nightjar.strategy_db import classify_invariant_type
+        assert classify_invariant_type("returns True when valid") == "boolean_flag"
+        assert classify_invariant_type("bool result expected") == "boolean_flag"
+
+
+class TestPbtIntegrationHook:
+    """Tests for the strategy DB integration hook in pbt.py."""
+
+    def test_pbt_integration_hook_disabled_by_default(self, monkeypatch):
+        """PBT runs correctly with no StrategyDB created when env var is not set."""
+        monkeypatch.delenv("NIGHTJAR_ENABLE_STRATEGY_DB", raising=False)
+        # Verify that run_pbt works without the strategy DB being instantiated
+        spec = _make_spec([
+            Invariant(
+                id="INV-001",
+                tier=InvariantTier.PROPERTY,
+                statement="For any positive x, process(x) returns a positive integer",
+            ),
+        ])
+        result = run_pbt(spec, PASSING_CODE)
+        # Should still pass — strategy DB is purely additive
+        assert result.status == VerifyStatus.PASS

@@ -37,10 +37,14 @@ Design per ARCHITECTURE.md Section 4 + W1.3 BFS:
   BFS search: beam of candidates → expand best → verify → prune weaker branches
 """
 
+import csv
+import hashlib
 import json
 import os
 import re
+import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import litellm
@@ -486,10 +490,17 @@ class BFSNode:
         score: Verification progress score in [0.0, 1.0].
                1.0 = verified, approaches 1.0 as errors decrease.
         depth: Tree depth (0 = initial, 1 = first repair level, etc.)
+        errors: Structured errors from the last verification run. Default
+                empty so existing callers that omit this field still work.
+        error_hash: MD5 prefix of the first error message, used for
+                    diversity tracking in the ratchet population. Default
+                    empty string for backward compatibility.
     """
     code: str
     score: float
     depth: int = 0
+    errors: list[dict] = field(default_factory=list)
+    error_hash: str = ""
 
 
 def _score_verify_result(result: VerifyResult) -> float:
@@ -594,4 +605,228 @@ def run_bfs_search(
 
     # Exhausted search — return best failing result
     best_result.retry_count = total_attempts
+    return best_result
+
+
+# ─── AutoResearch Ratchet Loop (AE-1) ────────────────────────────────────────
+# Budget-controlled hill-climbing with TSV traceability (Karpathy, 2026).
+# Opt-in via NIGHTJAR_ENABLE_EVOLUTION=1. When disabled, delegates to
+# run_bfs_search() with zero overhead.
+
+# Default TSV log path (relative to project root, inside .card/ per spec layout)
+_DEFAULT_TSV_LOG_PATH = os.path.join(".card", "verify_log.tsv")
+_TSV_COLUMNS = ["timestamp", "spec_id", "attempt", "score", "error_count", "status", "code_hash"]
+
+
+def _hash_errors(errors: list[dict]) -> str:
+    """Compute an 8-char MD5 prefix from the first error message.
+
+    Used to track error-type diversity in the ratchet population, so
+    AE-2 can prefer inspiration nodes with different failure modes.
+
+    Args:
+        errors: List of error dicts (each may have a "message" key).
+
+    Returns:
+        8-character hex string, or "" if errors is empty.
+    """
+    if not errors:
+        return ""
+    first_msg = str(errors[0].get("message", ""))[:100]
+    return hashlib.md5(first_msg.encode()).hexdigest()[:8]
+
+
+def _log_candidate_to_tsv(log_path: str, row: dict) -> None:
+    """Append a candidate result row to the TSV trace log.
+
+    Creates the file (with header) if it does not yet exist.
+    Columns: timestamp, spec_id, attempt, score, error_count, status, code_hash.
+
+    This function NEVER raises — all exceptions are swallowed so TSV
+    failure can never crash the verification pipeline.
+
+    Args:
+        log_path: Filesystem path to the .tsv file.
+        row: Dict with keys matching _TSV_COLUMNS.
+    """
+    try:
+        os.makedirs(os.path.dirname(log_path) if os.path.dirname(log_path) else ".", exist_ok=True)
+        file_exists = os.path.isfile(log_path)
+        with open(log_path, "a", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=_TSV_COLUMNS, delimiter="\t", extrasaction="ignore")
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(row)
+    except Exception:
+        # TSV logging is best-effort — never propagate exceptions
+        pass
+
+
+def _get_repair_budget() -> float:
+    """Read the wall-clock repair budget from the environment.
+
+    Controlled by NIGHTJAR_REPAIR_BUDGET_SECONDS (default 120 seconds).
+
+    Returns:
+        Budget in seconds as a float. Returns 120.0 on parse error.
+    """
+    try:
+        return float(os.environ.get("NIGHTJAR_REPAIR_BUDGET_SECONDS", "120"))
+    except (ValueError, TypeError):
+        return 120.0
+
+
+def _prune_population(
+    population: list[tuple[BFSNode, VerifyResult]],
+    max_k: int = 5,
+) -> list[tuple[BFSNode, VerifyResult]]:
+    """Keep the top-max_k candidates by score from the population.
+
+    Simple score-only prune (diversity support added in AE-2).
+
+    Args:
+        population: List of (BFSNode, VerifyResult) pairs.
+        max_k: Maximum population size to retain.
+
+    Returns:
+        Pruned list, sorted descending by node score, length <= max_k.
+    """
+    return sorted(population, key=lambda pair: pair[0].score, reverse=True)[:max_k]
+
+
+def run_ratchet_search(
+    spec: CardSpec,
+    code: str,
+    budget_seconds: Optional[float] = None,
+    beam_width: int = DEFAULT_BFS_BEAM_WIDTH,
+) -> VerifyResult:
+    """AutoResearch ratchet loop — budget-controlled hill-climbing [AE-1].
+
+    When NIGHTJAR_ENABLE_EVOLUTION != "1" (the default), this function is a
+    thin wrapper that immediately delegates to run_bfs_search() so existing
+    behaviour is unchanged with zero overhead.
+
+    When enabled:
+    - Maintains a population of up to 5 best candidates
+    - Each iteration selects the highest-scoring parent and calls the LLM
+      for one repair candidate
+    - Verifies the candidate immediately (verifier-in-the-loop)
+    - Logs every candidate to .card/verify_log.tsv for traceability
+    - Circuit breaker: 5 consecutive candidates all scoring < 0.3 → abort
+    - Hard wall-clock budget (default 120 s from NIGHTJAR_REPAIR_BUDGET_SECONDS)
+
+    Args:
+        spec: Parsed .card.md specification.
+        code: Initial generated code to verify.
+        budget_seconds: Optional override for repair budget. Uses
+            NIGHTJAR_REPAIR_BUDGET_SECONDS env var when None.
+        beam_width: Passed through to run_bfs_search when evolution is
+            disabled (ignored when the ratchet loop runs).
+
+    Returns:
+        VerifyResult — verified=True as soon as a proof is found, otherwise
+        the best candidate seen within the budget.
+    """
+    # ── Activation gate ────────────────────────────────────────────────────
+    if os.environ.get("NIGHTJAR_ENABLE_EVOLUTION", "0") != "1":
+        return run_bfs_search(spec, code, beam_width=beam_width)
+
+    effective_budget = budget_seconds if budget_seconds is not None else _get_repair_budget()
+    start_time = time.monotonic()
+
+    # Verify the initial candidate
+    result = run_pipeline(spec, code)
+    if result.verified:
+        result.retry_count = 0
+        return result
+
+    initial_errors = []
+    for stage in result.stages:
+        if stage.status == VerifyStatus.FAIL:
+            initial_errors = stage.errors
+            break
+
+    initial_node = BFSNode(
+        code=code,
+        score=_score_verify_result(result),
+        depth=0,
+        errors=initial_errors,
+        error_hash=_hash_errors(initial_errors),
+    )
+    population: list[tuple[BFSNode, VerifyResult]] = [(initial_node, result)]
+
+    # Log the initial candidate
+    _log_candidate_to_tsv(_DEFAULT_TSV_LOG_PATH, {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "spec_id": spec.id,
+        "attempt": 0,
+        "score": initial_node.score,
+        "error_count": len(initial_errors),
+        "status": "fail",
+        "code_hash": hashlib.md5(code.encode()).hexdigest()[:8],
+    })
+
+    attempt = 0
+    consecutive_low_scores = 0
+
+    while time.monotonic() - start_time < effective_budget:
+        attempt += 1
+
+        # Select best parent from population
+        best_node, best_result = max(population, key=lambda pair: pair[0].score)
+
+        # Generate one repair candidate
+        candidate_code = _call_repair_llm(spec, best_node.code, best_result, attempt)
+
+        # Verify immediately (verifier-in-the-loop)
+        candidate_result = run_pipeline(spec, candidate_code)
+        candidate_score = _score_verify_result(candidate_result)
+
+        # Collect errors from failing stages for diversity tracking
+        candidate_errors: list[dict] = []
+        for stage in candidate_result.stages:
+            if stage.status == VerifyStatus.FAIL:
+                candidate_errors = stage.errors
+                break
+
+        # Log to TSV (never raises)
+        _log_candidate_to_tsv(_DEFAULT_TSV_LOG_PATH, {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "spec_id": spec.id,
+            "attempt": attempt,
+            "score": candidate_score,
+            "error_count": len(candidate_errors),
+            "status": "pass" if candidate_result.verified else "fail",
+            "code_hash": hashlib.md5(candidate_code.encode()).hexdigest()[:8],
+        })
+
+        # Return immediately on verification success
+        if candidate_result.verified:
+            candidate_result.retry_count = attempt
+            return candidate_result
+
+        # Circuit breaker: abort on 5 consecutive low-scoring candidates
+        if candidate_score < 0.3:
+            consecutive_low_scores += 1
+            if consecutive_low_scores >= 5:
+                break
+        else:
+            consecutive_low_scores = 0
+
+        # Determine whether to add candidate to the population
+        worst_score_in_pop = min(p[0].score for p in population)
+        if candidate_score > worst_score_in_pop or len(population) < 5:
+            candidate_node = BFSNode(
+                code=candidate_code,
+                score=candidate_score,
+                depth=best_node.depth + 1,
+                errors=candidate_errors,
+                error_hash=_hash_errors(candidate_errors),
+            )
+            population.append((candidate_node, candidate_result))
+            population = _prune_population(population, max_k=5)
+
+    # Budget exhausted (or circuit breaker) — return best candidate seen
+    best_node, best_result = max(population, key=lambda pair: pair[0].score)
+    best_result.retry_count = attempt
     return best_result

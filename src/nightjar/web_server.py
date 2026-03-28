@@ -50,8 +50,10 @@ def create_app() -> FastAPI:
     )
 
     from nightjar.web_router import router
+    from nightjar.web_scanner import scanner_router
 
     app.include_router(router, prefix="/api")
+    app.include_router(scanner_router, prefix="/api")
 
     return app
 

@@ -315,6 +315,10 @@ def _llm_generate_assertion(statement: str, func_name: str) -> str | None:
     All LLM calls go through litellm [REF-T16]. Model from get_model().
     Failures are caught and silently return None so PBT can continue.
 
+    When NIGHTJAR_ENABLE_STRATEGY_DB=1, injects best-performing and most-diverse
+    strategy templates from the StrategyDB into the prompt as parent/inspiration
+    examples (AlphaEvolve programs database pattern — arXiv:2506.13131).
+
     Args:
         statement: Natural-language invariant from .card.md.
         func_name: Name of the function under test.
@@ -322,10 +326,56 @@ def _llm_generate_assertion(statement: str, func_name: str) -> str | None:
     Returns:
         A syntactically valid Python ``assert …`` string, or None on failure.
     """
+    # ── Strategy DB integration hook (opt-in, gated by env var) ──────────────
+    # Activation: NIGHTJAR_ENABLE_STRATEGY_DB=1
+    # Failure is always silent — strategy DB issues must never crash PBT.
+    _strategy_db = None
+    _inv_type = "unknown"
+    _best_template_name = "unknown"
+    if os.getenv("NIGHTJAR_ENABLE_STRATEGY_DB", "0") == "1":
+        try:
+            from nightjar.strategy_db import StrategyDB, classify_invariant_type  # noqa: PLC0415
+            _strategy_db = StrategyDB()
+            _inv_type = classify_invariant_type(statement)
+            _best_seed = _strategy_db.get_best_for_type(_inv_type)
+            _best_template_name = (
+                _best_seed.template_name if _best_seed is not None else "unknown"
+            )
+        except Exception:  # noqa: BLE001
+            _strategy_db = None  # Ensure DB failures are silent
+    # ─────────────────────────────────────────────────────────────────────────
+
     try:
         from nightjar.config import load_config, get_model
         load_config()
         import litellm  # noqa: PLC0415
+
+        # Build strategy template context for the prompt (only when DB enabled)
+        strategy_context = ""
+        if _strategy_db is not None:
+            try:
+                best = _strategy_db.get_best_for_type(_inv_type)
+                diverse = _strategy_db.get_diverse_for_type(_inv_type)
+                examples: list[str] = []
+                if best is not None:
+                    examples.append(
+                        f"  Parent (best performer): {best.template_name} — "
+                        f"{best.template_code}"
+                    )
+                if diverse is not None and diverse.template_name != (
+                    best.template_name if best else ""
+                ):
+                    examples.append(
+                        f"  Inspiration (diverse): {diverse.template_name} — "
+                        f"{diverse.template_code}"
+                    )
+                if examples:
+                    strategy_context = (
+                        "\nRelevant Hypothesis strategy templates for this invariant type"
+                        f" ({_inv_type}):\n" + "\n".join(examples) + "\n"
+                    )
+            except Exception:  # noqa: BLE001
+                strategy_context = ""
 
         prompt = (
             f"Convert this invariant to a Python assert statement.\n"
@@ -333,6 +383,7 @@ def _llm_generate_assertion(statement: str, func_name: str) -> str | None:
             f"Available variables: result (return value of the function), "
             f"x (integer input to the function).\n"
             f"Invariant: {statement}\n"
+            f"{strategy_context}"
             f"Reply with ONLY the assert statement, nothing else."
         )
         response = litellm.completion(
@@ -649,9 +700,9 @@ def _run_single_invariant(
 
     try:
         pbt_test()
-        return None  # Success
+        outcome_error = None  # Success
     except AssertionError as e:
-        return {
+        outcome_error = {
             "invariant_id": invariant.id,
             "tier": invariant.tier.value,
             "statement": invariant.statement,
@@ -659,13 +710,32 @@ def _run_single_invariant(
             "type": "property_violation",
         }
     except Exception as e:
-        return {
+        outcome_error = {
             "invariant_id": invariant.id,
             "tier": invariant.tier.value,
             "statement": invariant.statement,
             "error": f"PBT execution error: {traceback.format_exc()}",
             "type": "execution_error",
         }
+
+    # ── Strategy DB outcome recording (opt-in, gated by env var) ─────────────
+    # Record at _run_single_invariant level where the actual pass/fail is known.
+    # This enables correct EMA updates for counterexample_found_rate.
+    if os.getenv("NIGHTJAR_ENABLE_STRATEGY_DB", "0") == "1":
+        try:
+            from nightjar.strategy_db import StrategyDB, classify_invariant_type  # noqa: PLC0415
+            _db = StrategyDB()
+            _itype = classify_invariant_type(invariant.statement)
+            _best = _db.get_best_for_type(_itype)
+            _tname = _best.template_name if _best is not None else "unknown"
+            _found_ce = outcome_error is not None and outcome_error.get("type") == "property_violation"
+            _db.record_outcome(_itype, _tname, found_counterexample=_found_ce, examples_taken=0)
+            _db.save()
+        except Exception:  # noqa: BLE001
+            pass  # DB update failure must never crash PBT
+    # ─────────────────────────────────────────────────────────────────────────
+
+    return outcome_error
 
 
 # Common stdlib names that appear in a namespace after exec() due to

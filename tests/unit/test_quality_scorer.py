@@ -28,10 +28,13 @@ from unittest.mock import patch, MagicMock
 from immune.enricher import CandidateInvariant
 from immune.quality_scorer import (
     QualityScore,
+    MapElitesArchive,
     score_candidate,
+    score_candidate_multidim,
     score_candidates,
     filter_by_quality,
     QUALITY_THRESHOLD,
+    _compute_specificity,
 )
 
 
@@ -234,3 +237,196 @@ class TestFilterByQuality:
         score_low = score_candidate(low).score
         score_high = score_candidate(high).score
         assert score_high >= score_low
+
+
+# ── AlphaEvolve MAP-Elites: new QualityScore fields ──────────────────────────
+
+
+class TestQualityScoreMapEliteFields:
+    """Tests for the four new optional fields added to QualityScore (AE-3)."""
+
+    def _make_qs(self) -> QualityScore:
+        return QualityScore(
+            candidate=make_candidate("result >= 0"),
+            score=0.5,
+            is_trivial=False,
+            is_valid_syntax=True,
+            reason="",
+        )
+
+    def test_quality_score_has_coverage_score_field_with_default(self):
+        qs = self._make_qs()
+        assert hasattr(qs, "coverage_score")
+        assert qs.coverage_score == 0.0
+
+    def test_quality_score_has_specificity_score_field_with_default(self):
+        qs = self._make_qs()
+        assert hasattr(qs, "specificity_score")
+        assert qs.specificity_score == 0.0
+
+    def test_quality_score_has_falsifiability_score_field_with_default(self):
+        qs = self._make_qs()
+        assert hasattr(qs, "falsifiability_score")
+        assert qs.falsifiability_score == 0.0
+
+    def test_quality_score_has_is_map_elite_field_with_default_false(self):
+        qs = self._make_qs()
+        assert hasattr(qs, "is_map_elite")
+        assert qs.is_map_elite is False
+
+
+# ── score_candidate_multidim ──────────────────────────────────────────────────
+
+
+class TestScoreCandidateMultidim:
+    """Tests for the multi-dimensional scorer (AE-3)."""
+
+    def test_score_candidate_multidim_returns_quality_score(self):
+        qs = score_candidate_multidim(make_candidate("result >= 0"))
+        assert isinstance(qs, QualityScore)
+
+    def test_score_candidate_multidim_uses_coverage_evidence(self):
+        qs = score_candidate_multidim(make_candidate("result >= 0"), coverage_evidence=0.9)
+        assert qs.coverage_score == 0.9
+
+    def test_score_candidate_multidim_uses_confidence_as_proxy_when_no_evidence(self):
+        candidate = make_candidate("result >= 0", confidence=0.75)
+        qs = score_candidate_multidim(candidate)
+        assert qs.coverage_score == pytest.approx(0.75)
+
+    def test_score_candidate_multidim_populates_specificity(self):
+        qs = score_candidate_multidim(make_candidate("x > 0"))
+        assert qs.specificity_score > 0.0
+
+    def test_score_candidate_multidim_base_score_unchanged(self):
+        candidate = make_candidate("result >= 0", confidence=0.7)
+        base = score_candidate(candidate)
+        multi = score_candidate_multidim(candidate)
+        assert multi.score == pytest.approx(base.score)
+
+
+# ── _compute_specificity ──────────────────────────────────────────────────────
+
+
+class TestComputeSpecificity:
+    """Tests for AST-based specificity scoring (AE-3)."""
+
+    def _parse(self, expr: str):
+        return ast.parse(expr, mode="eval")
+
+    def test_compute_specificity_single_bound_returns_0_6(self):
+        tree = self._parse("x > 0")
+        result = _compute_specificity(tree)
+        assert 0.5 <= result <= 0.7, f"Expected 0.5–0.7 for single bound, got {result}"
+
+    def test_compute_specificity_tautology_returns_0(self):
+        """Tautology (literal True) gets 0.0 specificity."""
+        tree = self._parse("True")
+        result = _compute_specificity(tree)
+        assert result == 0.0
+
+    def test_compute_specificity_literal_equality_returns_0_9(self):
+        tree = self._parse("x == 42")
+        result = _compute_specificity(tree)
+        assert result == pytest.approx(0.9)
+
+    def test_compute_specificity_range_returns_0_8(self):
+        tree = self._parse("x > 0 and x < 100")
+        result = _compute_specificity(tree)
+        assert result == pytest.approx(0.8)
+
+    def test_compute_specificity_membership_returns_0_7(self):
+        tree = self._parse("x in items")
+        result = _compute_specificity(tree)
+        assert result == pytest.approx(0.7)
+
+    def test_compute_specificity_complex_returns_0_5(self):
+        tree = self._parse("len(result) > 0")
+        result = _compute_specificity(tree)
+        # len() call is complex — should get conservative 0.5 or 0.6
+        assert 0.5 <= result <= 0.6
+
+
+# ── MapElitesArchive ──────────────────────────────────────────────────────────
+
+
+def _make_qs_multidim(
+    expression: str = "result >= 0",
+    score: float = 0.7,
+    coverage: float = 0.5,
+    specificity: float = 0.6,
+) -> QualityScore:
+    """Helper: build a QualityScore with explicit multidim fields."""
+    candidate = make_candidate(expression, confidence=0.7)
+    return QualityScore(
+        candidate=candidate,
+        score=score,
+        is_trivial=False,
+        is_valid_syntax=True,
+        reason="",
+        coverage_score=coverage,
+        specificity_score=specificity,
+    )
+
+
+class TestMapElitesArchive:
+    """Tests for MapElitesArchive (AE-3)."""
+
+    def test_map_elites_archive_starts_empty(self):
+        archive = MapElitesArchive()
+        assert archive.size() == 0
+
+    def test_map_elites_archive_update_accepts_new_cell(self):
+        archive = MapElitesArchive()
+        qs = _make_qs_multidim(coverage=0.5, specificity=0.6)
+        accepted = archive.update(qs)
+        assert accepted is True
+        assert archive.size() == 1
+
+    def test_map_elites_archive_update_rejects_worse_in_same_cell(self):
+        archive = MapElitesArchive()
+        good = _make_qs_multidim(score=0.8, coverage=0.5, specificity=0.6)
+        bad = _make_qs_multidim(score=0.3, coverage=0.5, specificity=0.6)
+        archive.update(good)
+        rejected = archive.update(bad)
+        assert rejected is False
+        assert archive.size() == 1
+
+    def test_map_elites_archive_update_accepts_better_in_same_cell(self):
+        archive = MapElitesArchive()
+        mediocre = _make_qs_multidim(score=0.5, coverage=0.5, specificity=0.6)
+        better = _make_qs_multidim(score=0.9, coverage=0.5, specificity=0.6)
+        archive.update(mediocre)
+        accepted = archive.update(better)
+        assert accepted is True
+        assert archive.size() == 1
+        # The stored elite should have the higher score
+        elites = archive.get_all_elites()
+        assert elites[0].score == pytest.approx(0.9)
+
+    def test_map_elites_archive_diverse_sample_bounded(self):
+        archive = MapElitesArchive()
+        # Fill a few different cells
+        for i in range(5):
+            qs = _make_qs_multidim(
+                expression=f"x > {i}",
+                coverage=i * 0.2,
+                specificity=i * 0.2,
+            )
+            archive.update(qs)
+        sample = archive.get_diverse_sample(n=3)
+        assert len(sample) <= 3
+
+    def test_map_elites_marks_elites_with_is_map_elite_true(self):
+        archive = MapElitesArchive()
+        qs = _make_qs_multidim()
+        archive.update(qs)
+        elites = archive.get_all_elites()
+        assert len(elites) == 1
+        assert elites[0].is_map_elite is True
+
+    def test_bucket_maps_zero_to_zero(self):
+        assert MapElitesArchive._bucket(0.0) == 0
+
+    def test_bucket_maps_one_to_four(self):
+        assert MapElitesArchive._bucket(1.0) == 4

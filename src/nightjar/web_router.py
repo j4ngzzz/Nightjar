@@ -133,6 +133,71 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "version": _VERSION}
 
 
+@router.get("/runs")
+async def list_runs(
+    public: Optional[bool] = None,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Return a list of recent verification runs.
+
+    Args:
+        public: If ``True``, return only public-scanner runs
+            (``meta.source == "public_scanner"``).  If omitted or ``False``,
+            returns all runs.
+        limit: Maximum number of runs to return (capped at 100).
+
+    Returns:
+        List of run summary dicts ordered by ``created_at`` descending.
+        Each item includes: ``run_id``, ``spec_id``, ``status``,
+        ``verified``, ``trust_level``, ``created_at``.
+    """
+    import sqlite3
+    import json
+
+    effective_limit = max(1, min(limit, 100))
+    db = _resolve_db()
+
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT run_id, spec_id, status, verified, trust_level,
+                   created_at, meta_json
+            FROM canvas_runs
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (effective_limit,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        meta: dict[str, Any] = {}
+        try:
+            meta = json.loads(row["meta_json"] or "{}")
+        except (ValueError, KeyError):
+            pass
+
+        if public and meta.get("source") != "public_scanner":
+            continue
+
+        result.append(
+            {
+                "run_id": row["run_id"],
+                "spec_id": row["spec_id"],
+                "status": row["status"],
+                "verified": bool(row["verified"]),
+                "trust_level": row["trust_level"],
+                "created_at": row["created_at"],
+            }
+        )
+
+    return result
+
+
 @router.post("/runs", response_model=CreateRunResponse, status_code=201)
 async def create_run(body: CreateRunRequest) -> CreateRunResponse:
     """Create a new verification run record.

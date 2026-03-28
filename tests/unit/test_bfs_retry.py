@@ -12,6 +12,8 @@ References:
 - >30% absolute improvement over flat sampling (Scout 3 S10)
 """
 
+import os
+
 import pytest
 from unittest.mock import patch, MagicMock
 from nightjar.types import (
@@ -216,3 +218,168 @@ class TestBFSNode:
         node_high = BFSNode(code="b", score=0.8, depth=1)
         # Higher score = better node (should come first in max-heap)
         assert node_high.score > node_low.score
+
+    def test_bfsnode_errors_field_has_default(self):
+        """BFSNode can be constructed without providing errors or error_hash.
+
+        AE-1 adds two new fields with defaults. Existing callsites that omit
+        both fields must continue to work — backward compatibility requirement.
+        """
+        from nightjar.retry import BFSNode
+
+        # Must NOT raise — backward-compatible construction
+        node = BFSNode(code="x", score=0.5, depth=0)
+        assert node.errors == []
+        assert node.error_hash == ""
+
+
+class TestHashErrors:
+    """Tests for _hash_errors() — error-type diversity tracking helper."""
+
+    def test_hash_errors_returns_empty_string_for_empty_list(self):
+        """Empty errors list → empty string (no hash to compute)."""
+        from nightjar.retry import _hash_errors
+
+        result = _hash_errors([])
+        assert result == ""
+
+    def test_hash_errors_returns_different_hash_for_different_messages(self):
+        """Two different error messages must produce different hash prefixes."""
+        from nightjar.retry import _hash_errors
+
+        hash_a = _hash_errors([{"message": "postcondition might not hold"}])
+        hash_b = _hash_errors([{"message": "precondition violation at line 7"}])
+        assert hash_a != ""
+        assert hash_b != ""
+        assert hash_a != hash_b
+
+    def test_hash_errors_returns_8_char_string(self):
+        """_hash_errors returns exactly 8 hex characters."""
+        from nightjar.retry import _hash_errors
+
+        result = _hash_errors([{"message": "some failure"}])
+        assert len(result) == 8
+        # Must be valid hex
+        int(result, 16)
+
+
+class TestRatchetSearch:
+    """Tests for run_ratchet_search — the AutoResearch ratchet loop (AE-1)."""
+
+    def test_ratchet_delegates_to_bfs_when_evolution_disabled(self, monkeypatch):
+        """Without NIGHTJAR_ENABLE_EVOLUTION=1, delegates immediately to run_bfs_search.
+
+        The ratchet is 100% opt-in — existing behaviour is unchanged unless
+        the env var is explicitly set to "1".
+        """
+        from nightjar.retry import run_ratchet_search
+
+        monkeypatch.delenv("NIGHTJAR_ENABLE_EVOLUTION", raising=False)
+
+        spec = _make_spec()
+
+        with patch("nightjar.retry.run_bfs_search") as mock_bfs, \
+             patch("nightjar.retry.run_pipeline") as mock_pipeline:
+            mock_bfs.return_value = _pass_verify()
+
+            result = run_ratchet_search(spec, "some_code")
+
+        mock_bfs.assert_called_once()
+        # run_pipeline must NOT have been called directly by the ratchet
+        mock_pipeline.assert_not_called()
+        assert result.verified is True
+
+    def test_ratchet_returns_immediately_on_verified(self, monkeypatch):
+        """When the first pipeline call returns verified, the ratchet exits at once."""
+        from nightjar.retry import run_ratchet_search
+
+        monkeypatch.setenv("NIGHTJAR_ENABLE_EVOLUTION", "1")
+
+        spec = _make_spec()
+
+        with patch("nightjar.retry.run_pipeline") as mock_pipeline, \
+             patch("nightjar.retry._call_repair_llm") as mock_llm:
+            mock_pipeline.return_value = _pass_verify()
+
+            result = run_ratchet_search(spec, "good_code", budget_seconds=30.0)
+
+        assert result.verified is True
+        # LLM must not have been called — no repair needed
+        mock_llm.assert_not_called()
+        # Only one pipeline call (the initial verification)
+        assert mock_pipeline.call_count == 1
+
+    def test_ratchet_circuit_breaker_aborts_on_consecutive_low_scores(self, monkeypatch):
+        """Circuit breaker fires after 5 consecutive candidates scoring < 0.3.
+
+        All mock pipeline calls return a result with many errors so the
+        score stays well below the 0.3 threshold. The ratchet must abort
+        (not spin forever) and return the best-seen result.
+        """
+        from nightjar.retry import run_ratchet_search
+
+        monkeypatch.setenv("NIGHTJAR_ENABLE_EVOLUTION", "1")
+
+        spec = _make_spec()
+        # Score = 1/(N+1).  With 10 errors → 1/11 ≈ 0.09  (< 0.3)
+        low_score_result = _fail_verify(
+            errors=[{"type": "err", "message": f"err {i}"} for i in range(10)]
+        )
+
+        with patch("nightjar.retry.run_pipeline") as mock_pipeline, \
+             patch("nightjar.retry._call_repair_llm") as mock_llm:
+            # Initial verify + enough candidates to trigger circuit breaker
+            mock_pipeline.return_value = low_score_result
+            mock_llm.return_value = "candidate_code"
+
+            result = run_ratchet_search(spec, "bad_code", budget_seconds=9999.0)
+
+        # Circuit breaker: initial call + 5 candidates = 6 pipeline calls max
+        assert mock_pipeline.call_count <= 6, (
+            f"Circuit breaker should fire at 5 consecutive low scores; "
+            f"got {mock_pipeline.call_count} calls"
+        )
+        assert result.verified is False
+
+    def test_ratchet_logs_to_tsv(self, monkeypatch, tmp_path):
+        """run_ratchet_search creates and appends to a TSV log file.
+
+        Uses tmp_path to redirect the log path so tests don't write to the
+        real .card/ directory.
+        """
+        import nightjar.retry as retry_module
+        from nightjar.retry import run_ratchet_search
+
+        monkeypatch.setenv("NIGHTJAR_ENABLE_EVOLUTION", "1")
+
+        tsv_path = str(tmp_path / "verify_log.tsv")
+        monkeypatch.setattr(retry_module, "_DEFAULT_TSV_LOG_PATH", tsv_path)
+
+        spec = _make_spec()
+        low_score_result = _fail_verify(
+            errors=[{"type": "err", "message": f"e{i}"} for i in range(10)]
+        )
+
+        with patch("nightjar.retry.run_pipeline") as mock_pipeline, \
+             patch("nightjar.retry._call_repair_llm") as mock_llm:
+            mock_pipeline.return_value = low_score_result
+            mock_llm.return_value = "candidate"
+
+            run_ratchet_search(spec, "code", budget_seconds=9999.0)
+
+        # The TSV file must exist and have at least a header + one data row
+        assert os.path.isfile(tsv_path), "verify_log.tsv was not created"
+        import csv as _csv
+        with open(tsv_path, encoding="utf-8") as fh:
+            reader = _csv.DictReader(fh, delimiter="\t")
+            rows = list(reader)
+        assert len(rows) >= 1, (
+            f"Expected at least 1 data row in TSV; got {len(rows)}"
+        )
+        # Spot-check one known column value
+        assert rows[0]["spec_id"] == "test-module", (
+            f"Expected spec_id='test-module'; got {rows[0].get('spec_id')!r}"
+        )
+        # Score must parse as a float in [0, 1]
+        score = float(rows[0]["score"])
+        assert 0.0 <= score <= 1.0, f"score out of range: {score}"
