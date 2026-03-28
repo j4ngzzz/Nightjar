@@ -63,7 +63,7 @@ class TestTypeHintExtraction:
         code = "def foo(x: int) -> str:\n    return str(x)"
         candidates = scan_file_from_string(code)
         assert any("str" in c.statement for c in candidates)
-        assert any(c.tier == "schema" for c in candidates)
+        assert any(c.tier == "property" for c in candidates)
 
     def test_extracts_return_type_int(self):
         code = "def foo(x: str) -> int:\n    return len(x)"
@@ -102,8 +102,10 @@ class TestTypeHintExtraction:
     def test_type_hint_schema_tier(self):
         code = "def foo(x: int) -> str:\n    return str(x)"
         candidates = scan_file_from_string(code)
-        schema_candidates = [c for c in candidates if c.tier == "schema"]
-        assert len(schema_candidates) > 0
+        # type_hint candidates now use "property" tier (not "schema" — schema is not a valid InvariantTier)
+        type_hint_candidates = [c for c in candidates if c.source == "type_hint"]
+        assert len(type_hint_candidates) > 0
+        assert all(c.tier == "property" for c in type_hint_candidates)
 
     def test_type_hint_high_confidence(self):
         code = "def foo(x: int) -> str:\n    return str(x)"

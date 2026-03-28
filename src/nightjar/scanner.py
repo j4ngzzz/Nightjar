@@ -25,7 +25,7 @@ class ScanCandidate:
     """An invariant candidate extracted from Python source."""
 
     statement: str          # The invariant text (natural language)
-    tier: str               # "schema" or "property"
+    tier: str               # "example", "property", or "formal"
     source: str             # "type_hint", "guard_clause", "docstring", "assertion"
     source_line: int        # Line number in source file
     confidence: float       # 0.0-1.0 based on extraction certainty
@@ -357,8 +357,11 @@ def _extract_type_hints(
 ) -> list[ScanCandidate]:
     """Extract invariants from function type annotations.
 
-    - Return type annotation → schema invariant about result type
-    - Parameter annotations → schema invariants about input types
+    - Return type annotation -> property invariant about result type
+    - Parameter annotations -> property invariants about input types
+
+    Note: uses "property" tier (not "schema") because InvariantTier has no SCHEMA
+    value -- valid tiers are "example", "property", and "formal" per [REF-C01].
     """
     candidates: list[ScanCandidate] = []
     fn_name = node.name
@@ -372,7 +375,7 @@ def _extract_type_hints(
             candidates.append(
                 ScanCandidate(
                     statement=statement,
-                    tier="schema",
+                    tier="property",
                     source="type_hint",
                     source_line=node.lineno,
                     confidence=0.95,
@@ -391,7 +394,7 @@ def _extract_type_hints(
                 candidates.append(
                     ScanCandidate(
                         statement=statement,
-                        tier="schema",
+                        tier="property",
                         source="type_hint",
                         source_line=getattr(arg, "lineno", node.lineno),
                         confidence=0.9,
