@@ -1,0 +1,618 @@
+# Nightjar — LLM Reference Document
+# Format: llms.txt (structured plaintext optimized for LLM consumption)
+# Version: 0.1.0 | Updated: 2026-03-28
+# Source: https://github.com/nightjar-dev/nightjar
+
+---
+
+## Overview
+
+Nightjar is a contract-anchored verification layer for AI-generated code. Developers write
+behavioral specifications in `.card.md` files — YAML frontmatter plus Markdown body. An LLM
+generates the implementation. Nightjar runs a six-stage pipeline (preflight, dependency audit,
+schema validation, property-based testing, negation-proof validation, and Dafny formal
+verification) and either produces a mathematically verified artifact or a concrete counterexample
+via a CEGIS (Counterexample-Guided Inductive Synthesis) retry loop. Code is regenerated from
+scratch on every build and is never manually edited. The central architectural principle:
+generated code is disposable; specs are the source of truth.
+
+---
+
+## Install
+
+```bash
+pip install nightjarzzz
+```
+
+PyPI package name: nightjarzzz
+CLI entry point: nightjar
+Python: 3.11+
+
+### Install with development extras
+
+```bash
+pip install "nightjarzzz[dev]"
+```
+
+### Install from source
+
+```bash
+git clone https://github.com/nightjar-dev/nightjar
+cd nightjar
+pip install -e ".[dev]"
+```
+
+### External dependencies (not on PyPI)
+
+- Dafny 4.x — download binary from https://github.com/dafny-lang/dafny/releases
+  - Required for Stage 4 formal verification (complex functions)
+  - Optional if using CrossHair-only mode (--fast flag)
+- Set NIGHTJAR_MODEL environment variable to select the LLM model
+
+---
+
+## Core Concepts
+
+### .card.md Specs
+
+The `.card.md` file is the single source of truth. It has two parts:
+
+1. YAML frontmatter: machine-readable contract (module boundary, inputs/outputs, invariants)
+2. Markdown body: human-readable intent, acceptance criteria, functional requirements
+
+Specs live in `.card/` at the project root. Generated code lives in `.card/audit/` (read-only).
+Never edit generated code directly — all changes go through the spec.
+
+### Trust Levels (Invariant Tiers)
+
+Every invariant in a `.card.md` has a tier that determines how it is verified:
+
+- `example`: generates a unit test from Given/When/Then acceptance criteria (pytest)
+- `property`: generates a Hypothesis property-based test with 200+ random inputs
+- `formal`: generates Dafny preconditions/postconditions requiring mathematical proof
+
+### The Five-Stage Verification Pipeline
+
+Nightjar runs stages in order, cheapest first, short-circuiting on failure:
+
+```
+Stage 0  Pre-flight         ~0.5s   Python AST well-formedness + YAML self-validation
+Stage 1  Dependency check   ~1-2s   Sealed manifest diff + pip-audit CVE scan
+Stage 2  Schema validation  ~0.5s   Pydantic v2 parse of generated output schemas  [parallel]
+Stage 3  PBT               ~3-8s   Hypothesis property-based tests from invariants [parallel]
+Stage 2.5 Negation-proof   ~2-5s   CrossHair checks negated formal invariants (degenerate spec guard)
+Stage 4  Formal            ~5-20s  CrossHair (complexity <= 5) or Dafny (complexity > 5)
+```
+
+Stages 2 and 3 run in parallel (asyncio.gather). Stage 2.5 is skipped when no `formal` invariants
+are present. Stage 4 routes between CrossHair and Dafny based on cyclomatic complexity score.
+
+### CEGIS Retry Loop
+
+When any stage fails, Nightjar enters a CEGIS repair loop:
+
+1. Collect failure context (counterexample, Dafny error lines, assertion batch ID)
+2. Build a structured repair prompt (spec + failed code + error block + prior attempts)
+3. Call LLM via litellm at temperature 0.2
+4. Re-run full pipeline from Stage 0
+5. Retry up to N=5 times (configurable with --retries)
+6. On exhaustion: LP dual root-cause diagnosis identifies the binding constraint
+
+Success rate: 86% pass@10 with Claude 3.5 Sonnet (DafnyPro benchmark).
+
+### Code Generation Pipeline
+
+Before verification, code is generated via a three-agent pipeline:
+
+```
+Spec Rewriter   →  applies 19 proven rewrite rules to normalize ambiguous invariants
+Analyst Agent   →  reads intent + acceptance criteria, outputs structured requirements
+Formalizer      →  reads analyst output + invariants, outputs Dafny module skeleton
+Coder           →  reads Dafny skeleton, outputs complete implementation
+```
+
+All three agents call the LLM via litellm. Model is configurable via NIGHTJAR_MODEL env var.
+
+### Immune System
+
+The immune system monitors production and feeds discovered invariants back into specs:
+
+1. Signal collection: OpenTelemetry spans + MonkeyType type traces + Sentry errors
+2. Invariant candidate generation: reimplemented Daikon algorithm + LLM enrichment
+3. Invariant verification: CrossHair symbolic + Hypothesis PBT
+4. Quality scoring: Wonda 4-criteria filter (precision, recall, specificity, stability >= 0.8)
+5. Adversarial debate: Proposer LLM vs Adversary LLM with judge scoring
+6. Spec integration: verified invariants appended to `.card.md`, next build is safer
+
+---
+
+## CLI Reference
+
+```
+nightjar <command> [flags]
+```
+
+### Commands
+
+```
+nightjar init [module-name]
+    Scaffold a new .card.md spec + deps.lock + test stubs
+    Example: nightjar init payment
+
+nightjar generate [--model MODEL]
+    LLM generates code from all .card.md specs
+    Uses Analyst → Formalizer → Coder pipeline
+    Model defaults to NIGHTJAR_MODEL env var
+    Example: nightjar generate --model claude-sonnet-4-6
+
+nightjar verify
+    Run full 6-stage verification pipeline (Stages 0–4 + 2.5)
+    Exit 0 = all pass, Exit 1 = verification fail
+
+nightjar verify --fast
+    Run Stages 0–3 only (skip Stage 2.5 and Dafny)
+    Suitable for rapid iteration; no formal proof
+
+nightjar verify --stage N
+    Run only stage N (0, 1, 2, 3, 4)
+
+nightjar verify --tui
+    Run verification with Textual TUI dashboard (live stage status)
+
+nightjar build [--target LANG]
+    Full pipeline: generate + verify + compile to target language
+    Targets: py | js | ts | go | java | cs
+    Example: nightjar build --target py
+
+nightjar ship
+    build + cryptographically sign the verified artifact
+
+nightjar retry [--max N]
+    Force re-entry into the CEGIS retry loop
+    Default max retries: 5
+
+nightjar lock
+    Freeze all current dependencies into deps.lock with SHA-256 hashes
+    Run after adding any new dependency
+
+nightjar explain
+    Display the last verification failure with LP dual root-cause diagnosis
+    Identifies which invariant constraint is structurally infeasible
+
+nightjar optimize
+    Run DSPy SIMBA prompt optimization on the generation pipeline
+    Optimizes Analyst/Formalizer/Coder prompts for higher pass rates
+```
+
+### Flags (all commands)
+
+```
+--contract PATH     Path to .card.md (default: ./.card/*.card.md)
+--target LANG       Compile target: py | js | ts | go | java | cs
+--model NAME        LLM model (default: NIGHTJAR_MODEL env var)
+--retries N         Max CEGIS repair attempts (default: 5)
+--output DIR        Output directory for compiled artifacts
+--tui               Launch Textual TUI dashboard
+--ci                CI mode: strict, no prompts, exit code on failure
+--fast              Skip Stage 2.5 + Dafny (fast check only)
+--stage N           Run only stage N
+```
+
+### Exit Codes
+
+```
+0   All verification stages PASS
+1   Verification FAIL (at least one stage failed)
+2   Configuration error (bad .card.md, missing nightjar.toml)
+3   Timeout exceeded
+4   LLM API error
+5   Max retries exceeded — human escalation required
+```
+
+### Environment Variables
+
+```
+NIGHTJAR_MODEL      LLM model name (e.g. claude-sonnet-4-6, openai/o3, deepseek/deepseek-chat)
+```
+
+---
+
+## Pipeline Stages — Detailed
+
+### Stage 0: Pre-flight (preflight.py)
+
+- Parses all Python source with the `ast` module — catches syntax errors before anything else
+- Validates `.card.md` YAML schema (required fields: card-version, id, title, status, module,
+  contract, invariants)
+- Fast: ~0.5 seconds, $0.00 cost
+- Short-circuits on malformed input
+
+### Stage 1: Dependency Check (deps.py)
+
+- Compares imports in generated code against the `deps.lock` allowlist
+- Runs `uv pip sync --require-hashes --dry-run` to verify sealed manifest integrity
+- Runs `pip-audit --requirement deps.lock --format json` for CVE scanning
+- Motivation: 19.7% of AI-generated package dependencies are hallucinated (slopsquatting)
+- Short-circuits on unknown packages or known CVEs
+- Run `nightjar lock` to refresh deps.lock after adding a new dependency
+
+### Stage 2: Schema Validation (schema.py)
+
+- Parses generated output data structures against the `contract.outputs` schema using Pydantic v2
+- Validates OpenAPI contract definitions when present
+- Runs in parallel with Stage 3
+- Short-circuits on schema mismatch
+
+### Stage 3: Property-Based Testing (pbt.py)
+
+- Generates Hypothesis test code from `invariants` entries with `tier: property`
+- Runs with `max_examples=200` and `derandomize=True` for reproducibility
+- On failure: extracts minimal counterexample (input, output, property text)
+- Counterexample is fed into the CEGIS repair prompt
+- Runs in parallel with Stage 2
+
+### Stage 2.5: Negation-Proof Validation (negation_proof.py)
+
+- Only runs when `formal` invariants are present
+- Negates the postconditions of each formal invariant
+- Runs CrossHair on the negated spec — if CrossHair finds the negation trivially true, the
+  invariant is degenerate (vacuously satisfied)
+- Guards against specs that pass Dafny not because the code is correct but because the invariant
+  is so weak that any code satisfies it
+- Short-circuits with "weak spec" error if degenerate invariant detected
+
+### Stage 4: Formal Verification (formal.py)
+
+- Routes based on complexity score: cyclomatic_complexity + floor(ast_depth / 3)
+- Score <= 5: CrossHair symbolic execution (~13s avg, ~70% wall-time saving)
+- Score > 5: Dafny 4.x formal verification
+  - Flags: --verification-time-limit 15 --isolate-assertions --boogie /vcsCores:4
+- Only verifies invariants with `tier: formal`
+- Graceful degradation: Dafny timeout → CrossHair → Hypothesis extended → confidence-scored partial
+- Short-circuits on proof failure; structured error fed into CEGIS repair prompt
+
+---
+
+## .card.md Format
+
+Every module has one `.card.md` file in `.card/`. Minimum viable spec is ~30 lines.
+
+### Full Format
+
+```yaml
+---
+card-version: "1.0"
+id: module-name
+title: Human-Readable Module Title
+status: draft | review | approved | frozen
+
+module:
+  owns: [function_a(), function_b(), EntityX]
+  depends-on:
+    - other-module: "approved"
+    - external-service: "^3.x"
+  excludes:
+    - "feature explicitly out of scope"
+
+contract:
+  inputs:
+    - name: param_name
+      type: integer
+      constraints: "param_name > 0 AND param_name <= 1_000_000"
+  outputs:
+    - name: ResultType
+      type: object
+      schema:
+        field_a: string
+        field_b: integer
+  errors:
+    - SpecificError
+  events-emitted:
+    - event.name
+
+invariants:
+  - id: INV-001
+    tier: property
+    statement: "A valid token always corresponds to exactly one active user session"
+    rationale: "Prevents session hijacking"
+
+  - id: INV-002
+    tier: formal
+    statement: "Output amount is always strictly less than or equal to input amount"
+    rationale: "Financial safety — cannot create money"
+
+constraints:
+  performance: "p95 latency < 2000ms"
+  security: "all tokens expire within 24 hours"
+  idempotency: "calling login() twice with same credentials returns same token"
+---
+
+## Intent
+
+Natural language description of what this module does and why it exists.
+
+## Acceptance Criteria
+
+### Story 1 — Login (P1)
+
+**As a** user, **I want** to log in with email/password, **so that** I get a session token.
+
+1. **Given** valid credentials, **When** login() is called, **Then** a JWT is returned
+2. **Given** invalid password, **When** login() is called, **Then** AuthError is raised
+
+### Edge Cases
+
+- What happens when the account is locked? → LockError raised
+- [NEEDS CLARIFICATION: What about OAuth tokens?]
+
+## Functional Requirements
+
+- **FR-001**: System MUST validate email format before checking database
+- **FR-002**: System SHOULD log all authentication attempts
+- **FR-003**: System MAY cache valid tokens for 5 minutes
+```
+
+### Minimum Viable .card.md (~30 lines)
+
+```yaml
+---
+card-version: "1.0"
+id: user-auth
+title: User Authentication
+status: draft
+module:
+  owns: [login(), logout(), validate_token()]
+  depends-on: [postgres, bcrypt]
+contract:
+  inputs:
+    - name: email
+      type: string
+    - name: password
+      type: string
+  outputs:
+    - name: session_token
+      type: string
+invariants:
+  - id: INV-001
+    tier: property
+    statement: "A valid token always corresponds to exactly one active user session"
+---
+
+## Intent
+Let users log in with email/password and get a session token.
+
+## Acceptance Criteria
+
+### Story 1 — Login (P1)
+1. **Given** valid credentials, **When** login() is called, **Then** a JWT is returned
+2. **Given** invalid password, **When** login() is called, **Then** AuthError is raised
+```
+
+### Invariant Tier Summary
+
+```
+tier: example   → unit test from Given/When/Then (pytest)
+tier: property  → Hypothesis PBT, 200+ random inputs (fast, ~3-8s)
+tier: formal    → Dafny mathematical proof or CrossHair symbolic (~5-20s)
+```
+
+Escalate tiers for higher-risk invariants. Security and financial invariants should use `formal`.
+
+---
+
+## Architecture
+
+### Source Layout
+
+```
+src/
+├── nightjar/              Main CLI and verification pipeline
+│   ├── cli.py             Click commands — 8 commands
+│   ├── parser.py          .card.md parser (YAML + Markdown)
+│   ├── generator.py       Analyst → Formalizer → Coder pipeline
+│   ├── verifier.py        Pipeline orchestrator (asyncio)
+│   ├── spec_rewriter.py   19 proven spec rewrite rules (pre-generation)
+│   ├── retry.py           CEGIS retry loop
+│   ├── diagnosis.py       LP dual root-cause diagnosis
+│   ├── negation_proof.py  Stage 2.5 negation-proof validation
+│   ├── oracle_lifter.py   Test oracle lifting (tests → .card.md invariants)
+│   ├── tui.py             Textual TUI dashboard
+│   ├── display.py         Rich streaming DisplayCallback protocol
+│   ├── sentry_integration.py  Sentry errors → immune system feed
+│   ├── gitnexus_hooks.py  Blast radius warnings before regeneration
+│   ├── mcp_server.py      MCP server (3 tools)
+│   ├── invariant_generators/  Per-tier code generators
+│   ├── security/          OWASP security checks
+│   └── stages/
+│       ├── preflight.py   Stage 0
+│       ├── deps.py        Stage 1 (uv + pip-audit)
+│       ├── schema.py      Stage 2 (Pydantic v2)
+│       ├── pbt.py         Stage 3 (Hypothesis)
+│       └── formal.py      Stage 4 (CrossHair + Dafny)
+└── immune/                Immune system
+    ├── collector.py       Trace collection (MonkeyType + OpenTelemetry)
+    ├── daikon.py          Daikon algorithm reimplementation (MIT license)
+    ├── mines.py           Invariant mining pipeline
+    ├── enricher.py        LLM enrichment of invariant candidates
+    ├── enforcer.py        Runtime enforcement + temporal supersession
+    ├── quality_scorer.py  Wonda quality scoring (4-criteria filter)
+    ├── debate.py          Adversarial debate validation
+    └── spec_updater.py    Append invariants to .card.md
+```
+
+### Tech Stack
+
+```
+Language             Python 3.11+
+CLI framework        Click
+LLM interface        litellm (model-agnostic, 100+ providers)
+Verification engine  Dafny 4.x (compiles to py/js/go/java/cs)
+Property-based test  Hypothesis
+Schema validation    Pydantic v2
+Symbolic execution   CrossHair (Z3-based)
+Runtime contracts    icontract
+Type tracing         MonkeyType
+Dependency security  uv + pip-audit
+TUI dashboard        Textual
+Streaming output     Rich
+MCP server           mcp SDK
+```
+
+### MCP Server
+
+Nightjar ships as an MCP server for IDE integration (Cursor, Windsurf, Claude Code, Kiro).
+
+Three tools:
+
+```
+verify_contract(spec_path, code_path, stages?)
+    Run Nightjar pipeline on generated code against a .card.md spec
+    Returns: { verified, stages, errors, duration_ms }
+
+get_violations(spec_path)
+    Get detailed violation report from last verification run
+    Returns: { violations: [{ stage, file, line, message, counterexample }] }
+
+suggest_fix(spec_path, violation_id)
+    Get LLM-suggested fix for a specific verification violation
+    Returns: { suggested_code, explanation, confidence }
+```
+
+### DisplayCallback Protocol
+
+```python
+class DisplayCallback(Protocol):
+    def on_stage_start(self, stage: int, name: str) -> None: ...
+    def on_stage_complete(self, result: StageResult) -> None: ...
+    def on_pipeline_complete(self, result: VerifyResult) -> None: ...
+```
+
+Implementations: RichStreamingDisplay (terminal output), NightjarTUI (Textual), NullDisplay (tests).
+
+---
+
+## Key Files
+
+```
+nightjar.toml               CLI configuration (project name, default model, stage flags)
+pyproject.toml              Package metadata, entry point: nightjar.cli:main
+deps.lock                   Sealed dependency manifest with SHA-256 hashes
+.card/*.card.md             Module specs (source of truth — edit these, not generated code)
+.card/audit/                Read-only generated code (git-tracked, never manually edited)
+.card/verify.json           Last verification run report
+.card/cache/                Verification cache (content-hash → verified result)
+src/nightjar/cli.py         All CLI commands
+src/nightjar/verifier.py    Pipeline orchestrator
+src/nightjar/generator.py   Three-agent code generation
+src/nightjar/retry.py       CEGIS repair loop
+src/nightjar/stages/        Individual stage implementations
+src/immune/                 Immune system (trace → invariant → spec update)
+docs/REFERENCES.md          Full citation library (read before implementing anything)
+docs/ARCHITECTURE.md        Full system design with citations
+```
+
+---
+
+## Development
+
+### TDD Workflow
+
+1. Write a failing test FIRST (in tests/unit/ or tests/integration/)
+2. Run it to confirm it fails
+3. Write minimal code to make it pass
+4. Run test to confirm it passes
+5. Commit
+
+### Running Tests
+
+```bash
+# All tests
+pytest tests/ -v
+
+# Unit tests only (no Dafny or LLM required)
+pytest tests/ -v -m "not integration"
+
+# Specific test file
+pytest tests/unit/test_parser.py -v
+```
+
+### Reference-First Development
+
+Every algorithm in Nightjar traces to a citation in docs/REFERENCES.md. Before implementing
+any component:
+
+1. Open docs/REFERENCES.md and find the [REF-XXX] entries for the task
+2. Read the cited paper or tool documentation
+3. Implement from the paper, not from intuition
+4. Tag the commit with the reference:
+   `ref: implement CEGIS repair loop [REF-NEW-02, REF-C02]`
+
+Do NOT implement from training data. If you cannot find a reference for what you are implementing,
+stop and ask.
+
+### Commit Conventions
+
+```
+feat: description          new feature
+fix: description           bug fix
+ref: description [REF-XXX] reference implementation from paper
+test: description          test only
+docs: description          documentation
+```
+
+### Anti-Patterns (What NOT to Do)
+
+- DO NOT edit files in .card/audit/ — they are auto-generated and read-only
+- DO NOT call LLM providers directly — all LLM calls go through litellm
+- DO NOT hardcode model names — use NIGHTJAR_MODEL env var
+- DO NOT add dependencies without running nightjar lock to update deps.lock
+- DO NOT use Fuzzingbook code in production — CC-BY-NC-SA prohibits commercial use;
+  Nightjar reimplements the Daikon algorithm from scratch in src/immune/daikon.py (MIT)
+- DO NOT skip the verification pipeline for "simple" changes
+
+### Configuration (nightjar.toml)
+
+```toml
+[nightjar]
+model = "claude-sonnet-4-6"   # overridden by NIGHTJAR_MODEL env var
+retries = 5
+target = "py"
+
+[verify]
+fast = false                  # true skips Stage 2.5 + Dafny
+```
+
+---
+
+## Scan Results
+
+Nightjar's Stage 1 dependency check (pip-audit) scanned the dependency graph at build time.
+
+Summary: 48 bugs found across 20 packages in the broader Python ecosystem.
+
+All critical CVEs are blocked at Stage 1 before any generated code can use vulnerable packages.
+The sealed manifest (deps.lock) with SHA-256 hashes prevents hallucinated or substituted packages
+from entering the dependency graph.
+
+For the full audit report: run `nightjar verify` and inspect `.card/verify.json`.
+
+Reference: 19.7% of AI-generated package dependencies are hallucinated (slopsquatting research,
+USENIX). The sealed manifest is the primary defense. See docs/REFERENCES.md [REF-P27].
+
+Audit tooling:
+- pip-audit: https://github.com/pypa/pip-audit (Apache 2.0)
+- uv: https://github.com/astral-sh/uv (MIT)
+
+---
+
+## Further Reading
+
+- Architecture: docs/ARCHITECTURE.md
+- Citation library: docs/REFERENCES.md
+- Positioning and strategy: docs/POSITIONING.md
+- Implementation plans: docs/superpowers/plans/
+
+Homepage: https://nightjar.dev
+Repository: https://github.com/nightjar-dev/nightjar
+Issues: https://github.com/nightjar-dev/nightjar/issues
+PyPI: https://pypi.org/project/nightjarzzz/

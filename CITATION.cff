@@ -23,6 +23,10 @@ keywords:
   - cegis
   - hypothesis
   - specification
+  - invariant-mining
+  - formal-methods
+  - contract-programming
+  - vericoding
 references:
   - type: article
     title: "Program Synthesis"
@@ -38,3 +42,19 @@ references:
     title: "Hypothesis: Property-Based Testing for Python"
     url: "https://hypothesis.readthedocs.io"
     notes: "[REF-T03]"
+  - type: software
+    title: "CrossHair: A Static Analysis Tool for Python Contracts"
+    url: "https://github.com/pschanely/CrossHair"
+    notes: "Symbolic execution via Z3 used in Stage 2.5 negation-proof validation and Stage 4 complexity-routed formal verification [REF-T09]"
+  - type: software
+    title: "icontract: Design-by-Contract for Python"
+    url: "https://github.com/Parquery/icontract"
+    notes: "Runtime contract enforcement in the Nightjar immune system; @require/@ensure/@invariant decorators [REF-T10]"
+  - type: software
+    title: "litellm: Call 100+ LLMs Using the OpenAI Input/Output Format"
+    url: "https://github.com/BerriAI/litellm"
+    notes: "Unified LLM API used for all Nightjar LLM calls (Analyst, Formalizer, Coder agents and CEGIS repair loop) [REF-T16]"
+  - type: software
+    title: "Pydantic v2: Data Validation Using Python Type Hints"
+    url: "https://github.com/pydantic/pydantic"
+    notes: "Stage 2 schema validation; validates generated output data structures against contract.outputs schema [REF-T08]"
