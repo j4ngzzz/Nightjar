@@ -1,212 +1,188 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" width="800" height="560">
   <defs>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap');
-
-      text {
-        font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
-        font-size: 13px;
-      }
-
-      .cmd      { fill: #f0f6fc; font-weight: bold; }
-      .prompt   { fill: #58a6ff; }
-      .comment  { fill: #6e7681; font-style: italic; }
-      .header   { fill: #d2a8ff; font-weight: bold; font-size: 14px; }
-      .sub      { fill: #8b949e; font-size: 12px; }
-      .pass     { fill: #3fb950; font-weight: bold; }
-      .fail     { fill: #f85149; font-weight: bold; }
-      .skip     { fill: #d29922; font-weight: bold; }
-      .muted    { fill: #6e7681; }
-      .dim      { fill: #484f58; font-size: 12px; }
-      .err-line { fill: #ff7b72; font-size: 12px; }
-      .err-hint { fill: #8b949e; font-size: 11.5px; font-style: italic; }
-      .warn     { fill: #d29922; font-size: 12px; }
-      .normal   { fill: #c9d1d9; }
-      .green-txt{ fill: #7ee787; font-size: 12px; }
-      .badge-fail-txt  { fill: #fff; font-weight: bold; font-size: 11px; letter-spacing: 0.05em; }
-      .badge-trust-txt { fill: #58a6ff; font-weight: bold; font-size: 11px; letter-spacing: 0.05em; }
-      .kw       { fill: #ff7b72; }
-      .fn-name  { fill: #d2a8ff; }
-      .string   { fill: #a5d6ff; }
-      .number   { fill: #79c0ff; }
-
-      /* Animation classes for each visual row */
-      .a0  { opacity: 0; animation: fade-in 0.25s ease forwards 0.3s; }
-      .a1  { opacity: 0; animation: fade-in 0.25s ease forwards 0.8s; }
-      .a2  { opacity: 0; animation: fade-in 0.25s ease forwards 1.0s; }
-      .a3  { opacity: 0; animation: fade-in 0.25s ease forwards 1.3s; }
-      .a4  { opacity: 0; animation: fade-in 0.25s ease forwards 1.5s; }
-      .a5  { opacity: 0; animation: fade-in 0.25s ease forwards 1.7s; }
-      .a6  { opacity: 0; animation: fade-in 0.25s ease forwards 1.9s; }
-      .a7  { opacity: 0; animation: fade-in 0.25s ease forwards 2.2s; }
-      .a8  { opacity: 0; animation: fade-in 0.25s ease forwards 2.8s; }
-      .a9  { opacity: 0; animation: fade-in 0.25s ease forwards 3.0s; }
-      .a10 { opacity: 0; animation: fade-in 0.25s ease forwards 3.2s; }
-      .a11 { opacity: 0; animation: fade-in 0.25s ease forwards 3.5s; }
-      .a12 { opacity: 0; animation: fade-in 0.25s ease forwards 3.8s; }
-      .a13 { opacity: 0; animation: fade-in 0.25s ease forwards 4.0s; }
-      .a14 { opacity: 0; animation: fade-in 0.25s ease forwards 4.2s; }
-      .a15 { opacity: 0; animation: fade-in 0.25s ease forwards 4.5s; }
-      .a16 { opacity: 0; animation: fade-in 0.25s ease forwards 4.8s; }
-      .a17 { opacity: 0; animation: fade-in 0.25s ease forwards 5.0s; }
-      .a18 { opacity: 0; animation: fade-in 0.25s ease forwards 5.3s; }
-      .a19 { opacity: 0; animation: fade-in 0.25s ease forwards 5.6s; }
-      .a20 { opacity: 0; animation: fade-in 0.5s ease forwards 5.9s; }
-
-      @keyframes fade-in {
-        from { opacity: 0; transform: translateY(3px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
-
-      .typing-cmd {
-        clip-path: inset(0 100% 0 0);
-        animation: type-reveal 0.5s steps(42, end) forwards 0.3s;
-      }
-      @keyframes type-reveal {
-        from { clip-path: inset(0 100% 0 0); }
-        to   { clip-path: inset(0 0% 0 0); }
-      }
-    </style>
+    <clipPath id="content-clip">
+      <rect x="0" y="42" width="800" height="518"/>
+    </clipPath>
   </defs>
 
-  <!-- Terminal shell -->
-  <rect width="800" height="560" rx="12" fill="#0d1117"/>
-  <rect width="800" height="40" rx="12" fill="#161b22"/>
-  <rect y="28" width="800" height="12" fill="#161b22"/>
-  <rect y="39" width="800" height="1" fill="#21262d"/>
+  <!-- Terminal background (warm dark) -->
+  <rect width="800" height="560" rx="12" fill="#0d0b09"/>
+
+  <!-- Title bar -->
+  <rect width="800" height="40" rx="12" fill="#1a1714"/>
+  <rect y="28" width="800" height="12" fill="#1a1714"/>
+  <rect y="39" width="800" height="1" fill="#2e2a25"/>
 
   <!-- Traffic lights -->
-  <circle cx="20" cy="20" r="6" fill="#ff5f57"/>
+  <circle cx="20" cy="20" r="6" fill="#ff5f56"/>
   <circle cx="40" cy="20" r="6" fill="#ffbd2e"/>
-  <circle cx="60" cy="20" r="6" fill="#28c840"/>
-  <text x="80" y="24" class="sub">nightjar — catching vibe-coded bugs</text>
+  <circle cx="60" cy="20" r="6" fill="#27c93f"/>
 
-  <g>
+  <!-- Title bar text -->
+  <text x="400" y="25" text-anchor="middle" font-family="monospace" font-size="12" fill="#6b6358">nightjar — catching vibe-coded bugs</text>
 
-    <!-- Section label: the vibe-coded function -->
-    <g class="a0" transform="translate(26, 68)">
-      <text x="0" y="0" class="comment"># AI-generated checkout.py — looks fine, right?</text>
+  <!-- Content area -->
+  <g clip-path="url(#content-clip)">
+
+    <!-- Section label -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="0.3s" dur="0.3s" fill="freeze"/>
+      <text x="26" y="68" font-family="monospace" font-size="12" fill="#4a4540" font-style="italic"># AI-generated checkout.py — looks fine, right?</text>
     </g>
 
-    <g class="a1" transform="translate(26, 87)">
-      <text x="0" y="0" class="kw">def </text>
-      <text x="26" y="0" class="fn-name">apply_coupon</text>
-      <text x="113" y="0" class="normal">(price: float, coupon_pct: float) -&gt; float:</text>
-    </g>
-    <g class="a2" transform="translate(26, 105)">
-      <text x="20" y="0" class="comment"># Apply percentage discount: e.g. coupon_pct=10 means 10% off</text>
-    </g>
-    <g class="a3" transform="translate(26, 122)">
-      <text x="20" y="0" class="kw">return </text>
-      <text x="61" y="0" class="normal">price * (</text>
-      <text x="116" y="0" class="number">1</text>
-      <text x="123" y="0" class="normal"> - coupon_pct / </text>
-      <text x="218" y="0" class="number">100</text>
-      <text x="236" y="0" class="normal">)</text>
+    <!-- Code: def apply_coupon(...) -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="0.7s" dur="0.3s" fill="freeze"/>
+      <text x="26" y="88" font-family="monospace" font-size="13" fill="#f07b6b">def </text>
+      <text x="55" y="88" font-family="monospace" font-size="13" fill="#c89de0">apply_coupon</text>
+      <text x="154" y="88" font-family="monospace" font-size="13" fill="#c9c1b6">(price: float, coupon_pct: float) -&gt; float:</text>
     </g>
 
-    <!-- Divider -->
-    <rect class="a4" x="26" y="134" width="748" height="1" fill="#21262d"/>
+    <!-- Code: comment line -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="1.0s" dur="0.3s" fill="freeze"/>
+      <text x="46" y="107" font-family="monospace" font-size="13" fill="#4a4540" font-style="italic"># Apply percentage discount: e.g. coupon_pct=10 means 10% off</text>
+    </g>
 
-    <!-- nightjar verify command -->
-    <g class="a5" transform="translate(26, 154)">
-      <text x="0"  y="0" class="prompt">$</text>
-      <text x="14" y="0" class="cmd typing-cmd">nightjar verify --spec .card/checkout.card.md</text>
+    <!-- Code: return line -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="1.3s" dur="0.3s" fill="freeze"/>
+      <text x="46" y="126" font-family="monospace" font-size="13" fill="#f07b6b">return </text>
+      <text x="96" y="126" font-family="monospace" font-size="13" fill="#c9c1b6">price * (</text>
+      <text x="172" y="126" font-family="monospace" font-size="13" fill="#79c0e8">1</text>
+      <text x="181" y="126" font-family="monospace" font-size="13" fill="#c9c1b6"> - coupon_pct / </text>
+      <text x="307" y="126" font-family="monospace" font-size="13" fill="#79c0e8">100</text>
+      <text x="334" y="126" font-family="monospace" font-size="13" fill="#c9c1b6">)</text>
+    </g>
+
+    <!-- horizontal divider -->
+    <rect x="26" y="138" width="748" height="1" fill="#2e2a25" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="1.6s" dur="0.2s" fill="freeze"/>
+    </rect>
+
+    <!-- verify command -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="1.8s" dur="0.3s" fill="freeze"/>
+      <text x="26" y="160" font-family="monospace" font-size="14" fill="#d4920a" font-weight="bold">$</text>
+      <text x="40" y="160" font-family="monospace" font-size="14" fill="#f0ebe3" font-weight="bold">nightjar verify --spec .card/checkout.card.md</text>
     </g>
 
     <!-- Pipeline header -->
-    <g class="a6" transform="translate(26, 178)">
-      <text x="0" y="0" class="header">Nightjar Verification Pipeline</text>
-    </g>
-    <g class="a7" transform="translate(26, 195)">
-      <text x="0" y="0" class="sub">Spec: checkout  ·  4 invariants  ·  model: claude-sonnet-4-6</text>
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="2.2s" dur="0.3s" fill="freeze"/>
+      <text x="26" y="185" font-family="monospace" font-size="14" fill="#c8a97e" font-weight="bold">Nightjar Verification Pipeline</text>
     </g>
 
-    <!-- Divider -->
-    <rect class="a7" x="26" y="204" width="748" height="1" fill="#21262d"/>
-
-    <!-- Stage 0 -->
-    <g class="a8" transform="translate(26, 223)">
-      <text x="0"   y="0" class="pass">PASS</text>
-      <text x="52"  y="0" class="normal">Stage 0  </text>
-      <text x="134" y="0" class="muted">(preflight)</text>
-      <text x="290" y="0" class="dim">11ms</text>
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="2.5s" dur="0.3s" fill="freeze"/>
+      <text x="26" y="203" font-family="monospace" font-size="12" fill="#7a7168">Spec: checkout  ·  4 invariants  ·  model: claude-sonnet-4-6</text>
     </g>
 
-    <!-- Stage 1 -->
-    <g class="a9" transform="translate(26, 243)">
-      <text x="0"   y="0" class="pass">PASS</text>
-      <text x="52"  y="0" class="normal">Stage 1  </text>
-      <text x="134" y="0" class="muted">(deps)</text>
-      <text x="290" y="0" class="dim">9ms</text>
+    <!-- divider -->
+    <rect x="26" y="211" width="748" height="1" fill="#2e2a25" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="2.7s" dur="0.2s" fill="freeze"/>
+    </rect>
+
+    <!-- Stage 0 PASS -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="2.9s" dur="0.3s" fill="freeze"/>
+      <text x="26" y="232" font-family="monospace" font-size="14" fill="#3fb950" font-weight="bold">PASS</text>
+      <text x="78" y="232" font-family="monospace" font-size="14" fill="#c9c1b6">Stage 0</text>
+      <text x="156" y="232" font-family="monospace" font-size="13" fill="#6b6358">(preflight)</text>
+      <text x="700" y="232" font-family="monospace" font-size="12" fill="#4a4540">11ms</text>
     </g>
 
-    <!-- Stage 2 -->
-    <g class="a10" transform="translate(26, 263)">
-      <text x="0"   y="0" class="pass">PASS</text>
-      <text x="52"  y="0" class="normal">Stage 2  </text>
-      <text x="134" y="0" class="muted">(schema)</text>
-      <text x="290" y="0" class="dim">14ms</text>
+    <!-- Stage 1 PASS -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="3.2s" dur="0.3s" fill="freeze"/>
+      <text x="26" y="252" font-family="monospace" font-size="14" fill="#3fb950" font-weight="bold">PASS</text>
+      <text x="78" y="252" font-family="monospace" font-size="14" fill="#c9c1b6">Stage 1</text>
+      <text x="156" y="252" font-family="monospace" font-size="13" fill="#6b6358">(deps)</text>
+      <text x="700" y="252" font-family="monospace" font-size="12" fill="#4a4540">9ms</text>
+    </g>
+
+    <!-- Stage 2 PASS -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="3.5s" dur="0.3s" fill="freeze"/>
+      <text x="26" y="272" font-family="monospace" font-size="14" fill="#3fb950" font-weight="bold">PASS</text>
+      <text x="78" y="272" font-family="monospace" font-size="14" fill="#c9c1b6">Stage 2</text>
+      <text x="156" y="272" font-family="monospace" font-size="13" fill="#6b6358">(schema)</text>
+      <text x="700" y="272" font-family="monospace" font-size="12" fill="#4a4540">14ms</text>
     </g>
 
     <!-- Stage 3 FAIL -->
-    <g class="a11" transform="translate(26, 283)">
-      <text x="0"   y="0" class="fail">FAIL</text>
-      <text x="52"  y="0" class="normal">Stage 3  </text>
-      <text x="134" y="0" class="muted">(property-tests)</text>
-      <text x="290" y="0" class="dim">412ms</text>
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="3.8s" dur="0.3s" fill="freeze"/>
+      <text x="26" y="292" font-family="monospace" font-size="14" fill="#f85149" font-weight="bold">FAIL</text>
+      <text x="78" y="292" font-family="monospace" font-size="14" fill="#c9c1b6">Stage 3</text>
+      <text x="156" y="292" font-family="monospace" font-size="13" fill="#6b6358">(property-tests)</text>
+      <text x="700" y="292" font-family="monospace" font-size="12" fill="#4a4540">412ms</text>
     </g>
 
-    <!-- Error block 1 bg -->
-    <rect class="a12" x="32" y="289" width="716" height="36" rx="3" fill="rgba(248,81,73,0.07)"/>
-    <rect class="a12" x="32" y="289" width="3" height="36" fill="#f85149"/>
-    <g class="a12" transform="translate(42, 304)">
-      <text x="0" y="0" class="err-line">INV-03 violated:  final price must be &gt;= 0.0</text>
-    </g>
-    <g class="a13" transform="translate(42, 318)">
-      <text x="0" y="0" class="err-hint">counterexample: apply_coupon(50.0, 150) → -25.0  (coupon &gt; 100% produces negative price)</text>
-    </g>
-
-    <!-- Error block 2 bg -->
-    <rect class="a14" x="32" y="332" width="716" height="36" rx="3" fill="rgba(248,81,73,0.07)"/>
-    <rect class="a14" x="32" y="332" width="3" height="36" fill="#f85149"/>
-    <g class="a14" transform="translate(42, 347)">
-      <text x="0" y="0" class="err-line">INV-04 violated:  discounted price must not exceed original</text>
-    </g>
-    <g class="a15" transform="translate(42, 361)">
-      <text x="0" y="0" class="err-hint">counterexample: apply_coupon(100.0, -20) → 120.0  (negative coupon inflates price)</text>
+    <!-- Error block 1 -->
+    <rect x="32" y="299" width="714" height="40" rx="3" fill="#1a0e0d" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="4.1s" dur="0.3s" fill="freeze"/>
+    </rect>
+    <rect x="32" y="299" width="3" height="40" fill="#f85149" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="4.1s" dur="0.3s" fill="freeze"/>
+    </rect>
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="4.1s" dur="0.3s" fill="freeze"/>
+      <text x="42" y="316" font-family="monospace" font-size="12" fill="#ff7b72">INV-03 violated:  final price must be &gt;= 0.0</text>
+      <text x="42" y="333" font-family="monospace" font-size="11" fill="#7a7168" font-style="italic">counterexample: apply_coupon(50.0, 150) → -25.0  (coupon &gt; 100% produces negative price)</text>
     </g>
 
-    <!-- Warning note about input validation -->
-    <g class="a16" transform="translate(32, 383)">
-      <text x="0" y="0" class="warn">  Missing guard: coupon_pct must be in [0, 100] — no input validation in generated code</text>
+    <!-- Error block 2 -->
+    <rect x="32" y="343" width="714" height="40" rx="3" fill="#1a0e0d" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="4.5s" dur="0.3s" fill="freeze"/>
+    </rect>
+    <rect x="32" y="343" width="3" height="40" fill="#f85149" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="4.5s" dur="0.3s" fill="freeze"/>
+    </rect>
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="4.5s" dur="0.3s" fill="freeze"/>
+      <text x="42" y="360" font-family="monospace" font-size="12" fill="#ff7b72">INV-04 violated:  discounted price must not exceed original</text>
+      <text x="42" y="377" font-family="monospace" font-size="11" fill="#7a7168" font-style="italic">counterexample: apply_coupon(100.0, -20) → 120.0  (negative coupon inflates price)</text>
+    </g>
+
+    <!-- Warning about missing guard -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="4.8s" dur="0.3s" fill="freeze"/>
+      <text x="32" y="398" font-family="monospace" font-size="12" fill="#d4920a">  Missing guard: coupon_pct must be in [0, 100] — no input validation in generated code</text>
     </g>
 
     <!-- Stage 4 SKIP -->
-    <g class="a17" transform="translate(26, 403)">
-      <text x="0"   y="0" class="skip">SKIP</text>
-      <text x="52"  y="0" class="normal">Stage 4  </text>
-      <text x="134" y="0" class="muted">(formal-proof)</text>
-      <text x="290" y="0" class="dim">—</text>
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="5.1s" dur="0.3s" fill="freeze"/>
+      <text x="26" y="418" font-family="monospace" font-size="14" fill="#d4920a" font-weight="bold">SKIP</text>
+      <text x="78" y="418" font-family="monospace" font-size="14" fill="#c9c1b6">Stage 4</text>
+      <text x="156" y="418" font-family="monospace" font-size="13" fill="#6b6358">(formal-proof)</text>
+      <text x="700" y="418" font-family="monospace" font-size="12" fill="#4a4540">—</text>
     </g>
 
-    <!-- Divider -->
-    <rect class="a18" x="26" y="416" width="748" height="1" fill="#21262d"/>
+    <!-- divider -->
+    <rect x="26" y="428" width="748" height="1" fill="#2e2a25" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="5.3s" dur="0.2s" fill="freeze"/>
+    </rect>
 
-    <!-- Result block -->
-    <g class="a20">
-      <rect x="26" y="424" width="748" height="106" rx="6" fill="rgba(248,81,73,0.06)" stroke="rgba(248,81,73,0.25)" stroke-width="1"/>
+    <!-- Result block background -->
+    <rect x="26" y="436" width="748" height="104" rx="6" fill="#160c0b" stroke="#4a1c1a" stroke-width="1" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="5.6s" dur="0.4s" fill="freeze"/>
+    </rect>
 
-      <text x="42" y="449" class="sub">Result</text>
-      <rect x="680" y="434" width="80" height="22" rx="4" fill="#da3633"/>
-      <text x="720" y="449" text-anchor="middle" class="badge-fail-txt">2 VIOLATIONS</text>
+    <!-- Result block content -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="5.6s" dur="0.4s" fill="freeze"/>
 
-      <text x="42" y="475" class="sub">Trust level</text>
-      <rect x="604" y="460" width="156" height="22" rx="4" fill="#1f3a5c" stroke="#1d4070" stroke-width="1"/>
-      <text x="682" y="475" text-anchor="middle" class="badge-trust-txt">SCHEMA_VERIFIED (0.40)</text>
+      <text x="42" y="461" font-family="monospace" font-size="12" fill="#7a7168">Result</text>
+      <rect x="636" y="446" width="120" height="22" rx="4" fill="#7a1f1c"/>
+      <text x="696" y="461" text-anchor="middle" font-family="monospace" font-size="11" fill="#fff" font-weight="bold">2 VIOLATIONS</text>
 
-      <text x="42" y="498" class="dim">Total: 449ms  ·  2 missing guards caught by Hypothesis before production</text>
-      <text x="42" y="516" class="green-txt">  Fix: add assert 0 &lt;= coupon_pct &lt;= 100 and assert price &gt;= 0 before return</text>
+      <text x="42" y="489" font-family="monospace" font-size="12" fill="#7a7168">Trust level</text>
+      <rect x="554" y="474" width="202" height="22" rx="4" fill="#1a2a3a" stroke="#1e3a5a" stroke-width="1"/>
+      <text x="655" y="489" text-anchor="middle" font-family="monospace" font-size="11" fill="#6a9bc8" font-weight="bold">SCHEMA_VERIFIED (0.40)</text>
+
+      <text x="42" y="519" font-family="monospace" font-size="12" fill="#4a7a4a">  Fix: assert 0 &lt;= coupon_pct &lt;= 100 and assert price &gt;= 0 before return</text>
     </g>
 
   </g>
