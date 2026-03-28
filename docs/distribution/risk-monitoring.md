@@ -100,7 +100,7 @@ Set up all monitoring in the first week. Most of it is free and takes under an h
 
 **Watch signal:**
 - GitHub Issues on any affected repo mentioning Nightjar
-- Twitter/X search: "nightjar false positive" + "nightjar wrong" + "nightjarzzz"
+- Twitter/X search: "nightjar false positive" + "nightjar wrong" + "nightjar-verify"
 - HN search: site:news.ycombinator.com "nightjar"
 
 **Trigger condition:** A package maintainer publicly claims a Nightjar finding is incorrect, or an HN/Reddit thread accuses Nightjar of generating false positives.
@@ -139,7 +139,7 @@ Set up all monitoring in the first week. Most of it is free and takes under an h
 ### C2-C: AGPL enforcement accusation or license dispute
 
 **Watch signal:**
-- Google Alerts: "nightjar AGPL" + "nightjarzzz license"
+- Google Alerts: "nightjar AGPL" + "nightjar-verify license"
 - GitHub Issues on j4ngzzz/Nightjar
 
 **Trigger condition:** A company or developer publicly claims the AGPL is being applied in bad faith, or that Nightjar's license terms are misleading.
@@ -218,7 +218,7 @@ Set up all monitoring in the first week. Most of it is free and takes under an h
 2. If C&D arrives before filing: immediately engage a trademark attorney; do not respond to the C&D yourself
 3. If the plain name `nightjar` is unregistrable: establish "Nightjar Code" or "NightjarVerify" as the brand early rather than at crisis time
 
-**Proactive action (time-sensitive):** The SEO research identified that `nightjar` on PyPI is taken (hence `nightjarzzz`). This suggests a potential namespace conflict. Investigate: who owns the `nightjar` PyPI package, when it was created, and whether it's active. If abandoned, file a PyPI name transfer request.
+**Proactive action (time-sensitive):** The SEO research identified that `nightjar` on PyPI is taken (hence `nightjar-verify`). This suggests a potential namespace conflict. Investigate: who owns the `nightjar` PyPI package, when it was created, and whether it's active. If abandoned, file a PyPI name transfer request.
 
 ---
 

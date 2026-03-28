@@ -22,17 +22,17 @@ generated code is disposable; specs are the source of truth.
 ## Install
 
 ```bash
-pip install nightjarzzz
+pip install nightjar-verify
 ```
 
-PyPI package name: nightjarzzz
+PyPI package name: nightjar-verify
 CLI entry point: nightjar
 Python: 3.11+
 
 ### Install with development extras
 
 ```bash
-pip install "nightjarzzz[dev]"
+pip install "nightjar-verify[dev]"
 ```
 
 ### Install from source
@@ -616,4 +616,4 @@ Audit tooling:
 Homepage: https://nightjar.dev
 Repository: https://github.com/nightjar-dev/nightjar
 Issues: https://github.com/nightjar-dev/nightjar/issues
-PyPI: https://pypi.org/project/nightjarzzz/
+PyPI: https://pypi.org/project/nightjar-verify/

@@ -1,5 +1,5 @@
 [project]
-name = "nightjarzzz"
+name = "nightjar-verify"
 version = "0.1.0"
 description = "Formal verification pipeline for AI-generated Python code — 5-stage proof from syntax to Dafny, with CVE scanning, property-based testing, and CEGIS retry loop."
 readme = "README.md"

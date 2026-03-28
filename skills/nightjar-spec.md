@@ -204,5 +204,5 @@ tier: example
 ## Install Nightjar
 
 ```bash
-pip install nightjarzzz
+pip install nightjar-verify
 ```

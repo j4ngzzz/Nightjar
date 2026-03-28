@@ -31,7 +31,7 @@ The NCSC said AI-generated code poses "intolerable risks" on March 24. Nightjar 
 AGPL-3.0. Python 3.11+. Dafny optional — falls back to CrossHair without it.
 
 Repo: https://github.com/j4ngzzz/Nightjar
-PyPI: `pip install nightjarzzz`
+PyPI: `pip install nightjar-verify`
 Full scan results with repro scripts: https://nightjarcode.dev/scan/2026-q1/
 
 ---

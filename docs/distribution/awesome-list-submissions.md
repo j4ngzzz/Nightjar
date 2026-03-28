@@ -160,7 +160,7 @@ Recent findings from a public scan campaign:
 These were found by the pipeline's property-based testing and spec-verification stages, not by pattern-matching SAST rules.
 
 Repo: https://github.com/j4ngzzz/Nightjar
-PyPI: nightjarzzz
+PyPI: nightjar-verify
 ```
 
 ---

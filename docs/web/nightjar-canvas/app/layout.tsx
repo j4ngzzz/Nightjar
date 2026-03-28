@@ -46,7 +46,7 @@ const jsonLd = {
   "programmingLanguage": "Python",
   "softwareVersion": "0.1.0",
   "license": "https://spdx.org/licenses/AGPL-3.0.html",
-  "downloadUrl": "https://pypi.org/project/nightjarzzz/",
+  "downloadUrl": "https://pypi.org/project/nightjar-verify/",
   "codeRepository": "https://github.com/j4ngzzz/Nightjar",
   "description": "Formal verification pipeline for AI-generated Python code.",
   "url": "https://nightjarcode.dev",

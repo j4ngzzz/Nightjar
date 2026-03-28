@@ -110,7 +110,7 @@ Get an LLM-generated code fix for a specific violation from the last verificatio
 ## Install
 
 ```bash
-pip install nightjarzzz
+pip install nightjar-verify
 ```
 
 Requires Python 3.11+. For formal proof (Stage 4), also install Dafny 4.x.
@@ -173,7 +173,7 @@ Nightjar uses [litellm](https://github.com/BerriAI/litellm) for LLM calls, so an
 ## Requirements
 
 - Python 3.11+
-- `mcp[fastmcp]` (installed automatically with nightjarzzz)
+- `mcp[fastmcp]` (installed automatically with nightjar-verify)
 - `litellm` (installed automatically)
 - LLM API key in env (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`)
 - Optional: Dafny 4.x for Stage 4 formal proof
@@ -202,7 +202,7 @@ Nightjar uses [litellm](https://github.com/BerriAI/litellm) for LLM calls, so an
 
 - Homepage: https://nightjar.dev
 - GitHub: https://github.com/nightjar-dev/nightjar
-- PyPI: https://pypi.org/project/nightjarzzz/
+- PyPI: https://pypi.org/project/nightjar-verify/
 - Issues: https://github.com/nightjar-dev/nightjar/issues
 
 ---

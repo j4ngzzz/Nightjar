@@ -48,7 +48,7 @@ AI-generated code has a 2.74x higher vulnerability rate. Nightjar runs a 5-stage
 ## Install
 
 ```bash
-pip install nightjarzzz
+pip install nightjar-verify
 ```
 
 ## Why

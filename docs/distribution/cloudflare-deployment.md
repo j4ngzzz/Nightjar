@@ -103,7 +103,7 @@ Add these in Pages → Settings → Environment variables. Set for both Producti
 | `NODE_VERSION` | `18` | No |
 | `NEXT_PUBLIC_SITE_URL` | `https://nightjarcode.dev` | No |
 | `NEXT_PUBLIC_GITHUB_REPO` | `https://github.com/j4ngzzz/Nightjar` | No |
-| `NEXT_PUBLIC_PYPI_PACKAGE` | `nightjarzzz` | No |
+| `NEXT_PUBLIC_PYPI_PACKAGE` | `nightjar-verify` | No |
 
 Do not add any API keys or secrets to the Pages environment unless needed. Cloudflare Workers/Pages Secrets (encrypted, not visible after save) are available under Settings → Environment variables → Add secret.
 

@@ -15,7 +15,7 @@
 - [Nightjar vs Bandit](https://nightjarcode.dev/compare/nightjar-vs-bandit)
 
 ## Install
-pip install nightjarzzz
+pip install nightjar-verify
 
 ## Key Facts
 - Found 48 confirmed bugs across 20 popular Python packages

@@ -3,7 +3,7 @@
 # Version: 0.1.0 | Updated: 2026-03-28
 # Homepage: https://nightjarcode.dev
 # Repository: https://github.com/j4ngzzz/Nightjar
-# PyPI: https://pypi.org/project/nightjarzzz/
+# PyPI: https://pypi.org/project/nightjar-verify/
 # Tagline: AI writes the code. Nightjar proves it's correct.
 
 ---
@@ -46,17 +46,17 @@ Code is regenerated from scratch on every build and is never manually edited.
 ### Standard install
 
 ```bash
-pip install nightjarzzz
+pip install nightjar-verify
 ```
 
-PyPI package name: `nightjarzzz`
+PyPI package name: `nightjar-verify`
 CLI entry point: `nightjar`
 Python: 3.11+
 
 ### With development extras
 
 ```bash
-pip install "nightjarzzz[dev]"
+pip install "nightjar-verify[dev]"
 ```
 
 ### From source
@@ -85,7 +85,7 @@ export NIGHTJAR_MODEL="claude-sonnet-4-6"   # or openai/o3, deepseek/deepseek-ch
 
 ```bash
 # 1. Install
-pip install nightjarzzz
+pip install nightjar-verify
 export NIGHTJAR_MODEL="claude-sonnet-4-6"
 
 # 2. Initialize a module spec
@@ -666,5 +666,5 @@ and Hypothesis run on all platforms.
 - Comparisons: https://nightjarcode.dev/compare/
 - Repository: https://github.com/j4ngzzz/Nightjar
 - Issues: https://github.com/j4ngzzz/Nightjar/issues
-- PyPI: https://pypi.org/project/nightjarzzz/
+- PyPI: https://pypi.org/project/nightjar-verify/
 - License: AGPL-3.0 (open source) | Commercial license available
