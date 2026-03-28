@@ -1,0 +1,298 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 450" width="900" height="450">
+  <defs>
+    <!-- Clip for left panel content -->
+    <clipPath id="left-clip">
+      <rect x="10" y="52" width="408" height="378"/>
+    </clipPath>
+    <!-- Clip for right panel content -->
+    <clipPath id="right-clip">
+      <rect x="482" y="52" width="408" height="378"/>
+    </clipPath>
+    <!-- Amber glow filter for right panel verified state -->
+    <filter id="amber-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <!-- Pulse filter for VERIFIED text -->
+    <filter id="pulse-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- ============================================================ -->
+  <!-- OVERALL BACKGROUND                                            -->
+  <!-- ============================================================ -->
+  <rect width="900" height="450" fill="#0D0B09"/>
+
+  <!-- ============================================================ -->
+  <!-- LEFT PANEL — THE FAIL                                         -->
+  <!-- ============================================================ -->
+
+  <!-- Panel background -->
+  <rect x="10" y="10" width="420" height="430" rx="10" fill="#141109" stroke="#2A2315" stroke-width="1"/>
+
+  <!-- Title bar -->
+  <rect x="10" y="10" width="420" height="38" rx="10" fill="#1a1714"/>
+  <rect x="10" y="36" width="420" height="12" fill="#1a1714"/>
+  <rect x="10" y="47" width="420" height="1" fill="#2e2a25"/>
+
+  <!-- Traffic lights left panel -->
+  <circle cx="30" cy="29" r="5" fill="#ff5f56"/>
+  <circle cx="48" cy="29" r="5" fill="#ffbd2e"/>
+  <circle cx="66" cy="29" r="5" fill="#27c93f"/>
+
+  <!-- Title bar label left -->
+  <text x="220" y="33" text-anchor="middle" font-family="monospace" font-size="11" fill="#6b6358">nightjar verify — FAIL</text>
+
+  <!-- Left panel content — staggered animation -->
+  <g clip-path="url(#left-clip)">
+
+    <!-- Row 0: command prompt -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="0.3s" dur="0.25s" fill="freeze"/>
+      <text x="26" y="78" font-family="monospace" font-size="13" fill="#D4920A" font-weight="bold">$</text>
+      <text x="40" y="78" font-family="monospace" font-size="13" fill="#f0ebe3">nightjar verify</text>
+    </g>
+
+    <!-- Row 1: blank spacer visual separator -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="0.7s" dur="0.2s" fill="freeze"/>
+      <text x="26" y="104" font-family="monospace" font-size="13" fill="#7a7168">Spec: payment.card.md · 3 invariants</text>
+    </g>
+
+    <!-- Divider line -->
+    <rect x="26" y="112" width="385" height="1" fill="#2e2a25" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="0.9s" dur="0.2s" fill="freeze"/>
+    </rect>
+
+    <!-- Row 2: Stage 0 PASS -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="1.1s" dur="0.25s" fill="freeze"/>
+      <text x="26" y="136" font-family="monospace" font-size="13" fill="#3fb950">PASS</text>
+      <text x="78" y="136" font-family="monospace" font-size="13" fill="#9A8E78"> Stage 0</text>
+      <text x="152" y="136" font-family="monospace" font-size="13" fill="#6b6358">(preflight)</text>
+      <text x="300" y="136" font-family="monospace" font-size="11" fill="#6b6358">12ms</text>
+    </g>
+
+    <!-- Row 3: Stage 1 PASS -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="1.4s" dur="0.25s" fill="freeze"/>
+      <text x="26" y="160" font-family="monospace" font-size="13" fill="#3fb950">PASS</text>
+      <text x="78" y="160" font-family="monospace" font-size="13" fill="#9A8E78"> Stage 1</text>
+      <text x="152" y="160" font-family="monospace" font-size="13" fill="#6b6358">(deps)</text>
+      <text x="300" y="160" font-family="monospace" font-size="11" fill="#6b6358">45ms</text>
+    </g>
+
+    <!-- Row 4: Stage 2 PASS -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="1.7s" dur="0.25s" fill="freeze"/>
+      <text x="26" y="184" font-family="monospace" font-size="13" fill="#3fb950">PASS</text>
+      <text x="78" y="184" font-family="monospace" font-size="13" fill="#9A8E78"> Stage 2</text>
+      <text x="152" y="184" font-family="monospace" font-size="13" fill="#6b6358">(schema)</text>
+      <text x="300" y="184" font-family="monospace" font-size="11" fill="#6b6358">23ms</text>
+    </g>
+
+    <!-- Row 5: Stage 3 FAIL -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="2.0s" dur="0.25s" fill="freeze"/>
+      <text x="26" y="208" font-family="monospace" font-size="13" fill="#f85149" font-weight="bold">FAIL</text>
+      <text x="78" y="208" font-family="monospace" font-size="13" fill="#9A8E78"> Stage 3</text>
+      <text x="152" y="208" font-family="monospace" font-size="13" fill="#6b6358">(pbt)</text>
+      <text x="300" y="208" font-family="monospace" font-size="11" fill="#6b6358">340ms</text>
+    </g>
+
+    <!-- Row 6: counterexample detail line 1 -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="2.3s" dur="0.25s" fill="freeze"/>
+      <text x="42" y="228" font-family="monospace" font-size="12" fill="#f85149">x</text>
+      <text x="52" y="228" font-family="monospace" font-size="12" fill="#9A8E78">=-5 → result=-5.4</text>
+    </g>
+
+    <!-- Row 7: counterexample detail line 2 -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="2.5s" dur="0.25s" fill="freeze"/>
+      <text x="42" y="246" font-family="monospace" font-size="12" fill="#9A8E78">"negative input not guarded"</text>
+    </g>
+
+    <!-- Row 8: Stage 4 SKIP -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="2.7s" dur="0.25s" fill="freeze"/>
+      <text x="26" y="270" font-family="monospace" font-size="13" fill="#6b6358">SKIP</text>
+      <text x="78" y="270" font-family="monospace" font-size="13" fill="#6b6358"> Stage 4</text>
+      <text x="152" y="270" font-family="monospace" font-size="13" fill="#4a3a1a">(formal)</text>
+    </g>
+
+    <!-- Divider line 2 -->
+    <rect x="26" y="283" width="385" height="1" fill="#2e2a25" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="2.9s" dur="0.2s" fill="freeze"/>
+    </rect>
+
+    <!-- Row 9: final verdict FAIL -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="3.1s" dur="0.3s" fill="freeze"/>
+      <!-- Red background pill -->
+      <rect x="22" y="292" width="200" height="28" rx="4" fill="#2d0c0a"/>
+      <text x="36" y="311" font-family="monospace" font-size="15" fill="#f85149" font-weight="bold">&#x2716; 1 VIOLATION</text>
+    </g>
+
+    <!-- Row 10: trust score -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="3.4s" dur="0.25s" fill="freeze"/>
+      <text x="26" y="344" font-family="monospace" font-size="12" fill="#6b6358">Trust: 0.60  ·  PROPERTY_TESTED</text>
+    </g>
+
+  </g>
+  <!-- end left panel content -->
+
+  <!-- ============================================================ -->
+  <!-- ARROW BETWEEN PANELS                                          -->
+  <!-- ============================================================ -->
+
+  <!-- Arrow appears after left panel is done -->
+  <g opacity="0">
+    <animate attributeName="opacity" from="0" to="1" begin="3.7s" dur="0.4s" fill="freeze"/>
+    <!-- Horizontal arrow line -->
+    <line x1="445" y1="225" x2="468" y2="225" stroke="#D4920A" stroke-width="2"/>
+    <!-- Arrowhead -->
+    <polygon points="468,220 477,225 468,230" fill="#D4920A"/>
+    <!-- Fix label above -->
+    <text x="461" y="213" text-anchor="middle" font-family="monospace" font-size="9" fill="#D4920A">fix</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- RIGHT PANEL — THE PASS                                        -->
+  <!-- ============================================================ -->
+
+  <!-- Panel background — initially dim, glows amber on reveal -->
+  <rect x="470" y="10" width="420" height="430" rx="10" fill="#141109" stroke="#2A2315" stroke-width="1">
+    <animate attributeName="stroke" from="#2A2315" to="#4A3A1A" begin="4.0s" dur="0.5s" fill="freeze"/>
+  </rect>
+
+  <!-- Title bar right -->
+  <rect x="470" y="10" width="420" height="38" rx="10" fill="#1a1714"/>
+  <rect x="470" y="36" width="420" height="12" fill="#1a1714"/>
+  <rect x="470" y="47" width="420" height="1" fill="#2e2a25"/>
+
+  <!-- Traffic lights right panel -->
+  <circle cx="490" cy="29" r="5" fill="#ff5f56"/>
+  <circle cx="508" cy="29" r="5" fill="#ffbd2e"/>
+  <circle cx="526" cy="29" r="5" fill="#27c93f"/>
+
+  <!-- Title bar label right -->
+  <text x="680" y="33" text-anchor="middle" font-family="monospace" font-size="11" fill="#6b6358">nightjar verify — PASS</text>
+
+  <!-- Right panel content — all staggered starting after left completes -->
+  <g clip-path="url(#right-clip)">
+
+    <!-- Row 0: command prompt -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="4.2s" dur="0.25s" fill="freeze"/>
+      <text x="486" y="78" font-family="monospace" font-size="13" fill="#D4920A" font-weight="bold">$</text>
+      <text x="500" y="78" font-family="monospace" font-size="13" fill="#f0ebe3">nightjar verify</text>
+    </g>
+
+    <!-- Row 1: spec info -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="4.5s" dur="0.2s" fill="freeze"/>
+      <text x="486" y="104" font-family="monospace" font-size="13" fill="#7a7168">Spec: payment.card.md · 3 invariants</text>
+    </g>
+
+    <!-- Divider line -->
+    <rect x="486" y="112" width="385" height="1" fill="#2e2a25" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="4.7s" dur="0.2s" fill="freeze"/>
+    </rect>
+
+    <!-- Row 2: Stage 0 PASS -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="4.9s" dur="0.25s" fill="freeze"/>
+      <text x="486" y="136" font-family="monospace" font-size="13" fill="#3fb950">PASS</text>
+      <text x="538" y="136" font-family="monospace" font-size="13" fill="#9A8E78"> Stage 0</text>
+      <text x="612" y="136" font-family="monospace" font-size="13" fill="#6b6358">(preflight)</text>
+      <text x="760" y="136" font-family="monospace" font-size="11" fill="#6b6358">12ms</text>
+    </g>
+
+    <!-- Row 3: Stage 1 PASS -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="5.2s" dur="0.25s" fill="freeze"/>
+      <text x="486" y="160" font-family="monospace" font-size="13" fill="#3fb950">PASS</text>
+      <text x="538" y="160" font-family="monospace" font-size="13" fill="#9A8E78"> Stage 1</text>
+      <text x="612" y="160" font-family="monospace" font-size="13" fill="#6b6358">(deps)</text>
+      <text x="760" y="160" font-family="monospace" font-size="11" fill="#6b6358">45ms</text>
+    </g>
+
+    <!-- Row 4: Stage 2 PASS -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="5.5s" dur="0.25s" fill="freeze"/>
+      <text x="486" y="184" font-family="monospace" font-size="13" fill="#3fb950">PASS</text>
+      <text x="538" y="184" font-family="monospace" font-size="13" fill="#9A8E78"> Stage 2</text>
+      <text x="612" y="184" font-family="monospace" font-size="13" fill="#6b6358">(schema)</text>
+      <text x="760" y="184" font-family="monospace" font-size="11" fill="#6b6358">23ms</text>
+    </g>
+
+    <!-- Row 5: Stage 3 PASS -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="5.8s" dur="0.25s" fill="freeze"/>
+      <text x="486" y="208" font-family="monospace" font-size="13" fill="#3fb950">PASS</text>
+      <text x="538" y="208" font-family="monospace" font-size="13" fill="#9A8E78"> Stage 3</text>
+      <text x="612" y="208" font-family="monospace" font-size="13" fill="#6b6358">(pbt)</text>
+      <text x="760" y="208" font-family="monospace" font-size="11" fill="#6b6358">280ms</text>
+    </g>
+
+    <!-- Row 6: Stage 4 PASS (formal) -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="6.1s" dur="0.25s" fill="freeze"/>
+      <text x="486" y="232" font-family="monospace" font-size="13" fill="#F5B93A" font-weight="bold">PASS</text>
+      <text x="538" y="232" font-family="monospace" font-size="13" fill="#9A8E78"> Stage 4</text>
+      <text x="612" y="232" font-family="monospace" font-size="13" fill="#6b6358">(formal)</text>
+      <text x="760" y="232" font-family="monospace" font-size="11" fill="#6b6358">1.2s</text>
+    </g>
+
+    <!-- Divider line 2 -->
+    <rect x="486" y="246" width="385" height="1" fill="#2e2a25" opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="6.3s" dur="0.2s" fill="freeze"/>
+    </rect>
+
+    <!-- Row 7: FORMALLY VERIFIED verdict — amber glow pill -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="6.5s" dur="0.4s" fill="freeze"/>
+      <rect x="482" y="255" width="260" height="32" rx="5" fill="#1c1500"/>
+      <rect x="482" y="255" width="260" height="32" rx="5" fill="none" stroke="#D4920A" stroke-width="1"/>
+      <text x="498" y="277" font-family="monospace" font-size="15" fill="#F5B93A" font-weight="bold">&#x2713; FORMALLY VERIFIED</text>
+    </g>
+
+    <!-- Pulse animation on verified text — one amber ring -->
+    <circle cx="612" cy="271" r="130" fill="none" stroke="#FFD060" stroke-width="2" opacity="0">
+      <animate attributeName="opacity" from="0.7" to="0" begin="6.9s" dur="1.2s" fill="freeze"/>
+      <animate attributeName="r" from="130" to="200" begin="6.9s" dur="1.2s" fill="freeze"/>
+    </circle>
+
+    <!-- Row 8: Trust score -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="7.0s" dur="0.3s" fill="freeze"/>
+      <text x="486" y="310" font-family="monospace" font-size="13" fill="#D4920A">Trust: 0.95</text>
+    </g>
+
+    <!-- Row 9: Proof certificate -->
+    <g opacity="0">
+      <animate attributeName="opacity" from="0" to="1" begin="7.3s" dur="0.3s" fill="freeze"/>
+      <text x="486" y="334" font-family="monospace" font-size="11" fill="#6b6358">cert: .card/audit/payment.proof.json</text>
+    </g>
+
+    <!-- Row 10: subtle breathing glow on verified panel — repeating pulse -->
+    <rect x="471" y="11" width="418" height="428" rx="10" fill="none" stroke="#D4920A" stroke-width="1" opacity="0">
+      <animate attributeName="opacity" values="0;0;0.4;0" begin="7.5s" dur="3s" repeatCount="indefinite"/>
+    </rect>
+
+  </g>
+  <!-- end right panel content -->
+
+  <!-- ============================================================ -->
+  <!-- BOTTOM CAPTION                                               -->
+  <!-- ============================================================ -->
+  <g opacity="0">
+    <animate attributeName="opacity" from="0" to="1" begin="7.5s" dur="0.5s" fill="freeze"/>
+    <text x="450" y="442" text-anchor="middle" font-family="monospace" font-size="10" fill="#4A3A1A">nightjar · your LLM writes code · nightjar proves it</text>
+  </g>
+
+</svg>
