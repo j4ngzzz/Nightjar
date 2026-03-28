@@ -1,11 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Static export for Cloudflare Pages — produces out/ directory
+  output: "export",
+
   // Enable React strict mode for better development warnings
   reactStrictMode: true,
 
-  // Image optimization
+  // Image optimization must be disabled for static export
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
