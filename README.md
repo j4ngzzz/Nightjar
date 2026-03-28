@@ -1,6 +1,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/banner.svg">
-  <img alt="Nightjar — Formally verify AI-generated code" src="assets/banner-light.svg" width="100%">
+  <source media="(prefers-color-scheme: light)" srcset="assets/banner-light.svg">
+  <img alt="Nightjar" src="assets/banner.svg" width="100%">
 </picture>
 
 <div align="center">
@@ -12,25 +13,23 @@
 [![CI Verify](https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml/badge.svg?style=for-the-badge)](https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml)
 [![llms.txt](https://img.shields.io/badge/llms.txt-docs-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](docs/llms.txt)
 
-</div>
-
-<div align="center">
-
 [English](README.md) | [中文](README-zh.md)
-
-**Found 48 bugs across 20 codebases. Zero false positives. [Security packages →](scan-lab/bug-verification.md) · [AI apps →](scan-lab/) · [All results →](scan-lab/)**
 
 </div>
 
 ---
 
-> **Nightjar found an OAuth redirect bypass in fastmcp 2.14.5.**
+> **fastmcp 2.14.5 — OAuth authorization codes can be redirected to attacker-controlled URLs.**
 >
 > `fnmatch("https://evil.com/cb?legit.example.com/anything", "https://*.example.com/*")` returns `True`.
-> Authorization codes redirected to attacker-controlled URLs. `OAuthProxyProvider(allowed_client_redirect_uris=None)` allows ALL redirect URIs — the docs say "localhost-only", the code says `return True`.
-> JWT expiry check: `if exp and exp < time.time()` — a token with `exp=0` is accepted as valid because `0` is falsy in Python.
+> `OAuthProxyProvider(allowed_client_redirect_uris=None)` allows every redirect URI — the docs say localhost-only.
+> JWT expiry check: `if exp and exp < time.time()` — `exp=0` is the Unix epoch and passes because `0` is falsy in Python.
 >
-> Both confirmed in [one script](scan-lab/repro-scripts.py). Both filed. [Full fastmcp findings →](scan-lab/bug-verification.md#bug-t2-3--bug-t2-4-fastmcp-2145--jwt-expiry-falsy-check)
+> Both confirmed in [one script](scan-lab/repro-scripts.py). [Full findings →](scan-lab/bug-verification.md#bug-t2-3--bug-t2-4-fastmcp-2145--jwt-expiry-falsy-check)
+
+---
+
+![Nightjar catching a bug](demo/nightjar-terminal-anim.svg)
 
 ---
 
@@ -42,47 +41,132 @@ nightjar init mymodule
 nightjar verify --spec .card/mymodule.card.md
 ```
 
-Python 3.11+. Dafny 4.x is optional — without it, Nightjar falls back to CrossHair and Hypothesis and still gives you a confidence score, just not a full proof.
-
----
-
-<details>
-<summary>See verification in action</summary>
-
-**Catching a bug:**
-
-![Nightjar FAIL demo](demo/nightjar-fail-demo.svg)
-
-**After fixing:**
-
-![Nightjar PASS demo](demo/nightjar-pass-demo.svg)
-
-</details>
+Python 3.11+. Dafny 4.x is optional — without it, Nightjar falls back to CrossHair and Hypothesis and still gives you a confidence score.
 
 ---
 
 ## What it found
 
-Selected findings from 48 confirmed bugs — picked for impact:
+48 confirmed bugs across 20 codebases. Every finding runs in [one script](scan-lab/repro-scripts.py).
 
-| Package / Repo | Severity | Bug | Report |
-|---|---|---|---|
-| fastmcp 2.14.5 | HIGH | OAuth `None` allows all redirect URIs (contradicts docs) | [→](scan-lab/bug-verification.md#bug-t2-6) |
-| fastmcp 2.14.5 | HIGH | JWT `if exp and ...` — `exp=0` and `exp=None` both bypass expiry | [→](scan-lab/bug-verification.md#bug-t2-3--bug-t2-4) |
-| litellm 1.82.6 | HIGH | `created_at=time.time()` frozen at import — budgets never reset on long-running servers | [→](scan-lab/bug-verification.md#bug-t2-8) |
-| python-jose 3.5.0 | HIGH | `algorithms=None` skips allowlist (related to CVE-2024-33663) | [→](scan-lab/bug-verification.md#bug-t45-11) |
-| passlib 1.7.4 | HIGH | Completely incompatible with bcrypt 5.x — auth broken on upgrade | [→](scan-lab/bug-verification.md#bug-t45-14) |
-| pydantic 2.12.5 | HIGH | `model_copy(update=)` bypasses ALL validators including type validators | [→](scan-lab/agent-framework-results.md) |
-| MiroFish (vibe-coded) | HIGH | Hardcoded `SECRET_KEY = 'mirofish-secret-key'` + `DEBUG=True` as defaults | [→](scan-lab/mirofish-results.md) |
-| Karpathy / minbpe | HIGH | `train('a', 258)` crashes: `ValueError: max() iterable argument is empty` | [→](scan-lab/karpathy-results.md) |
+---
 
-Clean codebases: Simon Willison's [datasette](https://github.com/simonw/datasette), [rich](https://github.com/Textualize/rich), and [hypothesis](https://github.com/HypothesisWorks/hypothesis) passed invariant tests with only minor edge cases — formal verification is not "everything is broken."
+**fastmcp 2.14.5 — JWT tokens with `exp=0` and `exp=None` accepted as valid**
+
+`fastmcp/server/auth/jwt_issuer.py:215`
+
+```python
+if exp and exp < time.time():   # exp=None → False. exp=0 → False.
+    raise JoseError("expired")
+# A token from 1970 or with no expiry passes without error
+```
+
+Any bearer token with a missing or zero expiry claim is silently accepted. [Details →](scan-lab/bug-verification.md#bug-t2-3--bug-t2-4)
+
+---
+
+**litellm 1.82.6 — Budget windows never reset on long-running servers**
+
+`litellm/budget_manager.py:81`
+
+```python
+def create_budget(
+    total_budget: float,
+    user: str,
+    duration: Optional[...] = None,
+    created_at: float = time.time(),  # evaluated once at import, not at call time
+):
+```
+
+On any server running longer than the budget window, every new budget is immediately treated as expired. Daily limits stop working. [Details →](scan-lab/bug-verification.md#bug-t2-8)
+
+---
+
+**python-jose 3.5.0 — `algorithms=None` accepts any signing algorithm**
+
+`jose/jws.py`
+
+```python
+if algorithms is not None and alg not in algorithms:  # None skips the check entirely
+    raise JWSError("The specified alg value is not allowed")
+```
+
+Related to CVE-2024-33663. Passing `algorithms=None` decodes tokens signed with any algorithm, including unexpected ones. [Details →](scan-lab/bug-verification.md#bug-t45-11)
+
+---
+
+**minbpe — `train('a', 258)` crashes with `ValueError`**
+
+`minbpe/basic.py:35` — a crash in Andrej Karpathy's BPE tokenizer reference implementation
+
+```python
+pair = max(stats, key=stats.get)  # ValueError: max() iterable argument is empty
+# Fix is one line:
+if not stats:
+    break
+```
+
+Short text, repetitive input, or any `vocab_size` that requests more merges than the text can produce — all crash. [Details →](scan-lab/karpathy-results.md)
+
+---
+
+**MiroFish — Hardcoded secret key and RCE-enabled debug mode in default config**
+
+`backend/app/config.py:24-25`
+
+```python
+SECRET_KEY = os.environ.get('SECRET_KEY', 'mirofish-secret-key')  # publicly known
+DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'   # Werkzeug PIN bypass
+```
+
+Any deployment without a `.env` file runs with a known session signing key and Flask's interactive debugger enabled. [Details →](scan-lab/mirofish-results.md)
+
+---
+
+**open-swe — Safety-net middleware silently skips PR recovery on tool failure**
+
+`agent/middleware/open_pr.py:87`
+
+```python
+if "success" in pr_payload:   # True when success=False too — key always present
+    return None               # abandons recovery regardless of outcome
+```
+
+When `commit_and_open_pr` fails, the middleware that should retry does nothing. The agent ends without a PR and without an error. [Details →](scan-lab/openswe-results.md)
+
+---
+
+### Clean results — what disciplined code looks like
+
+Not every repo has bugs. These passed with no violations:
+
+| Package | Functions scanned | Result |
+|---------|------------------|--------|
+| `datasette` 0.65.2 | 1,129 | Clean — layered SQL injection defense, parameterized queries throughout |
+| `sqlite-utils` 3.39 | ~237 | Clean — consistent identifier escaping, no raw string interpolation |
+| `rich` 14.3.3 | ~705 | Clean — markup escape works correctly, all edge cases handled |
+| `hypothesis` 6.151.9 | — | Clean — no invariant violations found |
+
+Nightjar finds the gap between what code claims and what it does. These repos have a small gap.
+
+---
+
+## Why not just...
+
+| Tool | What it catches | What it misses |
+|------|----------------|----------------|
+| mypy | Type errors | Logic bugs, edge cases, invariant violations |
+| bandit | Known vulnerability patterns | Novel logic flaws, spec violations |
+| pytest | What you write tests for | What you forget to test |
+| **Nightjar** | Mathematical proof from specs | Requires writing specs |
+
+Nightjar does not replace any of these. It checks whether the code satisfies the properties you wrote in its spec, for all inputs — not just the inputs you thought of.
 
 ---
 
 ## How it works
 
-You write a `.card.md` spec. An LLM generates the implementation. Nightjar runs five stages cheapest-first and short-circuits on the first failure. Either you get a proof certificate or you get the exact counterexample that broke it.
+You write a `.card.md` spec. An LLM generates the implementation. Nightjar runs five stages cheapest-first and short-circuits on the first failure.
 
 ```mermaid
 graph LR
@@ -104,23 +188,16 @@ graph LR
     style H fill:#1a1409,color:#C84B2F,stroke:#C84B2F
 ```
 
-When Dafny fails, the CEGIS loop extracts the concrete counterexample and puts it in the next prompt. "Your spec fails on input X=5, Y=-3 because..." works better than pasting the raw Dafny error. Simple functions skip Dafny and go to CrossHair (about 70% faster) — routing is automatic based on cyclomatic complexity.
+When Dafny fails, the CEGIS loop extracts the concrete counterexample and puts it in the next prompt. Simple functions skip Dafny and route to CrossHair (about 70% faster) — routing is automatic based on cyclomatic complexity.
 
 ---
 
 ## Verified by Nightjar
 
-This repo runs `nightjar verify` on its own pipeline code. The CI badge above shows the last passing run. The badge turns red if any stage fails — we eat our own cooking.
+This repo runs `nightjar verify` on its own pipeline code. The verification pipeline has a spec in `.card/`. If Nightjar's own code violates a property, Nightjar's own CI fails. The CI badge above shows the last passing run.
 
 ```bash
 nightjar badge  # prints the shields.io URL for your last verification run
-```
-
-To run verification on every push, add the action:
-
-```yaml
-# .github/workflows/nightjar.yml
-- uses: ./.github/nightjar-action
 ```
 
 ---
@@ -136,19 +213,5 @@ No sponsors yet. If Nightjar saves your team time, consider [sponsoring developm
 - [Architecture](docs/ARCHITECTURE.md) — how the pipeline works internally
 - [References](docs/REFERENCES.md) — papers the algorithms come from (CEGIS, Daikon, CrossHair)
 - [LLM docs](docs/llms.txt) — structured project description for LLM consumption
-- [Contributing](CONTRIBUTING.md)
-- [Security](SECURITY.md)
+- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 - Commercial license for teams that can't work with AGPL: $2,400/yr (teams) · $12,000/yr (enterprise). Contact: nightjar-license@proton.me
-
----
-
-<sub>
-
-[badge-pypi]: https://img.shields.io/pypi/v/nightjarzzz.svg?style=for-the-badge&labelColor=0d0b09&color=D4920A
-[badge-tests]: https://img.shields.io/badge/tests-1267_passed-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A
-[badge-license]: https://img.shields.io/badge/license-AGPL--3.0-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A
-[badge-dafny]: https://img.shields.io/badge/verified_with-Dafny_4.x-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A
-[badge-ci]: https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml/badge.svg?style=for-the-badge
-[badge-llms]: https://img.shields.io/badge/llms.txt-docs-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A
-
-</sub>
