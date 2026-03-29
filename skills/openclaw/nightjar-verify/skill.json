@@ -1,0 +1,153 @@
+{
+  "name": "Nightjar Verify",
+  "slug": "nightjar-verify",
+  "tagline": "Mathematical proof for AI-generated Python code — not just tested, proved",
+  "description": "Nightjar goes beyond vulnerability scanning. It mathematically proves your AI-generated code satisfies its specification using Dafny formal verification, Hypothesis property-based testing, and CrossHair symbolic execution. Found 74 confirmed bugs across 34 popular Python packages including web3.py ENS hijacking, RestrictedPython RCE, and pydantic validator bypass. Zero false positives.\n\nBuilt after the OpenClaw security incidents: 8 CVEs in 30 days, 341 malicious ClawHub skills, 42,000 exposed instances with auth bypass. Those bugs all shared one root cause — code was never formally verified against its specification. Nightjar closes that gap.",
+  "category": "development",
+  "subcategory": "security",
+  "tags": [
+    "security",
+    "verification",
+    "formal-proof",
+    "dafny",
+    "python",
+    "testing",
+    "hypothesis",
+    "pbt",
+    "crosshair",
+    "contracts",
+    "agent-security",
+    "mcp"
+  ],
+  "version": "1.0.0",
+  "license": "AGPL-3.0",
+  "pricing": "free",
+  "author": {
+    "name": "Nightjar Contributors",
+    "github": "j4ngzzz"
+  },
+  "repository": "https://github.com/j4ngzzz/Nightjar",
+  "homepage": "https://nightjarcode.dev",
+  "support_url": "https://github.com/j4ngzzz/Nightjar/issues",
+  "install": {
+    "pip": "nightjar-verify"
+  },
+  "requires": {
+    "python": ">=3.11",
+    "bins": ["nightjar", "python3"],
+    "optional_bins": ["dafny"]
+  },
+  "permissions": {
+    "bash": "Required to run `nightjar verify`, `nightjar scan`, `nightjar audit`, and `nightjar explain` CLI commands as subprocesses",
+    "filesystem": "Reads .card.md spec files and Python source files in the project directory. Does not write files except when bootstrapping a new spec via `nightjar init` or `nightjar scan`.",
+    "env": "Reads NIGHTJAR_MODEL (LLM model name) and NIGHTJAR_AUTO_VERIFY (opt-in auto-verify flag)"
+  },
+  "triggers": [
+    "verify code",
+    "check correctness",
+    "formal proof",
+    "run nightjar",
+    "prove this code",
+    "check safety",
+    "verify this function",
+    "nightjar verify",
+    "mathematically prove",
+    "check invariants",
+    "property based test",
+    "dafny proof"
+  ],
+  "auto_trigger": {
+    "description": "Automatically activates after writing a .py file when NIGHTJAR_AUTO_VERIFY=1 is set and a matching .card.md spec exists",
+    "hook": "hooks/nightjar-auto-verify",
+    "env_gate": "NIGHTJAR_AUTO_VERIFY"
+  },
+  "commands": [
+    {
+      "name": "nightjar verify",
+      "description": "Run 5-stage verification pipeline against a .card.md spec",
+      "flags": ["--spec", "--fast", "--format", "--max-examples", "--timeout"]
+    },
+    {
+      "name": "nightjar scan",
+      "description": "Scan a Python file or directory and generate a .card.md spec",
+      "flags": ["--smart-sort", "--security-mode"]
+    },
+    {
+      "name": "nightjar infer",
+      "description": "Infer contracts via LLM + CrossHair symbolic execution",
+      "flags": []
+    },
+    {
+      "name": "nightjar init",
+      "description": "Scaffold an empty .card.md spec for manual editing",
+      "flags": []
+    },
+    {
+      "name": "nightjar audit",
+      "description": "Scan a PyPI package for contract coverage, outputs letter-grade report",
+      "flags": []
+    },
+    {
+      "name": "nightjar explain",
+      "description": "Show last verification failure in human-readable form with Dafny error translation",
+      "flags": []
+    },
+    {
+      "name": "nightjar retry",
+      "description": "Force retry with CEGIS LLM repair loop",
+      "flags": ["--spec"]
+    },
+    {
+      "name": "nightjar lock",
+      "description": "Freeze dependencies into deps.lock with cryptographic hashes",
+      "flags": []
+    }
+  ],
+  "exit_codes": {
+    "0": "All stages PASS",
+    "1": "Verification FAIL",
+    "2": "Configuration error",
+    "3": "Timeout exceeded",
+    "4": "LLM API error",
+    "5": "Max retries exceeded — human escalation required"
+  },
+  "security_invariants": [
+    {
+      "id": "SEC-INV-01",
+      "cve": "CVE-2026-25593",
+      "description": "No shell execution with user-controlled input"
+    },
+    {
+      "id": "SEC-INV-02",
+      "description": "All tool parameters validated against strict schema before use"
+    },
+    {
+      "id": "SEC-INV-03",
+      "cve": "CVE-2026-26322",
+      "description": "No file access outside allowed_paths"
+    },
+    {
+      "id": "SEC-INV-04",
+      "incident": "Moltbook breach",
+      "description": "No secrets or tokens present in tool output"
+    },
+    {
+      "id": "SEC-INV-05",
+      "cve": "CVE-2026-26319",
+      "description": "Network requests validated against allowlist"
+    },
+    {
+      "id": "SEC-INV-07",
+      "incident": "ClawHavoc",
+      "description": "No dynamic tool registration from external input"
+    },
+    {
+      "id": "SEC-INV-08",
+      "tier": "formal",
+      "description": "Dafny proof that validation gate is never bypassed"
+    }
+  ],
+  "screenshots": [],
+  "changelog": "CHANGELOG.md",
+  "readme": "SKILL.md"
+}
