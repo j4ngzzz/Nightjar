@@ -1,12 +1,12 @@
 # Show HN Draft
 
-**Title:** Show HN: I'm 19, can't code, so I vibecoded a formal verifier that found 74 bugs in popular packages
+**Title:** Show HN: Nightjar — I spec it, AI writes it, Dafny proves it (found 74 bugs in 34 packages)
 
 ---
 
 ## Post Body
 
-I'm 19, year one polytechnic CS student in Singapore. I vibecoded this entire project — 30,000+ lines, 1,514 passing tests, Dafny formal proofs — in 62 hours using Claude Code. I never wrote a Python function manually.
+I'm 19, year one polytechnic CS student in Singapore. I vibecoded this entire project — 45,000+ lines, 1,841 passing tests, Dafny formal proofs — in 62 hours using Claude Code. I never wrote a Python function manually.
 
 The problem I kept hitting: AI writes code that looks right but isn't. Not "wrong type" wrong — logically wrong. The kind of wrong that passes unit tests and ships to production. I was spending half my time debugging my own vibecoded stuff. Testing wasn't enough because you can only test the cases you think of.
 
@@ -29,13 +29,35 @@ Clean packages: datasette, rich, hypothesis, sqlite-utils, httpx, requests, and 
 
 The NCSC said AI-generated code poses "intolerable risks" on March 24. Nightjar shipped March 29. Make of that what you will.
 
-62 hours. 175 commits. 34 packages scanned. 74 bugs confirmed. 14 clean. One person. First year of college.
+62 hours. 209 commits. 34 packages scanned. 74 bugs confirmed. 14 clean. One person. First year of college.
 
 AGPL-3.0. Python 3.11+. Dafny optional — falls back to CrossHair without it.
 
 Repo: https://github.com/j4ngzzz/Nightjar
 PyPI: `pip install nightjar-verify`
 Full scan results with repro scripts: https://nightjarcode.dev/scan/2026-q1/
+
+---
+
+## First Comment (verbatim — copy-paste ready)
+
+> Post this as your own first reply within 60 seconds of submission, before anyone else comments. This sets the technical framing and seeds the discussion.
+
+---
+
+Author here. A few things that didn't fit in the post:
+
+**TL;DR for the impatient:**
+- You write a `.card.md` spec describing what your code should do. Nightjar generates an implementation, then proves it satisfies the spec for *all* inputs — not just the ones you tested.
+- The pipeline is 6 stages: syntax checks → dependency CVEs → schema invariants → negation proof → Hypothesis property tests → Dafny formal proof. Dafny is optional; falls back to CrossHair and still catches most issues.
+- I scanned 34 packages in 4 days using 38 parallel agents. 74 bugs confirmed. 14 packages came back clean. Every finding has a standalone reproduction script — nothing is asserted without a repro.
+- The pattern that surprised me: every well-maintained, hand-tested package (datasette, rich, urllib3, hypothesis itself) passed clean. The AI tooling ecosystem — langgraph, ragas, openai-agents, google-adk — had the worst bugs by severity. Draw your own conclusions.
+
+**On "this is just Hypothesis":** Hypothesis is Stage 3 of 6. It finds counterexamples. Dafny (Stage 4) proves there are no counterexamples — a different claim entirely. The web3.py ENS finding came from Stage 3 (Hypothesis found the fullwidth-to-ASCII collision in 8 examples). The pydantic model_copy issue was caught at Stage 2 (schema spec violation before any test ran). RestrictedPython was flagged by Stage 2.5 (CrossHair symbolic execution). Different stages find different bugs; that's why the pipeline exists.
+
+**Honest caveat:** This is v0.1.1 alpha. The bug findings are independently reproducible. The verification pipeline is functional but not yet battle-tested at scale. I'd rather say that here than have you discover it.
+
+The question I'm genuinely curious about: the clean/buggy split was sharp — hand-maintained packages that existed before the AI coding wave held up; packages from the AI tooling ecosystem didn't. Has anyone doing static analysis or fuzzing at scale seen the same pattern, or is this sample too small to draw from?
 
 ---
 

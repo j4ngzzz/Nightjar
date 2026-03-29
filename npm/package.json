@@ -1,0 +1,37 @@
+{
+  "name": "@nightjar/mcp",
+  "version": "0.1.1",
+  "description": "Zero-setup MCP server shim for Nightjar — formally verify AI-generated code via npx",
+  "license": "AGPL-3.0-only",
+  "author": "Nightjar Contributors <hello@nightjar.dev>",
+  "homepage": "https://nightjarcode.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/j4ngzzz/Nightjar.git",
+    "directory": "npm"
+  },
+  "bugs": {
+    "url": "https://github.com/j4ngzzz/Nightjar/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/"
+  ],
+  "bin": {
+    "nightjar-mcp": "./bin/nightjar-mcp.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "nightjar",
+    "formal-verification",
+    "ai-code",
+    "dafny",
+    "property-based-testing",
+    "hypothesis",
+    "verification",
+    "contracts"
+  ]
+}

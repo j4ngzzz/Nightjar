@@ -1,0 +1,74 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+# Nightjar — Formally verify AI-generated code. Not tested — proved.
+#
+# Tools provided by this MCP server (discovered via MCP protocol at runtime):
+#
+#   1. verify_contract
+#      Run the 6-stage Nightjar verification pipeline against a .card.md spec.
+#      Inputs:
+#        - spec_path  (string)  Path to the .card.md spec file
+#        - code_path  (string)  Path to the generated code file to verify
+#        - stages     (string, optional)  "all" (default) | "fast" (stages 0-3, no Dafny)
+#                                        | "formal" (stage 4 only)
+#      Output: { verified, stages, errors, duration_ms, retry_count }
+#
+#   2. get_violations
+#      Retrieve detailed violation report from the most recent verify_contract call.
+#      Inputs:
+#        - spec_path  (string)  Path to the .card.md file (used as result key)
+#      Output: { violations: [{ stage, stage_num, file, line, message, type, counterexample? }] }
+#
+#   3. suggest_fix
+#      Get an LLM-generated code repair for a specific violation.
+#      Inputs:
+#        - spec_path     (string)  Path to the .card.md file
+#        - violation_id  (string)  0-based index from get_violations list
+#      Output: { suggested_code, explanation, confidence }
+#
+# Requires Python 3.11+ and uv/uvx (https://docs.astral.sh/uv/).
+# For Stage 4 formal proof, also install Dafny 4.x.
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      nightjarModel:
+        type: string
+        title: "LLM Model"
+        description: >-
+          litellm model string used by suggest_fix (e.g. "claude-sonnet-4-6",
+          "deepseek/deepseek-chat", "gpt-4o", "gemini/gemini-1.5-pro",
+          "ollama/llama3.2"). Defaults to claude-sonnet-4-6.
+        default: "claude-sonnet-4-6"
+      anthropicApiKey:
+        type: string
+        title: "Anthropic API Key"
+        description: "Required when nightjarModel uses a Claude model (claude-*)."
+      openaiApiKey:
+        type: string
+        title: "OpenAI API Key"
+        description: "Required when nightjarModel uses a GPT model (gpt-*)."
+      deepseekApiKey:
+        type: string
+        title: "DeepSeek API Key"
+        description: "Required when nightjarModel is deepseek/deepseek-chat."
+      geminiApiKey:
+        type: string
+        title: "Google Gemini API Key"
+        description: "Required when nightjarModel uses gemini/* models."
+  exampleConfig:
+    nightjarModel: "claude-sonnet-4-6"
+    anthropicApiKey: "sk-ant-api03-..."
+  commandFunction: |-
+    (config) => ({
+      command: 'uvx',
+      args: ['--from', 'nightjar-verify', 'python', '-m', 'nightjar.mcp_server'],
+      env: {
+        ...(config.nightjarModel ? { NIGHTJAR_MODEL: config.nightjarModel } : {}),
+        ...(config.anthropicApiKey ? { ANTHROPIC_API_KEY: config.anthropicApiKey } : {}),
+        ...(config.openaiApiKey ? { OPENAI_API_KEY: config.openaiApiKey } : {}),
+        ...(config.deepseekApiKey ? { DEEPSEEK_API_KEY: config.deepseekApiKey } : {}),
+        ...(config.geminiApiKey ? { GEMINI_API_KEY: config.geminiApiKey } : {})
+      }
+    })

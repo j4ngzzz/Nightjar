@@ -67,3 +67,47 @@ verify-results-*.png
 .card/*.html
 .card/*.png
 
+# Root-level debug/scratch output files — never commit
+/*.txt
+/*.dfy
+/*.png
+scanner_v1.py
+
+# Playwright MCP session data
+.playwright-mcp/
+
+# .card runtime artifacts (databases, logs, raw exports)
+.card/*.db
+.card/*.tsv
+.card/*.txt
+.card/*.json
+
+# docs/web — temporary depth-research docs and backup directories
+docs/web/depth-*.md
+docs/web/tier4-*.md
+docs/web/ui-ux-*.md
+docs/web/*-backup/
+
+# demo — rendered/test outputs (generated SVGs, PNGs, HTML previews)
+demo/real-*.svg
+demo/svg-test-*.png
+demo/test-*.svg
+demo/test-*.html
+
+# scan-lab — scratch result docs and throwaway scripts
+scan-lab/dogfood-*.md
+scan-lab/newer-*.md
+scan-lab/self-scan-*.md
+scan-lab/repro-scripts-v2.py
+scan-lab/wave4-hunt-a2-*.py
+scan-lab/wave4-hunt-b1-tests.py
+scan-lab/wave4-pbt-runner.py
+scan-lab/*_probe.py
+
+# docs/web/nightjar-canvas — default Next.js scaffold assets (not project files)
+docs/web/nightjar-canvas/public/file.svg
+docs/web/nightjar-canvas/public/globe.svg
+docs/web/nightjar-canvas/public/next.svg
+docs/web/nightjar-canvas/public/vercel.svg
+docs/web/nightjar-canvas/public/window.svg
+

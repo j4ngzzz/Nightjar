@@ -1,0 +1,78 @@
+name: Nightjar Badge
+
+# Auto-updates .card/badge.svg whenever Python source or card specs change.
+# The badge reflects the last fast-verification result via shields.io.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**/*.py'
+      - '.card/**/*.card.md'
+
+# Write permission required so stefanzweifel/git-auto-commit-action can push
+# the updated badge back to master.
+permissions:
+  contents: write
+
+# Prevent overlapping badge updates when multiple commits land quickly.
+concurrency:
+  group: badge-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Force all JS actions onto Node 24 (consistent with verify.yml).
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  update-badge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]" --no-cache-dir
+
+      # --fast skips Stage 2.5 (negation-proof) and Stage 4 (Dafny formal),
+      # keeping CI time short while still exercising schema + PBT stages.
+      # continue-on-error ensures the badge is always refreshed — if verify
+      # partially fails, badge.py reads the partial verify.json and emits a
+      # "failed" badge rather than leaving .card/badge.svg stale.
+      - name: Run fast verification
+        run: nightjar verify --fast
+        continue-on-error: true
+        env:
+          # Set NIGHTJAR_MODEL in repository secrets to enable LLM-backed stages.
+          NIGHTJAR_MODEL: ${{ secrets.NIGHTJAR_MODEL }}
+
+      # nightjar badge --format=url prints the shields.io URL to stdout.
+      # Shields.io badge URLs return SVG directly (no extension needed).
+      # NOTE: the CLI supports --format=[url|markdown|html] only; there is no
+      # --format=svg or --output flag in the current CLI. The SVG is fetched
+      # from shields.io and written to .card/badge.svg here instead.
+      - name: Generate badge SVG
+        run: |
+          mkdir -p .card
+          BADGE_URL=$(nightjar badge --format=url)
+          echo "Badge URL: ${BADGE_URL}"
+          curl -fsSL \
+            -H "Accept: image/svg+xml" \
+            "${BADGE_URL}" \
+            -o .card/badge.svg
+
+      # NOTE: stefanzweifel/git-auto-commit-action@v5 is NOT the current release.
+      # Latest as of 2025-12-17 is v7.1.0 (Node 24, skip_push support).
+      # Pinned to @v5 per project specification. Upgrade to @v7 when ready.
+      - name: Commit badge
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'ci: update verification badge [skip ci]'
+          file_pattern: .card/badge.svg
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com

@@ -45,6 +45,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.0] - Planned
+
+### Planned
+
+- `nightjar hook install` — new `hook` CLI command group (`install` / `list` / `remove`) writing
+  PostToolUse hooks for Claude Code, Cursor, Windsurf, and Kiro; atomic JSON merge with no-clobber
+  safety invariants (`hook_installer.py`)
+- `nightjar spec smart router` — CLI surface for the NL intent router: classify natural-language
+  intent into structured spec targets and route to the correct `.card.md` pipeline stage
+  (`intent_router.py` module already built; CLI command not yet exposed)
+- `nightjar mcp CLI` — `nightjar mcp` subcommand that starts the MCP server over stdio transport,
+  enabling `uvx nightjar-verify[mcp] mcp` as a zero-config entry point for Smithery and Kiro
+- Enhanced badge — SVG badge generation with pass-rate colour scale (green/yellow/red/grey),
+  `--readme` flag with auto-detected repo URL, `--format=shields` JSON endpoint payload, and
+  `.github/workflows/nightjar-badge.yml` CI auto-update workflow (extends the shields.io URL
+  generator shipped in v0.1.0)
+- `nightjar verify --security-pack owasp` — exposes the OWASP check pack as a first-class `verify`
+  flag; OWASP compliance report generation and EU CRA integration exist in `compliance.py` but the
+  `--security-pack` CLI option is not yet wired
+- Smithery listing — `smithery.yaml` registry metadata at repo root enabling one-command MCP install
+  via Smithery; `@nightjar/mcp` listed as the canonical Smithery entry
+- npm shim — `@nightjar/mcp` npm package (`npm/package.json` + `npm/bin/nightjar-mcp.js`) so
+  `npx -y @nightjar/mcp` starts the MCP server with zero Python environment setup required
+- 10 seed specs — community `.card.md` specs for `jwt-validation`, `sql-injection-prevention`,
+  `file-upload-validation`, `pagination`, `password-hashing`, `api-key-rotation`,
+  `session-management`, `csrf-protection`, `input-sanitization`, and `webhook-validation`; seeding
+  the `nightjarcode/spec-registry` Apache 2.0 repo
+- BAIF benchmark results — run Nightjar's CEGIS pipeline against the BAIF vericoding benchmark
+  Dafny subset (3,029 tasks), publish pass@1 and pass@5 vs Claude Opus 4.1 baseline; benchmark
+  runner (`benchmark_runner.py`, `benchmark_adapter.py`, `nightjar benchmark` CLI) already built
+  in v0.1.1 — results not yet published
+
+> **Groundwork already shipped (not yet user-facing):** `intent_router.py` (spec smart router
+> logic), `mcp_server.py` (MCP server, no CLI entry point), `badge.py` (shields.io URL — SVG
+> generation pending), `compliance.py` + `shadow_ci_runner.py` (OWASP pack internals — `--security-pack`
+> flag not wired), `benchmark_runner.py` + `benchmark_adapter.py` (runner built — no published
+> results yet).
+
+---
+
 ## [0.1.0] - 2026-03-27
 
 ### Added
