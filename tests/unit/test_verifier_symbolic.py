@@ -6,6 +6,9 @@ References:
 """
 
 import pytest
+
+pytest.importorskip("crosshair", reason="crosshair-tool not installed; skipping symbolic verification tests")
+
 from immune.verifier_symbolic import (
     verify_invariant_symbolic,
     SymbolicResult,

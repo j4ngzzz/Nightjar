@@ -6,4 +6,4 @@ the code satisfies the invariants. Code is regenerated from scratch every
 build — never manually edited.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

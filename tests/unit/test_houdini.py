@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import pytest
 
+z3 = pytest.importorskip("z3", reason="z3-solver not installed; skipping Houdini Z3 tests")
+
 from immune.daikon import Invariant, InvariantKind
 from immune.houdini import houdini_filter, HoudiniResult
 
