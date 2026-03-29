@@ -95,3 +95,189 @@ class TestGenerateBadgeUrl:
         md = generate_badge_markdown(status=BadgeStatus.PASSED, score=100)
         assert md.startswith("![")
         assert "shields.io" in md
+
+
+class TestGenerateShieldsJson:
+    """Tests for generate_shields_json()."""
+
+    def test_generate_shields_json_verified_high_confidence(self, tmp_path):
+        """High-confidence verified report → brightgreen."""
+        import json
+        from nightjar.badge import generate_shields_json
+
+        report = {"verified": True, "confidence_score": 95}
+        report_path = tmp_path / "verify.json"
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        result = generate_shields_json(str(report_path))
+
+        assert result["schemaVersion"] == 1
+        assert result["label"] == "nightjar"
+        assert "95" in result["message"]
+        assert "verified" in result["message"]
+        assert result["color"] == "brightgreen"
+
+    def test_generate_shields_json_verified_medium_confidence(self, tmp_path):
+        """Medium-confidence (70-89) verified report → green."""
+        import json
+        from nightjar.badge import generate_shields_json
+
+        report = {"verified": True, "confidence_score": 75}
+        report_path = tmp_path / "verify.json"
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        result = generate_shields_json(str(report_path))
+
+        assert result["color"] == "green"
+        assert "75" in result["message"]
+
+    def test_generate_shields_json_verified_low_confidence(self, tmp_path):
+        """Low-confidence (< 70) verified report → yellow."""
+        import json
+        from nightjar.badge import generate_shields_json
+
+        report = {"verified": True, "confidence_score": 55}
+        report_path = tmp_path / "verify.json"
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        result = generate_shields_json(str(report_path))
+
+        assert result["color"] == "yellow"
+        assert "55" in result["message"]
+
+    def test_generate_shields_json_failed(self, tmp_path):
+        """Failed verification → red badge with 'failed' message."""
+        import json
+        from nightjar.badge import generate_shields_json
+
+        report = {"verified": False, "confidence_score": 40}
+        report_path = tmp_path / "verify.json"
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        result = generate_shields_json(str(report_path))
+
+        assert result["color"] == "red"
+        assert "failed" in result["message"]
+        assert "40" in result["message"]
+
+    def test_generate_shields_json_no_report(self, tmp_path):
+        """Missing report file → lightgrey with 'not verified' message."""
+        from nightjar.badge import generate_shields_json
+
+        result = generate_shields_json(str(tmp_path / "nonexistent.json"))
+
+        assert result["schemaVersion"] == 1
+        assert result["label"] == "nightjar"
+        assert result["message"] == "not verified"
+        assert result["color"] == "lightgrey"
+
+
+class TestGenerateBadgeSvg:
+    """Tests for generate_badge_svg()."""
+
+    def test_generate_badge_svg_contains_nightjar(self, tmp_path):
+        """SVG badge contains the label 'nightjar'."""
+        import json
+        from nightjar.badge import generate_badge_svg
+
+        report = {"verified": True, "confidence_score": 90}
+        report_path = tmp_path / "verify.json"
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        svg = generate_badge_svg(str(report_path))
+
+        assert "<svg" in svg
+        assert "nightjar" in svg
+        assert "verified" in svg
+
+    def test_generate_badge_svg_color_scale(self, tmp_path):
+        """SVG badge reflects the correct hex colour for each status."""
+        import json
+        from nightjar.badge import generate_badge_svg
+
+        cases = [
+            ({"verified": True, "confidence_score": 95}, "#4c1"),    # brightgreen
+            ({"verified": True, "confidence_score": 80}, "#97ca00"),  # green
+            ({"verified": True, "confidence_score": 60}, "#dfb317"),  # yellow
+            ({"verified": False, "confidence_score": 30}, "#e05d44"), # red
+        ]
+        for report_data, expected_hex in cases:
+            report_path = tmp_path / "verify.json"
+            report_path.write_text(json.dumps(report_data), encoding="utf-8")
+            svg = generate_badge_svg(str(report_path))
+            assert expected_hex in svg, (
+                f"Expected {expected_hex} in SVG for report {report_data}"
+            )
+
+    def test_generate_badge_svg_no_report_lightgrey(self, tmp_path):
+        """SVG badge is lightgrey when no report is present."""
+        from nightjar.badge import generate_badge_svg
+
+        svg = generate_badge_svg(str(tmp_path / "missing.json"))
+
+        assert "#9f9f9f" in svg  # lightgrey hex
+        assert "not verified" in svg
+
+
+class TestGenerateReadmeEmbed:
+    """Tests for generate_readme_embed()."""
+
+    def test_generate_readme_embed_format(self):
+        """Embed returns correct raw.githubusercontent.com markdown link."""
+        from nightjar.badge import generate_readme_embed
+
+        md = generate_readme_embed("acme-org", "my-repo")
+
+        assert md.startswith("![Nightjar]")
+        assert "raw.githubusercontent.com" in md
+        assert "acme-org" in md
+        assert "my-repo" in md
+        assert "master" in md
+        assert ".card/badge.svg" in md
+
+    def test_generate_readme_embed_custom_branch(self):
+        """Embed uses the supplied branch name."""
+        from nightjar.badge import generate_readme_embed
+
+        md = generate_readme_embed("acme-org", "my-repo", branch="main")
+
+        assert "main" in md
+        assert "master" not in md
+
+
+class TestWriteShieldsJson:
+    """Tests for write_shields_json()."""
+
+    def test_write_shields_json_creates_file(self, tmp_path):
+        """write_shields_json creates the output file with valid JSON."""
+        import json
+        from nightjar.badge import write_shields_json
+
+        report = {"verified": True, "confidence_score": 88}
+        report_path = tmp_path / "verify.json"
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        output_path = tmp_path / "shields.json"
+        result = write_shields_json(str(report_path), str(output_path))
+
+        assert result == output_path
+        assert output_path.exists()
+        data = json.loads(output_path.read_text(encoding="utf-8"))
+        assert data["schemaVersion"] == 1
+        assert data["label"] == "nightjar"
+        assert data["color"] == "green"  # 88 → green
+
+    def test_write_shields_json_creates_parent_dirs(self, tmp_path):
+        """write_shields_json creates missing parent directories."""
+        import json
+        from nightjar.badge import write_shields_json
+
+        report = {"verified": False, "confidence_score": 10}
+        report_path = tmp_path / "verify.json"
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        output_path = tmp_path / "deep" / "nested" / "shields.json"
+        result = write_shields_json(str(report_path), str(output_path))
+
+        assert result == output_path
+        assert output_path.exists()
