@@ -1,7 +1,7 @@
 /**
  * Nightjar Bug Reports Index — /bugs
  *
- * Lists all 48 confirmed bugs by severity.
+ * Lists all 74 confirmed bugs by severity.
  * Each bug links to its individual report page.
  */
 
@@ -12,7 +12,7 @@ import { bugs, type BugReport } from "@/lib/bugs-data";
 export const metadata: Metadata = {
   title: "Bug Reports | Nightjar",
   description:
-    "48 confirmed security and logic bugs found by Nightjar in popular Python packages including httpx, fastapi, fastmcp, litellm, pydantic, and more.",
+    "74 confirmed security and logic bugs found by Nightjar in popular Python packages including httpx, fastapi, fastmcp, litellm, pydantic, and more.",
 };
 
 const SEVERITY_ORDER: BugReport["severity"][] = ["HIGH", "MEDIUM", "LOW"];
@@ -222,11 +222,11 @@ export default function BugsIndexPage() {
             lineHeight: "1.2",
           }}
         >
-          48 Confirmed Bugs
+          74 Confirmed Bugs
         </h1>
         <p style={{ color: "#8B8579", fontSize: "15px", maxWidth: "600px", lineHeight: "1.6" }}>
-          Security and logic bugs found by Nightjar in popular Python packages. All 48 reproduced
-          by direct execution. Verified 2026-03-28.
+          Security and logic bugs found by Nightjar in popular Python packages. All 74 reproduced
+          by direct execution. Verified 2026-03-29.
         </p>
 
         {/* Stats row */}
@@ -296,7 +296,7 @@ export default function BugsIndexPage() {
                 color: "#F5B93A",
               }}
             >
-              48/48
+              74/74
             </span>
             <span
               style={{
