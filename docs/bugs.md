@@ -1,7 +1,7 @@
 # Nightjar Bug Hunt — 74 Confirmed Findings
 
 > **Campaign period:** 2026-03-28 – 2026-03-29
-> **Packages scanned:** 32+
+> **Packages scanned:** 34
 > **Functions inspected:** ~5,000+
 > **Total findings:** 74
 > **False positives:** 0
