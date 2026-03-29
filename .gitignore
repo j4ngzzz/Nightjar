@@ -60,11 +60,17 @@ research/*.card.md
 # PyPI upload instructions (contains credential guidance)
 PYPI_UPLOAD.md
 
-# Internal strategy docs — not for public repo
+# Internal strategy & GTM docs (not for public repo)
 docs/distribution/show-hn-draft.md
 docs/distribution/competitor-responses.md
 docs/distribution/risk-monitoring.md
+docs/distribution/blog-post-draft.md
 docs/content/hn-objection-responses.md
+docs/content/product-hunt-listing.md
+docs/content/stackoverflow-answers.md
+docs/content/thesis-blog-post.md
+docs/content/disclosures/
+docs/content/listings/
 
 # Agent temp artifacts — screenshots, HTML validation pages, output files
 *.output
