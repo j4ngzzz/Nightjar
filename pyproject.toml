@@ -62,6 +62,9 @@ dev = [
     "mcp>=1.0",              # MCP server tests require the mcp SDK
     "watchdog>=3.0",         # watch.py file-watching daemon tests
 ]
+mcp = [
+    "mcp>=1.0",          # MCP server SDK — install to use nightjar as an MCP tool
+]
 fast = [
     "watchdog>=3.0",     # File-watching daemon for nightjar watch
 ]

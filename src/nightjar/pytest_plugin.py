@@ -104,7 +104,7 @@ def pytest_sessionstart(session: "Session") -> None:
         fast: bool = config.getoption("--nightjar-fast", default=False)
         spec_path: str = config.getoption("--nightjar-spec", default=".card")
 
-        cmd = [sys.executable, "-m", "nightjar", "verify", "--spec-path", spec_path]
+        cmd = [sys.executable, "-m", "nightjar", "verify", "--spec", spec_path]
         if fast:
             cmd.append("--fast")
 
@@ -113,7 +113,7 @@ def pytest_sessionstart(session: "Session") -> None:
             import shutil
             nightjar_bin = shutil.which("nightjar")
             if nightjar_bin:
-                cmd = [nightjar_bin, "verify", "--spec-path", spec_path]
+                cmd = [nightjar_bin, "verify", "--spec", spec_path]
                 if fast:
                     cmd.append("--fast")
         except Exception:

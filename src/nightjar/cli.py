@@ -24,6 +24,7 @@ Exit Codes:
     5  Max retries exceeded (human escalation required)
 """
 
+import datetime
 import io
 import json
 import os
@@ -178,6 +179,32 @@ def _run_verify(
                 total_duration_ms=result.total_duration_ms,
                 retry_count=result.retry_count,
             )
+
+    # ── Write verify.json for explain / badge commands ───────────────────────
+    # Always write after filtering so the file reflects exactly what was returned.
+    verify_json_path = Path(".card") / "verify.json"
+    verify_json_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        report = {
+            "verified": result.verified,
+            "stages": [
+                {
+                    "stage": s.stage,
+                    "name": s.name,
+                    "status": s.status.value,
+                    "errors": s.errors,
+                    "duration_ms": s.duration_ms,
+                }
+                for s in result.stages
+            ],
+            "confidence": getattr(result, "confidence", None),
+            "timestamp": datetime.datetime.now().isoformat(),
+        }
+        verify_json_path.write_text(
+            json.dumps(report, indent=2, default=str), encoding="utf-8"
+        )
+    except Exception:  # noqa: BLE001
+        pass  # Never block verification for a write failure
 
     return result
 
@@ -574,6 +601,14 @@ def verify(
         ctx.exit(EXIT_PASS)
     else:
         click.echo("FAILED -- verification did not pass")
+        from nightjar.types import VerifyStatus
+        for stage in result.stages:
+            if stage.status in (VerifyStatus.FAIL, VerifyStatus.TIMEOUT):
+                click.echo(f"  Stage {stage.stage} ({stage.name}): {stage.status.value.upper()}", err=True)
+                for error in stage.errors[:3]:  # Show max 3 errors
+                    msg = error.get("message") or error.get("statement") or str(error)
+                    click.echo(f"    \u2192 {msg}", err=True)
+        click.echo("  Run 'nightjar explain' for detailed diagnosis.", err=True)
         ctx.exit(EXIT_FAIL)
 
 
