@@ -120,14 +120,14 @@ A Dockerfile bundling Dafny 4.8.0 is in the repository root — build it locally
 ## The Bug Findings
 
 **Did Nightjar-the-CLI find the 74 bugs?**
-We used standalone Hypothesis scripts in `scan-lab/` that apply the same property-based
+We used standalone Hypothesis scripts in `research/` that apply the same property-based
 testing methodology Nightjar automates. Nightjar packages and orchestrates this approach
 into a multi-stage pipeline — the methodology is identical, the CLI wraps it. Saying
 Nightjar found 74 bugs is accurate in the same way you'd say "pytest found a bug" when a
 Hypothesis test fails inside pytest.
 
 **Are the bugs verified?**
-Every finding has a standalone reproduction script in `scan-lab/` that runs without
+Every finding has a standalone reproduction script in `research/` that runs without
 Nightjar installed. Zero false positives — each bug produces a concrete counterexample
 you can run yourself. See [nightjarcode.dev/bugs/](https://nightjarcode.dev/bugs/) for
 the full audit report.

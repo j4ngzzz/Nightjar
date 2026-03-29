@@ -22,7 +22,7 @@ We found it in four seconds with Hypothesis.
 
 Nightjar is a verification pipeline for Python code. The core idea: write a contract (`.card.md` spec), run a pipeline that mathematically checks the contract holds. For this scan, we used the pipeline's property-based testing stage — built on Hypothesis — to check invariants across 34 codebases: Tier 1 infrastructure packages (requests, httpx, fastapi), Tier 2 AI tooling (fastmcp, litellm, openai-agents, google-adk, ragas, langgraph), security libraries (python-jose, passlib, authlib, PyJWT, itsdangerous), AI agent frameworks (DeerFlow, Open-SWE, Hermes), web3 infrastructure (web3.py), Karpathy's minbpe tokenizer, MiroFish — a recently viral vibe-coded application — and others.
 
-The methodology was consistent across all targets: extract functions, write invariant specs, feed Hypothesis 500–1000 random inputs per function, confirm any failure by manual reproduction. False positives were explicitly tracked and excluded. Confirmed bugs were verified by running `python scan-lab/repro-scripts.py` against installed packages on a clean Python 3.14 environment. Zero false positives in the verified set.
+The methodology was consistent across all targets: extract functions, write invariant specs, feed Hypothesis 500–1000 random inputs per function, confirm any failure by manual reproduction. False positives were explicitly tracked and excluded. Confirmed bugs were verified by running `python research/repro-scripts.py` against installed packages on a clean Python 3.14 environment. Zero false positives in the verified set.
 
 Total confirmed bugs: 74. Total codebases scanned: 34. Verified clean: 14.
 

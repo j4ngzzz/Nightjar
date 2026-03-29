@@ -90,7 +90,7 @@ Nightjar's verification approach — property-based testing, symbolic execution,
 # developer messages carry system-level trust in the OpenAI Responses API
 ```
 
-User-controlled text that's ever echoed in an assistant message can forge `developer`-role instructions that survive agent handoff boundaries. No sanitization at ingestion, storage, or handoff. [Full findings →](scan-lab/wave4-hunt-a3a-results.md#finding-b--handoff-conversation-history-marker-injection-highest-severity)
+User-controlled text that's ever echoed in an assistant message can forge `developer`-role instructions that survive agent handoff boundaries. No sanitization at ingestion, storage, or handoff. [Full findings →](research/wave4-hunt-a3a-results.md#finding-b--handoff-conversation-history-marker-injection-highest-severity)
 
 ---
 
@@ -106,7 +106,7 @@ normalize_name("vitalik.eth")
 # Returns: 'vitalik.eth'
 ```
 
-All 62 fullwidth alphanumerics (U+FF10–U+FF5A) fold silently to their ASCII equivalents. An attacker registers `vit\uff41lik.eth`. Victim's wallet resolves it to the attacker's address — and the display shows `vitalik.eth`. Direct ETH address hijacking vector. [Full findings →](scan-lab/wave4-hunt-b2-results.md#finding-b2-03-ens-normalize_name----62-fullwidth-unicode-characters-silently-map-to-ascii-critical)
+All 62 fullwidth alphanumerics (U+FF10–U+FF5A) fold silently to their ASCII equivalents. An attacker registers `vit\uff41lik.eth`. Victim's wallet resolves it to the attacker's address — and the display shows `vitalik.eth`. Direct ETH address hijacking vector. [Full findings →](research/wave4-hunt-b2-results.md#finding-b2-03-ens-normalize_name----62-fullwidth-unicode-characters-silently-map-to-ascii-critical)
 
 ---
 
@@ -124,7 +124,7 @@ exec(r, glb)
 # result = 'E:\\vibecodeproject\\oracle'  (ACTUAL FILESYSTEM PATH)
 ```
 
-`compile_restricted()` does not block `import os` at compile time. Sandbox integrity is 100% dependent on the caller providing safe guard functions. `_getattr_ = getattr` is the first example on StackOverflow. One line of documentation misread = arbitrary code execution. [Full findings →](scan-lab/wave4-hunt-b5-results.md#finding-b5-rp-01--sandbox-integrity-is-100-dependent-on-caller-provided-guard-functions-import-os-executes-if-caller-provides-__import__)
+`compile_restricted()` does not block `import os` at compile time. Sandbox integrity is 100% dependent on the caller providing safe guard functions. `_getattr_ = getattr` is the first example on StackOverflow. One line of documentation misread = arbitrary code execution. [Full findings →](research/wave4-hunt-b5-results.md#finding-b5-rp-01--sandbox-integrity-is-100-dependent-on-caller-provided-guard-functions-import-os-executes-if-caller-provides-__import__)
 
 ---
 
@@ -143,7 +143,7 @@ if exp and exp < time.time():   # exp=None → False. exp=0 → False.
 # A token from 1970 or with no expiry passes without error
 ```
 
-Both confirmed in [one script](scan-lab/repro-scripts.py). [Full findings →](scan-lab/bug-verification.md#bug-t2-3--bug-t2-4-fastmcp-2145--jwt-expiry-falsy-check)
+Both confirmed in [one script](research/repro-scripts.py). [Full findings →](research/bug-verification.md#bug-t2-3--bug-t2-4-fastmcp-2145--jwt-expiry-falsy-check)
 
 ---
 
@@ -160,7 +160,7 @@ def create_budget(
 ):
 ```
 
-On any server running longer than the budget window, every new budget is immediately treated as expired. Daily limits stop working. [Details →](scan-lab/bug-verification.md#bug-t2-8)
+On any server running longer than the budget window, every new budget is immediately treated as expired. Daily limits stop working. [Details →](research/bug-verification.md#bug-t2-8)
 
 ---
 
@@ -183,7 +183,7 @@ bad = u.model_copy(update={'age': -1})
 # bad.age == -1  — validator never ran
 ```
 
-`model_copy(update=)` bypasses all field validators — by design, but frequently misused. Any downstream code trusting `model_copy` output as validated is wrong. [Details →](scan-lab/bug-verification.md)
+`model_copy(update=)` bypasses all field validators — by design, but frequently misused. Any downstream code trusting `model_copy` output as validated is wrong. [Details →](research/bug-verification.md)
 
 ---
 
@@ -196,7 +196,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'mirofish-secret-key')  # publicly kno
 DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'   # Werkzeug PIN bypass
 ```
 
-Any deployment without a `.env` file runs with a known session signing key and Flask's interactive debugger enabled. [Details →](scan-lab/mirofish-results.md)
+Any deployment without a `.env` file runs with a known session signing key and Flask's interactive debugger enabled. [Details →](research/mirofish-results.md)
 
 ---
 
@@ -211,11 +211,11 @@ if not stats:
     break
 ```
 
-Short text, repetitive input, or any `vocab_size` that requests more merges than the text can produce — all crash. [Details →](scan-lab/karpathy-results.md)
+Short text, repetitive input, or any `vocab_size` that requests more merges than the text can produce — all crash. [Details →](research/karpathy-results.md)
 
 ---
 
-Other findings include ragas (LLM evaluation framework), openai-swarm, langgraph, and 26 more packages — [see all 74 findings →](scan-lab/)
+Other findings include ragas (LLM evaluation framework), openai-swarm, langgraph, and 26 more packages — [see all 74 findings →](research/)
 
 ---
 

@@ -49,13 +49,13 @@ contractd.toml
 mutation-lab/
 
 # Scan-lab cloned repos — result .md files are committed, repos are not
-scan-lab/mirofish/
-scan-lab/hermes/
-scan-lab/deerflow/
-scan-lab/openswe/
-scan-lab/minbpe/
-scan-lab/makemore/
-scan-lab/*.card.md
+research/mirofish/
+research/hermes/
+research/deerflow/
+research/openswe/
+research/minbpe/
+research/makemore/
+research/*.card.md
 
 # PyPI upload instructions (contains credential guidance)
 PYPI_UPLOAD.md
@@ -95,11 +95,11 @@ demo/test-*.svg
 demo/test-*.html
 
 # scan-lab — throwaway scripts (result .md files are tracked, not ignored)
-scan-lab/repro-scripts-v2.py
-scan-lab/wave4-hunt-a2-*.py
-scan-lab/wave4-hunt-b1-tests.py
-scan-lab/wave4-pbt-runner.py
-scan-lab/*_probe.py
+research/repro-scripts-v2.py
+research/wave4-hunt-a2-*.py
+research/wave4-hunt-b1-tests.py
+research/wave4-pbt-runner.py
+research/*_probe.py
 
 # docs/web/nightjar-canvas — default Next.js scaffold assets (not project files)
 docs/web/nightjar-canvas/public/file.svg
