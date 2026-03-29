@@ -1,6 +1,6 @@
 # Nightjar — LLM Reference Document
 # Format: llms.txt (structured plaintext optimized for LLM consumption)
-# Version: 0.1.0 | Updated: 2026-03-28
+# Version: 0.2.0 | Updated: 2026-03-29
 # Source: https://github.com/nightjar-dev/nightjar
 # Tagline: AI writes the code. Nightjar proves it's correct.
 
@@ -8,14 +8,25 @@
 
 ## Overview
 
-AI writes the code. Nightjar proves it's correct. Nightjar is a contract-anchored verification
-layer for AI-generated code. Developers write behavioral specifications in `.card.md` files —
-YAML frontmatter plus Markdown body. An LLM generates the implementation. Nightjar runs a six-stage pipeline (preflight, dependency audit,
+AI writes the code. Nightjar proves it's correct. Nightjar is a vericoding tool for Python —
+the rigorous alternative to vibe coding. Vericoding means generation of formally verified code
+from formal specifications. The term was coined in the BAIF vericoding benchmark paper
+(arxiv:2509.22908, presented at the Dafny Workshop at POPL 2026). Nightjar is the first
+production vericoding tool for Python, using Dafny formal verification, CEGIS
+(Counterexample-Guided Inductive Synthesis) retry loops, and a community .card.md spec registry.
+
+Nightjar is a contract-anchored verification layer for AI-generated code. Developers write
+behavioral specifications in `.card.md` files — YAML frontmatter plus Markdown body. An LLM
+generates the implementation. Nightjar runs a six-stage pipeline (preflight, dependency audit,
 schema validation, property-based testing, negation-proof validation, and Dafny formal
 verification) and either produces a mathematically verified artifact or a concrete counterexample
-via a CEGIS (Counterexample-Guided Inductive Synthesis) retry loop. Code is regenerated from
-scratch on every build and is never manually edited. The central architectural principle:
-generated code is disposable; specs are the source of truth.
+via the CEGIS retry loop. Code is regenerated from scratch on every build and is never manually
+edited. The central architectural principle: generated code is disposable; specs are the source
+of truth.
+
+Vericoding vs vibe coding: vibe coding generates potentially buggy code from natural language
+descriptions. Vericoding generates formally verified code from formal specifications — the
+output is mathematically proven correct before it ships.
 
 ---
 

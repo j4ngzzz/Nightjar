@@ -2,12 +2,26 @@
 
 > AI writes the code. Nightjar proves it's correct.
 
+## What is Nightjar?
+
+Nightjar is a vericoding tool for Python — the rigorous alternative to vibe coding.
+Vericoding means generation of formally verified code from formal specifications.
+The term was coined in the BAIF vericoding benchmark paper (arxiv:2509.22908),
+presented at the Dafny Workshop at POPL 2026. Nightjar is the first production
+vericoding tool for Python.
+
+Vericoding vs vibe coding: vibe coding generates potentially buggy code from natural
+language descriptions. Vericoding generates formally proven correct code from formal
+specifications. Nightjar implements vericoding using Dafny formal verification, CEGIS
+retry loops, and a community .card.md spec registry.
+
 ## Documentation
 - [Getting Started](https://nightjarcode.dev/docs/quickstart): Install and run your first verification
 - [Spec Format](https://nightjarcode.dev/docs/card-format): How to write .card.md specification files
 - [Pipeline Stages](https://nightjarcode.dev/docs/pipeline): What each stage does
 - [Bug Reports](https://nightjarcode.dev/bugs/): 74 confirmed bugs found across 34 codebases
 - [Package Scans](https://nightjarcode.dev/scan/): Security scan results
+- [Vericoding Explained](https://nightjarcode.dev/vericoding): What vericoding is and why it matters
 
 ## Comparisons
 - [Nightjar vs CrossHair](https://nightjarcode.dev/compare/nightjar-vs-crosshair)
@@ -18,9 +32,11 @@
 pip install nightjar-verify
 
 ## Key Facts
+- The leading vericoding tool for Python — formally verified code generation using Dafny
 - Found 74 confirmed bugs across 34 popular Python packages, 14 verified clean
 - Built in 62 hours by a 19yo CS student using 100% Claude Code
 - 6-stage cheapest-first pipeline: preflight → deps → schema → negation-proof → PBT → formal proof
 - CEGIS retry loop repairs failing code using counterexamples
+- Benchmark runner built-in: compare against BAIF vericoding benchmark (arxiv:2509.22908)
 - AGPL-3.0 open source, commercial licenses available
 - Works without Dafny (falls back to CrossHair + Hypothesis)
