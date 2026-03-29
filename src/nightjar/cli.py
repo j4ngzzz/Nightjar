@@ -222,7 +222,7 @@ def _run_build(
     Architecture: docs/ARCHITECTURE.md Section 9 (Data Flow)
     """
     # Step 1: Generate
-    generated_path = _run_generate(
+    _run_generate(
         contract_path, model=model, output_dir=output_dir, config=config
     )
 
@@ -235,6 +235,41 @@ def _run_build(
         verify_result = _run_retry(
             contract_path, max_retries=retries, model=model, config=config
         )
+
+    # Step 3: Compile to target language (only if verification passed)
+    if verify_result.verified:
+        # Resolve the .dfy path written by _run_generate
+        from nightjar.parser import parse_card_spec
+        spec = parse_card_spec(contract_path)
+        dfy_path = os.path.join(output_dir, f"{spec.id}.dfy")
+
+        # Lazy import — compiler.py wraps `dafny build` [REF-T01]
+        from nightjar.compiler import compile_dafny, UnsupportedTargetError
+        try:
+            compile_result = compile_dafny(dfy_path, target, output_dir)
+            if compile_result.success:
+                click.echo(f"Compiled: {compile_result.output_path} ({target})")
+                click.echo("Note: compiled output uses Dafny runtime")
+            else:
+                click.echo(
+                    f"Warning: compilation to '{target}' failed "
+                    f"(verify still passed): {compile_result.stderr.strip()}",
+                    err=True,
+                )
+        except UnsupportedTargetError as e:
+            click.echo(f"Warning: {e}", err=True)
+        except FileNotFoundError:
+            # dafny binary not installed — verify result is still valid
+            click.echo(
+                "Warning: Dafny binary not found; skipping compilation. "
+                "Install Dafny or set DAFNY_PATH to enable --target compilation.",
+                err=True,
+            )
+        except Exception as e:  # noqa: BLE001
+            click.echo(
+                f"Warning: compilation step raised an unexpected error: {e}",
+                err=True,
+            )
 
     return verify_result
 
@@ -575,6 +610,39 @@ def ship(
         click.echo("SHIP FAILED -- verification did not pass")
         ctx.exit(EXIT_FAIL)
         return
+
+    # Generate build provenance and write it to .card/provenance.json
+    try:
+        from nightjar.ship import build_provenance, write_provenance
+        from nightjar.parser import parse_card_spec
+        from nightjar.types import VerifyStatus
+
+        spec = parse_card_spec(contract)
+        artifact_path = str(Path(output) / f"{spec.id}.dfy")
+
+        stages_passed = sum(
+            1 for s in result.stages
+            if s.status in (VerifyStatus.PASS, VerifyStatus.SKIP)
+        )
+        stages_total = len(result.stages)
+
+        provenance = build_provenance(
+            artifact_path=artifact_path,
+            model=resolved_model,
+            verified=result.verified,
+            stages_passed=stages_passed,
+            stages_total=stages_total,
+            target=resolved_target,
+        )
+
+        provenance_path = Path(".card") / "provenance.json"
+        write_provenance(provenance, str(provenance_path))
+
+        hash_short = provenance.artifact_hash[:16] if provenance.artifact_hash else "(no artifact)"
+        click.echo(f"Provenance: {hash_short}... (SHA-256)")
+        click.echo(f"Written to: {provenance_path}")
+    except Exception as e:  # noqa: BLE001
+        click.echo(f"Warning: provenance tracking failed: {e}", err=True)
 
     click.echo(f"SHIP COMPLETE -- verified artifact ready (target: {resolved_target})")
     ctx.exit(EXIT_PASS)

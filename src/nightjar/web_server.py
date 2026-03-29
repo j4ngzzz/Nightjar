@@ -12,8 +12,14 @@ The ``app`` module-level instance is imported by uvicorn and by the
 
 from __future__ import annotations
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+try:
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+    HAS_FASTAPI = True
+except ImportError:  # pragma: no cover
+    HAS_FASTAPI = False
+    FastAPI = None  # type: ignore[misc,assignment]
+    CORSMiddleware = None  # type: ignore[misc,assignment]
 
 
 def create_app() -> FastAPI:
@@ -58,11 +64,15 @@ def create_app() -> FastAPI:
     return app
 
 
-# Module-level application instance consumed by uvicorn / gunicorn
-app = create_app()
+# Module-level application instance consumed by uvicorn / gunicorn.
+# Guarded so the module is safely importable even when FastAPI is not installed.
+app = create_app() if HAS_FASTAPI else None  # type: ignore[assignment]
 
 
 if __name__ == "__main__":
+    if not HAS_FASTAPI or app is None:
+        raise SystemExit("FastAPI is required to run the web server. Install it with: pip install fastapi uvicorn")
+
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

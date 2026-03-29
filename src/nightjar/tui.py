@@ -19,11 +19,24 @@ References:
 
 from __future__ import annotations
 
-from textual.app import App, ComposeResult
-from textual.containers import Vertical
-from textual.message import Message
-from textual.reactive import reactive
-from textual.widgets import Footer, Header, ProgressBar, Static
+try:
+    from textual.app import App, ComposeResult
+    from textual.containers import Vertical
+    from textual.message import Message
+    from textual.reactive import reactive
+    from textual.widgets import Footer, Header, ProgressBar, Static
+    HAS_TEXTUAL = True
+except ImportError:  # pragma: no cover
+    HAS_TEXTUAL = False
+    App = object  # type: ignore[misc,assignment]
+    ComposeResult = object  # type: ignore[misc,assignment]
+    Vertical = object  # type: ignore[misc,assignment]
+    Message = object  # type: ignore[misc,assignment]
+    reactive = object  # type: ignore[misc,assignment]
+    Footer = object  # type: ignore[misc,assignment]
+    Header = object  # type: ignore[misc,assignment]
+    ProgressBar = object  # type: ignore[misc,assignment]
+    Static = object  # type: ignore[misc,assignment]
 
 from nightjar.types import StageResult, VerifyResult, VerifyStatus
 

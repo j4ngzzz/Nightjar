@@ -409,6 +409,66 @@ def run_pipeline(
     from nightjar.display import NullDisplay
     display = display_callback if display_callback is not None else NullDisplay()
 
+    # ── Monolithic cache lookup (Salsa-style, [REF-C08]) ─────────────────────
+    # Cache is a pure performance optimisation — any failure silently falls
+    # through to normal verification so correctness is never compromised.
+    # Only verified=True results are served from cache; failed runs always
+    # re-execute so the user can iterate on fixes without stale hits.
+    #
+    # Set NIGHTJAR_DISABLE_CACHE=1 (or any non-empty value) to bypass the
+    # cache entirely — useful in test environments and CI pipelines where
+    # stage mocking would otherwise be short-circuited by a cache hit.
+    _cache_key: Optional[str] = None
+    _cache_dir = ".card/cache"
+    try:
+        import os as _os
+        if _os.environ.get("NIGHTJAR_DISABLE_CACHE"):
+            raise RuntimeError("cache disabled via NIGHTJAR_DISABLE_CACHE")
+        from nightjar.cache import (
+            CacheEntry,
+            compute_cache_key,
+            get_cached_result,
+            store_result,
+        )
+        # Build inputs that fully characterise the verification unit:
+        #   spec content = all user-visible text fields concatenated
+        #   invariant_statements = the statement string of every invariant,
+        #   sorted for determinism (order shouldn't change the key).
+        _spec_content = "\n".join(filter(None, [
+            spec.card_version,
+            spec.id,
+            spec.title,
+            spec.status,
+            spec.intent,
+            spec.acceptance_criteria,
+            spec.functional_requirements,
+        ]))
+        _inv_statements = sorted(inv.statement for inv in spec.invariants)
+        _cache_key = compute_cache_key(_spec_content, _inv_statements)
+
+        _cached = get_cached_result(_cache_key, _cache_dir)
+        if _cached is not None and _cached.verified:
+            # Cache hit on a previously-verified spec+invariant combination.
+            # Return a minimal VerifyResult so callers get the same shape.
+            _hit_stage = StageResult(
+                stage=0,
+                name="cache_hit",
+                status=VerifyStatus.SKIP,
+                duration_ms=0,
+                errors=[{"message": f"cached result from {_cached.timestamp}"}],
+            )
+            _hit_result = VerifyResult(
+                verified=True,
+                stages=[_hit_stage],
+                total_duration_ms=0,
+            )
+            display.on_pipeline_complete(_hit_result)
+            return _hit_result
+    except ImportError:
+        _cache_key = None  # cache.py not importable — degrade gracefully
+    except Exception:
+        _cache_key = None  # Any cache error must never block verification
+
     start = time.monotonic()
     stages: list[StageResult] = []
 
@@ -501,6 +561,27 @@ def run_pipeline(
     verified = has_active_pass and no_failures
     result = _build_result(stages, start, verified=verified)
     display.on_pipeline_complete(result)
+
+    # ── Cache store ──────────────────────────────────────────────────────────
+    # Persist the result so the next identical run can skip all stages.
+    # Only verified=True results are cached; failed runs are never stored
+    # (the user may fix the code and retry, so stale failure hits are harmful).
+    # All errors are swallowed — a write failure must never affect the caller.
+    if _cache_key is not None and result.verified:
+        try:
+            from nightjar.cache import CacheEntry, store_result
+            _entry = CacheEntry(
+                cache_key=_cache_key,
+                verified=result.verified,
+                stages_passed=sum(
+                    1 for s in result.stages if s.status == VerifyStatus.PASS
+                ),
+                stages_total=len(result.stages),
+            )
+            store_result(_entry, _cache_dir)
+        except Exception:
+            pass  # Cache write failure is non-fatal
+
     return result
 
 

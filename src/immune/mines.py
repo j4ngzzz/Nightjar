@@ -37,6 +37,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
+from nightjar.config import DEFAULT_MODEL
+
 try:
     import litellm  # type: ignore[import]
     _LITELLM_AVAILABLE = True
@@ -287,9 +289,7 @@ def _llm_hypothesize(
         return []
     import litellm  # re-import is a no-op but satisfies type checker
 
-    resolved_model = model or os.environ.get("NIGHTJAR_MODEL")
-    if not resolved_model:
-        return []  # No model configured — skip LLM hypothesis
+    resolved_model = model or os.environ.get("NIGHTJAR_MODEL") or DEFAULT_MODEL
 
     # Format a representative sample (max 10 spans) as context
     sample = spans[:10]

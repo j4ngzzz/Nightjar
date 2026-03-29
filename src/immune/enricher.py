@@ -27,6 +27,8 @@ from typing import Optional
 
 import litellm
 
+from nightjar.config import DEFAULT_MODEL
+
 
 # Enrichment prompt template following [REF-P15] Agentic PBT pattern
 _ENRICHMENT_PROMPT_TEMPLATE = """\
@@ -182,7 +184,7 @@ def _call_llm(prompt: str) -> str:
     Uses NIGHTJAR_MODEL env var for model selection, falling back to a default.
     All LLM calls MUST go through litellm — never call provider APIs directly.
     """
-    model = os.environ.get("NIGHTJAR_MODEL", "deepseek/deepseek-chat")
+    model = os.environ.get("NIGHTJAR_MODEL", DEFAULT_MODEL)
 
     response = litellm.completion(
         model=model,
@@ -329,7 +331,7 @@ def _propose_refinement(
     References:
         [REF-C06] LLM-Driven Invariant Enrichment
     """
-    effective_model = model or os.environ.get("NIGHTJAR_MODEL", "deepseek/deepseek-chat")
+    effective_model = model or os.environ.get("NIGHTJAR_MODEL") or DEFAULT_MODEL
     prompt = _REFINEMENT_PROMPT_TEMPLATE.format(
         function_sig=function_sig,
         expression=candidate.expression,
@@ -530,7 +532,7 @@ def enrich_with_inspiration(
         for insp in top
     )
 
-    effective_model = model or os.environ.get("NIGHTJAR_MODEL", "deepseek/deepseek-chat")
+    effective_model = model or os.environ.get("NIGHTJAR_MODEL") or DEFAULT_MODEL
 
     inspiration_suffix = (
         "\n\nHere are high-quality invariants from similar functions:\n"
