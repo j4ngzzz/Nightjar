@@ -11,14 +11,26 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - run: pip install -e ".[dev]" --no-cache-dir
+      - name: Diagnose import
+        run: python -c "import nightjar; print('nightjar import ok:', nightjar.__version__)"
       - name: Run unit tests
-        run: python -m pytest tests/unit/ -p no:logfire -m "not integration" --tb=short -q
+        run: >-
+          python -m pytest tests/unit/
+          --import-mode=importlib
+          -p no:logfire
+          -p no:randomly
+          -p no:sugar
+          -m "not integration"
+          --tb=short
+          -q
         timeout-minutes: 10
       - name: Verify Nightjar specs (dogfooding)
         run: |
