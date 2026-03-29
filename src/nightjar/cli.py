@@ -544,10 +544,10 @@ def ship(
     output: str,
     ci: bool,
 ) -> None:
-    """Build + sign artifact for deployment.
+    """Build + package artifact for deployment.
 
     Runs the full build pipeline (generate + verify + compile) then
-    signs the resulting artifact. Architecture: docs/ARCHITECTURE.md Section 8.
+    packages the resulting artifact. Architecture: docs/ARCHITECTURE.md Section 8.
     """
     config = ctx.obj["config"]
     resolved_model = _get_model(model, config)

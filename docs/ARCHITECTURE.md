@@ -613,15 +613,29 @@ COMMANDS:
   nightjar lock                   Freeze deps into deps.lock with hashes
   nightjar explain                Show last failure with LP dual diagnosis
   nightjar optimize               Run DSPy SIMBA prompt optimization [REF-T26]
+  nightjar auto                   Generate .card.md specs from natural language intent
+  nightjar watch                  File-watching daemon with tiered verification
+  nightjar badge                  Print shields.io badge URL for last verification run
+  nightjar scan <file|dir>        Extract invariants from existing Python code
+                                    --smart-sort: security-critical file prioritization
+                                    --workers N: parallel file workers
+  nightjar infer <file>           LLM + CrossHair contract inference loop
+                                    Generates preconditions/postconditions automatically
+  nightjar audit <package>        PyPI package scanner with terminal report card
+                                    Letter grades A-F; CVE check via OSV API
+  nightjar benchmark <path>       Academic benchmark runner (vericoding POPL 2026, DafnyBench)
+                                    Reports pass@k scoring
 
 FLAGS:
-  --contract PATH    Path to .card.md (default: ./.card/*.card.md)
-  --target LANG      Compile target: py | js | ts | go | java | cs
-  --model NAME       LLM model (default: from NIGHTJAR_MODEL env var)
-  --retries N        Max repair attempts (default: 5)
-  --output DIR       Output directory for artifacts
-  --tui              Launch Textual TUI dashboard [Section 12]
-  --ci               CI mode (strict, no prompts, exit code on fail)
+  --contract PATH       Path to .card.md (default: ./.card/*.card.md)
+  --target LANG         Compile target: py | js | ts | go | java | cs
+  --model NAME          LLM model (default: from NIGHTJAR_MODEL env var)
+  --retries N           Max repair attempts (default: 5)
+  --output DIR          Output directory for artifacts
+  --tui                 Launch Textual TUI dashboard [Section 12]
+  --ci                  CI mode (strict, no prompts, exit code on fail)
+  --format=vscode       VS Code problem matcher output format
+  --output-sarif FILE   Write SARIF 2.1.0 file for GitHub Code Scanning
 
 EXIT CODES:
   0   All stages PASS
@@ -836,3 +850,74 @@ project/
 | Streaming output | Rich DisplayCallback | Protocol-based, NullDisplay default for library use | [REF-T28] |
 | Error observability | Sentry → immune feed | Production errors become invariant candidates automatically | |
 | Impact analysis | GitNexus blast radius | Warns before regenerating high-impact modules | |
+| Output formats | SARIF 2.1.0 + VS Code | GitHub Code Scanning integration; IDE inline errors | |
+| Docker image | Multi-stage, Dafny bundled | Hermetic CI environment, ~300MB | |
+
+---
+
+## 15. Phase 6 Extensions
+
+### Verification Canvas
+
+`docs/web/nightjar-canvas/` — a Next.js 15 frontend for visual verification exploration.
+
+```
+Technology: Next.js 15, React Flow, shadcn/ui, Tremor
+Realtime:   Server-Sent Events (SSE) for live stage updates
+Features:   Pipeline replay, playground, invariant explorer, compare runs
+Sharing:    Shareable run URLs, achievement badges, history
+Deployment: Cloudflare Pages (Functions for SSE endpoints)
+```
+
+Key components:
+- `VerificationLayout` — top-level layout with SSE connection and stage panels
+- Pipeline replay with step-by-step scrubbing
+- Invariant explorer: filter by tier, search, sort by confidence
+- Run comparison: diff two verification runs side-by-side
+- Achievement system: gamified milestones surfaced on first-pass verifications
+
+### AlphaEvolve Integration
+
+Five features behind the `NIGHTJAR_ENABLE_EVOLUTION=1` environment variable:
+
+| Feature | Description |
+|---------|-------------|
+| MAP-Elites strategy DB | Quality-diversity archive of successful repair strategies |
+| Strategy scoring | Tracks which repair prompts succeed per error-class |
+| Wave-based bug hunt | Automated multi-package scanning with wave coordination |
+| Ratchet loop | Prevents regression — verified confidence can only increase |
+| Scanner evolution | AlphaEvolve mutates scan heuristics toward higher bug-find rate |
+
+Enable with:
+```bash
+NIGHTJAR_ENABLE_EVOLUTION=1 nightjar verify
+```
+
+### SARIF Output
+
+`nightjar verify --output-sarif results.sarif` produces SARIF 2.1.0 compatible output:
+
+```
+Consumers:  GitHub Code Scanning (upload via actions/upload-sarif)
+            VS Code SARIF Viewer extension
+            Azure DevOps Code Scanning
+Schema:     https://docs.oasis-open.org/sarif/sarif/v2.1.0/
+Rules:      One SARIF rule per Nightjar stage (NJ-S0 through NJ-S4)
+Results:    Each invariant violation becomes a SARIF result with region info
+```
+
+### Docker Image Architecture
+
+`ghcr.io/j4ngzzz/nightjar` — multi-stage build, ~300MB:
+
+```dockerfile
+# Stage 1: Dafny installer (downloads Dafny 4.8.0 binary)
+# Stage 2: Python deps (pip install nightjar-verify)
+# Stage 3: Final image (copies both, sets entrypoint to nightjar CLI)
+
+# Usage:
+docker run --rm -v $(pwd):/workspace ghcr.io/j4ngzzz/nightjar \
+  verify --spec /workspace/.card/payment.card.md
+```
+
+The image pins Dafny 4.8.0 and the nightjar-verify release version together, ensuring reproducible verification results in CI without requiring Dafny to be installed on the host.

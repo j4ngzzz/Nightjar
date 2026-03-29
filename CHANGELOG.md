@@ -4,6 +4,36 @@ All notable changes to Nightjar are documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- `nightjar scan <dir>` — directory scanning with smart sort, parallel workers, security-critical file prioritization
+- `nightjar infer` — LLM + CrossHair contract inference with generate→verify→repair loop
+- `nightjar audit` — PyPI package scanner with terminal report card, letter grades A-F, CVE check via OSV
+- `nightjar benchmark` — academic benchmark runner (vericoding POPL 2026, DafnyBench) with pass@k scoring
+- `nightjar verify --format=vscode` — VS Code problem matcher output format
+- `nightjar verify --output-sarif` — SARIF 2.1.0 file writer for GitHub Code Scanning
+- Graduated confidence display: real path counts with mathematical confidence bounds
+- Dafny error translation: 20 patterns with Python-developer-friendly explanations
+- Docker image with Dafny 4.8.0 bundled — multi-stage build, ~300MB (`ghcr.io/j4ngzzz/nightjar`)
+- 3 tutorials: quickstart, CI integration, FastAPI verification
+- 3 example `.card.md` specs: payment, auth, rate-limiter
+- VHS demo recording script (`aha-moment.tape`)
+- 74 confirmed bugs across 34 packages (Wave 4 hunt complete)
+
+### Fixed
+
+- Default model fallback changed from deepseek to `claude-sonnet-4-6`
+- Stage 2.5 (negation proof) now visible in display output
+- `generate` command no longer dumps full dataclass repr
+- `hashlib.md5` uses `usedforsecurity=False` for FIPS compatibility
+- CrossHair runner functions deduplicated (~80 lines removed)
+- Duplicated config and import-to-package dicts consolidated
+- `litellm` import made lazy in `formal.py`
+
+---
+
 ## [0.1.0] - 2026-03-27
 
 ### Added

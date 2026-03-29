@@ -265,6 +265,51 @@ When Dafny fails, the CEGIS loop extracts the concrete counterexample and puts i
 
 ---
 
+## CLI Commands
+
+All 16 commands:
+
+```
+nightjar init <module>        Scaffold .card.md + deps.lock + tests/
+nightjar generate             LLM generates code from .card.md
+nightjar verify               Run full verification pipeline
+nightjar verify --fast        Stages 0-3 only (skip Stage 2.5 + Dafny)
+nightjar build                generate + verify + compile to target
+nightjar ship                 build + sign artifact
+nightjar retry                Force retry with LLM repair loop
+nightjar lock                 Freeze deps into deps.lock with hashes
+nightjar explain              Show last failure with LP dual diagnosis
+nightjar optimize             Run DSPy SIMBA prompt optimization
+nightjar auto                 Generate .card.md specs from natural language intent
+nightjar watch                File-watching daemon with tiered verification
+nightjar badge                Print shields.io badge URL for last verification run
+nightjar scan <file|dir>      Extract invariants from existing Python code.
+                              Supports directory scanning with --smart-sort for
+                              security-critical file prioritization.
+nightjar infer <file>         LLM + CrossHair contract inference loop.
+                              Generates preconditions/postconditions automatically.
+nightjar audit <package>      PyPI package scanner with terminal report card
+                              (letter grades A-F). Think "Lighthouse for Python packages."
+nightjar benchmark <path>     Run against academic benchmarks (vericoding POPL 2026,
+                              DafnyBench) with pass@k scoring.
+```
+
+### Output Formats
+
+```bash
+nightjar verify --format=vscode       # VS Code problem matcher output
+nightjar verify --output-sarif results.sarif  # SARIF 2.1.0 for GitHub Code Scanning
+```
+
+### Docker
+
+```bash
+docker pull ghcr.io/j4ngzzz/nightjar  # ~300MB, Dafny 4.8.0 bundled
+docker run ghcr.io/j4ngzzz/nightjar verify --spec .card/payment.card.md
+```
+
+---
+
 ## Verified by Nightjar
 
 This repo runs `nightjar verify` on its own pipeline code. The verification pipeline has a spec in `.card/`. If Nightjar's own code violates a property, Nightjar's own CI fails. The CI badge above shows the last passing run.

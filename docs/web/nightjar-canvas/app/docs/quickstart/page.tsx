@@ -451,7 +451,7 @@ export default function QuickstartPage() {
           </h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "12px" }}>
             {[
-              { href: "/bugs", label: "Browse bug reports", desc: "48 confirmed bugs found by Nightjar" },
+              { href: "/bugs", label: "Browse bug reports", desc: "74 confirmed bugs found by Nightjar" },
               { href: "/compare", label: "Compare tools", desc: "Nightjar vs. Semgrep, Snyk, CrossHair" },
               { href: "/pricing", label: "Pricing", desc: "Open source, Teams, Enterprise" },
             ].map((link) => (

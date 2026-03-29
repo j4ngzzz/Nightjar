@@ -40,12 +40,12 @@ The correct section in awesome-python is **Testing > Code Analysis**. The curren
 
 Adding nightjar to the Code Analysis subcategory under Testing.
 
-Nightjar is a formal verification pipeline for Python code. It runs 5 stages: syntax/preflight, dependency CVE scanning (pip-audit), schema validation (Pydantic), property-based testing (Hypothesis), and formal verification (CrossHair + Dafny). It found 48 confirmed bugs across 20 popular Python packages in a public scan campaign (nightjarcode.dev/scan/2026-q1/).
+Nightjar is a formal verification pipeline for Python code. It runs 5 stages: syntax/preflight, dependency CVE scanning (pip-audit), schema validation (Pydantic), property-based testing (Hypothesis), and formal verification (CrossHair + Dafny). It found 74 confirmed bugs across 34 popular Python packages in a public scan campaign (nightjarcode.dev/scan/2026-q1/).
 
 ## Why it's a Hidden Gem
 
 - Solves a niche problem (formal verification for AI-generated Python code) that no other tool in the list addresses
-- Has a documented track record: 48 confirmed bugs across 20 scanned codebases, 0 false positives in verified set
+- Has a documented track record: 74 confirmed bugs across 34 scanned codebases, 0 false positives in verified set
 - Active development with consistent commits
 - Real-world impact: fastmcp JWT bypass (CVSS 9.1), python-jose algorithm bypass, passlib bcrypt breakage all found via Nightjar's pipeline
 
@@ -95,7 +95,7 @@ description: >
   CVE scanning (pip-audit), schema validation (Pydantic), property-based testing
   (Hypothesis), and formal proof (CrossHair + Dafny). Designed for AI-generated
   code verification with CEGIS retry loop and spec-driven .card.md contracts.
-  Found 48 confirmed bugs across 20 popular Python packages.
+  Found 74 confirmed bugs across 34 popular Python packages.
 license: AGPL-3.0
 ```
 
@@ -109,7 +109,7 @@ Adding nightjar to the Python section.
 
 Nightjar is a 5-stage static/formal analysis pipeline specifically designed for AI-generated Python code. It is differentiated from other Python SAST tools in the list (bandit, semgrep, prospector) by including formal proof via CrossHair (SMT-based symbolic execution) and Dafny verification in addition to traditional linting and property-based testing.
 
-Track record: 48 confirmed bugs found across 20 popular Python packages including authentication bypasses in fastmcp and python-jose.
+Track record: 74 confirmed bugs found across 34 popular Python packages including authentication bypasses in fastmcp and python-jose.
 
 YAML file added at data/tools/nightjar.yml per CONTRIBUTING.md instructions.
 ```
