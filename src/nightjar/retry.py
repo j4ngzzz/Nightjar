@@ -705,7 +705,7 @@ def _hash_errors(errors: list[dict]) -> str:
     if not errors:
         return ""
     first_msg = str(errors[0].get("message", ""))[:100]
-    return hashlib.md5(first_msg.encode()).hexdigest()[:8]
+    return hashlib.md5(first_msg.encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 def _log_candidate_to_tsv(log_path: str, row: dict) -> None:
@@ -835,7 +835,7 @@ def run_ratchet_search(
         "score": initial_node.score,
         "error_count": len(initial_errors),
         "status": "fail",
-        "code_hash": hashlib.md5(code.encode()).hexdigest()[:8],
+        "code_hash": hashlib.md5(code.encode(), usedforsecurity=False).hexdigest()[:8],
     })
 
     attempt = 0
@@ -877,7 +877,7 @@ def run_ratchet_search(
             "score": candidate_score,
             "error_count": len(candidate_errors),
             "status": "pass" if candidate_result.verified else "fail",
-            "code_hash": hashlib.md5(candidate_code.encode()).hexdigest()[:8],
+            "code_hash": hashlib.md5(candidate_code.encode(), usedforsecurity=False).hexdigest()[:8],
         })
 
         # Return immediately on verification success

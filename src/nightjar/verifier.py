@@ -27,6 +27,11 @@ from nightjar.types import CardSpec, StageResult, VerifyResult, VerifyStatus
 # Complexity = cyclomatic_complexity + ast_depth / 3 (empirically calibrated).
 # Threshold ≤ 5 → CrossHair; > 5 → full Dafny.
 
+# ─── Stage ID constants ───────────────────────────────────────────────────────
+# Stage 2.5 (negation-proof) uses ID=5 to avoid renumbering the formal stage (4).
+# display.py iterates range(_STAGE_COUNT) == range(6), which includes this ID.
+STAGE_NEGPROOF = 5
+
 _COMPLEXITY_THRESHOLD = 5
 
 # AST node types that increment cyclomatic complexity (branch count)
@@ -178,19 +183,19 @@ def _run_stage_negproof(spec: CardSpec, code: str) -> StageResult:
     # Skip if no formal invariants (nothing to check)
     has_formal = any(inv.tier == InvariantTier.FORMAL for inv in spec.invariants)
     if not has_formal:
-        return StageResult(stage=5, name="negation_proof", status=VerifyStatus.SKIP)
+        return StageResult(stage=STAGE_NEGPROOF, name="negation_proof", status=VerifyStatus.SKIP)
 
     neg_result = run_negation_proof(spec, code)
     duration = int((_time.monotonic() - start) * 1000)
 
     if neg_result.passed:
         return StageResult(
-            stage=5, name="negation_proof", status=VerifyStatus.PASS,
+            stage=STAGE_NEGPROOF, name="negation_proof", status=VerifyStatus.PASS,
             duration_ms=duration,
         )
     else:
         return StageResult(
-            stage=5, name="negation_proof", status=VerifyStatus.FAIL,
+            stage=STAGE_NEGPROOF, name="negation_proof", status=VerifyStatus.FAIL,
             duration_ms=duration,
             errors=[{
                 "type": "weak_spec",
@@ -219,96 +224,138 @@ def _run_stage_4(spec: CardSpec, code: str) -> StageResult:
     return run_formal(spec, code)
 
 
-def _run_crosshair_symbolic(spec: CardSpec, code: str) -> StageResult:
-    """Run CrossHair as Stage 4 for simple functions (complexity routing path).
+def _exec_crosshair(
+    code: str,
+    stage_name: str,
+    report_all: bool = False,
+    timeout: int = 120,
+) -> StageResult:
+    """Run CrossHair check on a code string and return a StageResult.
 
-    Distinct from _run_crosshair_fallback (degradation ladder) — this is the
-    primary route for simple functions, not a fallback.
-    Returns SKIP with routing_note if CrossHair not installed.
+    Shared implementation for _run_crosshair_symbolic and _run_crosshair_fallback.
+    Writes code to a temp file, invokes ``python -m crosshair check``, parses
+    the output, and cleans up — regardless of outcome.
+
+    Args:
+        code: Python source code to analyze symbolically.
+        stage_name: Name to use in the returned StageResult (e.g. "formal" or "crosshair").
+        report_all: When True, attempt ``--report_all`` flag first (graceful fallback
+            if the installed CrossHair version doesn't support it).  Enables
+            path-count extraction for graduated confidence display.
+        timeout: Subprocess timeout in seconds (default 120).
+
+    Returns:
+        StageResult with stage=4, name=stage_name.
     """
     import subprocess
     import sys
     import tempfile
     import os
     import time as _time
+    import re as _re
 
     start = _time.monotonic()
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
         f.write(code)
         tmp_path = f.name
     try:
-        # --report_all: emit a summary line for every path checked, enabling
-        # path-count extraction for graduated confidence display.
-        # Graceful: if CrossHair doesn't support --report_all, we re-run without it.
-        cmd_with_report = [sys.executable, "-m", "crosshair", "check", "--report_all", tmp_path]
-        result = subprocess.run(
-            cmd_with_report,
-            capture_output=True, text=True, timeout=120,
-        )
-        # Detect unsupported flag: CrossHair prints "unrecognized arguments" or
-        # returns exit code 2 (argparse error) when the flag is unknown.
-        _report_all_supported = not (
-            result.returncode == 2
-            or "unrecognized" in (result.stderr or "").lower()
-            or "no such option" in (result.stderr or "").lower()
-        )
-        if not _report_all_supported:
-            # Re-run without --report_all (graceful degradation)
+        base_cmd = [sys.executable, "-m", "crosshair", "check"]
+
+        if report_all:
+            # --report_all: emit a summary line for every path checked, enabling
+            # path-count extraction for graduated confidence display.
+            # Graceful: if CrossHair doesn't support --report_all, re-run without it.
             result = subprocess.run(
-                [sys.executable, "-m", "crosshair", "check", tmp_path],
-                capture_output=True, text=True, timeout=120,
+                base_cmd + ["--report_all", tmp_path],
+                capture_output=True, text=True, timeout=timeout,
+            )
+            # Detect unsupported flag: CrossHair prints "unrecognized arguments" or
+            # returns exit code 2 (argparse error) when the flag is unknown.
+            _report_all_supported = not (
+                result.returncode == 2
+                or "unrecognized" in (result.stderr or "").lower()
+                or "no such option" in (result.stderr or "").lower()
+            )
+            if not _report_all_supported:
+                result = subprocess.run(
+                    base_cmd + [tmp_path],
+                    capture_output=True, text=True, timeout=timeout,
+                )
+        else:
+            result = subprocess.run(
+                base_cmd + [tmp_path],
+                capture_output=True, text=True, timeout=timeout,
             )
 
         duration = int((_time.monotonic() - start) * 1000)
-
-        # ── Parse path count from CrossHair output ────────────────────────
-        # CrossHair emits lines like: "Confirmed over all paths" or
-        # "All N paths confirmed" when it has exhausted the path space.
-        import re as _re
         output = result.stdout + result.stderr
-        paths_exhausted = 0
-        for line in output.splitlines():
-            m = _re.search(r"(\d+)\s+path", line, _re.IGNORECASE)
-            if m:
-                paths_exhausted += int(m.group(1))
-            elif _re.search(r"confirmed over all paths", line, _re.IGNORECASE):
-                paths_exhausted = paths_exhausted or 1  # at least 1 path confirmed
-        coverage_note = f"{paths_exhausted} paths exhausted" if paths_exhausted else ""
-        # ─────────────────────────────────────────────────────────────────
+
+        # ── Parse path count from CrossHair output (only meaningful with --report_all) ─
+        coverage_note = ""
+        if report_all:
+            paths_exhausted = 0
+            for line in output.splitlines():
+                m = _re.search(r"(\d+)\s+path", line, _re.IGNORECASE)
+                if m:
+                    paths_exhausted += int(m.group(1))
+                elif _re.search(r"confirmed over all paths", line, _re.IGNORECASE):
+                    paths_exhausted = paths_exhausted or 1
+            coverage_note = f"{paths_exhausted} paths exhausted" if paths_exhausted else ""
 
         if result.returncode == 0:
             return StageResult(
-                stage=4, name="formal", status=VerifyStatus.PASS,
+                stage=4, name=stage_name, status=VerifyStatus.PASS,
                 duration_ms=duration, coverage_note=coverage_note,
             )
+
         violations = [
             {"type": "crosshair_violation", "message": line.strip()}
             for line in output.splitlines()
             if line.strip() and ("error:" in line.lower() or "counterexample" in line.lower())
         ]
+        if not violations and output.strip():
+            violations = [{"type": "crosshair_error", "message": output.strip()[:500]}]
         return StageResult(
-            stage=4, name="formal", status=VerifyStatus.FAIL, duration_ms=duration,
-            errors=violations or [{"type": "crosshair_error", "message": output.strip()[:500]}],
+            stage=4, name=stage_name, status=VerifyStatus.FAIL, duration_ms=duration,
+            errors=violations or [{"type": "crosshair_error", "message": "CrossHair check failed"}],
             coverage_note=coverage_note,
         )
+
     except subprocess.TimeoutExpired:
         duration = int((_time.monotonic() - start) * 1000)
-        return StageResult(stage=4, name="formal", status=VerifyStatus.TIMEOUT, duration_ms=duration,
-                           errors=[{"type": "timeout", "message": "CrossHair symbolic exceeded 120s"}])
+        return StageResult(
+            stage=4, name=stage_name, status=VerifyStatus.TIMEOUT, duration_ms=duration,
+            errors=[{"type": "timeout", "message": f"CrossHair exceeded {timeout}s"}],
+        )
     except FileNotFoundError:
         duration = int((_time.monotonic() - start) * 1000)
-        # CrossHair not installed — SKIP with routing note (not a real failure)
-        return StageResult(stage=4, name="formal", status=VerifyStatus.SKIP, duration_ms=duration,
-                           errors=[{"message": "CrossHair not installed; install for complexity routing"}])
+        # CrossHair not installed — SKIP (not a real failure)
+        return StageResult(
+            stage=4, name=stage_name, status=VerifyStatus.SKIP, duration_ms=duration,
+            errors=[{"message": "CrossHair not installed; install crosshair for symbolic verification"}],
+        )
     except Exception as e:
         duration = int((_time.monotonic() - start) * 1000)
-        return StageResult(stage=4, name="formal", status=VerifyStatus.FAIL, duration_ms=duration,
-                           errors=[{"type": "error", "error": str(e)}])
+        return StageResult(
+            stage=4, name=stage_name, status=VerifyStatus.FAIL, duration_ms=duration,
+            errors=[{"type": "error", "error": str(e)}],
+        )
     finally:
         try:
             os.unlink(tmp_path)
         except OSError:
             pass
+
+
+def _run_crosshair_symbolic(spec: CardSpec, code: str) -> StageResult:
+    """Run CrossHair as Stage 4 for simple functions (complexity routing path).
+
+    Distinct from _run_crosshair_fallback (degradation ladder) — this is the
+    primary route for simple functions, not a fallback.
+    Uses --report_all for path-count extraction (graduated confidence display).
+    Returns SKIP with routing note if CrossHair not installed.
+    """
+    return _exec_crosshair(code, stage_name="formal", report_all=True)
 
 
 def _stage_ok(result: StageResult) -> bool:
@@ -430,7 +477,7 @@ def run_pipeline(
 
     # Stage 2.5: Negation-proof spec validation (U1.4 — NegProof)
     # Checks FORMAL invariants are meaningful before expensive Dafny run.
-    display.on_stage_start(5, "negation_proof")
+    display.on_stage_start(STAGE_NEGPROOF, "negation_proof")
     result_neg = _run_stage_negproof(spec, code)
     stages.append(result_neg)
     display.on_stage_complete(result_neg)
@@ -502,87 +549,7 @@ def _run_crosshair_fallback(spec: CardSpec, code: str) -> StageResult:
     Returns:
         StageResult with stage=4, name='crosshair'.
     """
-    import subprocess
-    import sys
-    import tempfile
-    import os
-    import time as _time
-
-    start = _time.monotonic()
-
-    # Write code to temp file for CrossHair analysis
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
-        f.write(code)
-        tmp_path = f.name
-
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "crosshair", "check", tmp_path],
-            capture_output=True,
-            text=True,
-            timeout=120,  # 120s CrossHair budget per Scout 3 S5.5
-        )
-        duration = int((_time.monotonic() - start) * 1000)
-
-        if result.returncode == 0:
-            return StageResult(
-                stage=4,
-                name="crosshair",
-                status=VerifyStatus.PASS,
-                duration_ms=duration,
-            )
-
-        # Parse violation lines from CrossHair output
-        output = result.stdout + result.stderr
-        violations = [
-            {"type": "crosshair_violation", "message": line.strip()}
-            for line in output.splitlines()
-            if line.strip() and ("error:" in line.lower() or "counterexample" in line.lower())
-        ]
-        if not violations and output.strip():
-            violations = [{"type": "crosshair_error", "message": output.strip()[:500]}]
-
-        return StageResult(
-            stage=4,
-            name="crosshair",
-            status=VerifyStatus.FAIL,
-            duration_ms=duration,
-            errors=violations or [{"type": "crosshair_error", "message": "CrossHair check failed"}],
-        )
-
-    except subprocess.TimeoutExpired:
-        duration = int((_time.monotonic() - start) * 1000)
-        return StageResult(
-            stage=4,
-            name="crosshair",
-            status=VerifyStatus.TIMEOUT,
-            duration_ms=duration,
-            errors=[{"type": "timeout", "message": "CrossHair exceeded 120s budget"}],
-        )
-    except FileNotFoundError:
-        # python -m crosshair not found — module not installed
-        duration = int((_time.monotonic() - start) * 1000)
-        return StageResult(
-            stage=4,
-            name="crosshair",
-            status=VerifyStatus.SKIP,
-            duration_ms=duration,
-            errors=[{"message": "CrossHair not installed — install crosshair for fallback"}],
-        )
-    except Exception as e:
-        duration = int((_time.monotonic() - start) * 1000)
-        return StageResult(
-            stage=4,
-            name="crosshair",
-            status=VerifyStatus.FAIL,
-            duration_ms=duration,
-            errors=[{"type": "crosshair_error", "error": str(e)}],
-        )
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+    return _exec_crosshair(code, stage_name="crosshair", report_all=False)
 
 
 def _run_hypothesis_extended(spec: CardSpec, code: str) -> StageResult:

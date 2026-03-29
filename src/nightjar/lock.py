@@ -24,8 +24,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-# Known import-name → package-name mappings where they differ
-_IMPORT_TO_PACKAGE: dict[str, str] = {
+# Known import-name → package-name mappings where they differ.
+# Public — imported by stages/deps.py to avoid duplication.
+IMPORT_TO_PACKAGE: dict[str, str] = {
     "yaml": "pyyaml",
     "cv2": "opencv-python",
     "PIL": "pillow",
@@ -141,7 +142,7 @@ def resolve_package_versions(import_names: set[str]) -> dict[str, str]:
 
     for import_name in import_names:
         # Try the known mapping first
-        pkg_name = _IMPORT_TO_PACKAGE.get(import_name, import_name)
+        pkg_name = IMPORT_TO_PACKAGE.get(import_name, import_name)
         version = _get_installed_version(pkg_name)
         if version:
             resolved[pkg_name] = version

@@ -80,12 +80,12 @@ def test_get_model_falls_back_to_config():
 
 
 def test_get_model_ultimate_default():
-    """When nothing is configured, use deepseek/deepseek-chat."""
+    """When nothing is configured, use claude-sonnet-4-6."""
     from nightjar.config import get_model
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("NIGHTJAR_MODEL", None)
-        assert get_model(config={}) == "deepseek/deepseek-chat"
+        assert get_model(config={}) == "claude-sonnet-4-6"
 
 
 def test_get_specs_dir_from_config():

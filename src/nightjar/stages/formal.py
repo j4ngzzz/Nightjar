@@ -33,8 +33,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-import litellm
-
 from nightjar.generator import get_model
 from nightjar.types import (
     CardSpec, Invariant, InvariantTier, StageResult, VerifyStatus,
@@ -852,6 +850,8 @@ def attempt_annotation_repair(
 
     # Take the first located error — greedy: fix one at a time
     error = located[0]
+
+    import litellm  # lazy import — avoids slow init when Dafny mocks are used
 
     model = get_model()  # NIGHTJAR_MODEL env var → default; centralised in get_model()
     prompt = _build_annotation_prompt(dafny_code, error, spec)

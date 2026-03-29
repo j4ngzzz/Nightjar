@@ -32,7 +32,7 @@ from typing import Optional
 import click
 
 from nightjar import __version__
-from nightjar.config import load_config, get_model, get_specs_dir
+from nightjar.config import load_config, get_model, get_specs_dir, DEFAULT_CONFIG
 
 # ── Exit codes (from ARCHITECTURE.md Section 8) ─────────
 
@@ -45,22 +45,8 @@ EXIT_MAX_RETRIES = 5
 
 # ── Config loading ───────────────────────────────────────
 
-# Default config values matching nightjar.toml schema
-_DEFAULT_CONFIG = {
-    "card": {
-        "version": "1.0",
-        "default_target": "py",
-        "default_model": "claude-sonnet-4-6",
-        "max_retries": 5,
-        "verification_timeout": 30,
-    },
-    "paths": {
-        "specs": ".card/",
-        "dist": "dist/",
-        "audit": ".card/audit/",
-        "cache": ".card/cache/",
-    },
-}
+# Default config values — imported from config module to avoid duplication
+_DEFAULT_CONFIG = DEFAULT_CONFIG
 
 
 def _load_config() -> dict:
@@ -150,7 +136,6 @@ def _run_verify(
     spec = parse_card_spec(contract_path)
 
     # Locate generated code: look for <spec_id>.py or <spec_id>.dfy in audit dir or cwd
-    import os
     code = ""
     audit_dir = config.get("paths", {}).get("audit", ".card/audit/")
     for ext in (".py", ".dfy"):
@@ -213,7 +198,6 @@ def _run_generate(
     result = generate_code(spec, model=model)
 
     if result.dafny_code:
-        import os
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, f"{spec.id}.dfy")
         with open(output_path, "w", encoding="utf-8") as f:
@@ -274,13 +258,12 @@ def _run_retry(
         raise SystemExit(EXIT_CONFIG_ERROR)
 
     from nightjar.parser import parse_card_spec
-    import os as _os
     spec = parse_card_spec(contract_path)
     code = ""
     audit_dir = config.get("paths", {}).get("audit", ".card/audit/")
     for ext in (".py", ".dfy"):
-        candidate = _os.path.join(audit_dir, f"{spec.id}{ext}")
-        if _os.path.exists(candidate):
+        candidate = os.path.join(audit_dir, f"{spec.id}{ext}")
+        if os.path.exists(candidate):
             with open(candidate, encoding="utf-8") as f:
                 code = f.read()
             break
@@ -480,7 +463,7 @@ def generate(ctx: click.Context, contract: str, model: Optional[str], output: st
         result = _run_generate(
             contract, model=resolved_model, output_dir=output, config=config
         )
-        click.echo(f"Generated: {result}")
+        click.echo(f"Generated: {result.spec_id}")
     except SystemExit:
         raise
     except Exception as e:
@@ -815,9 +798,8 @@ def badge(ctx: click.Context, fmt: str, report: str) -> None:
     """
     try:
         from nightjar.badge import generate_badge_url_from_report, generate_badge_markdown
-        import os as _os
 
-        if not _os.path.exists(report):
+        if not os.path.exists(report):
             click.echo("No verification report found. Run `nightjar verify` first.", err=True)
             ctx.exit(EXIT_CONFIG_ERROR)
             return

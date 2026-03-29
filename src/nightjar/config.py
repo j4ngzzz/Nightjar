@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
+# Default model — used as the final fallback when no env var or config is present
+DEFAULT_MODEL = "claude-sonnet-4-6"
 
 # Default config matching nightjar.toml schema
 DEFAULT_CONFIG: dict = {
@@ -97,9 +99,9 @@ def get_model(
         return env_model
 
     if config:
-        return config.get("card", {}).get("default_model", "deepseek/deepseek-chat")
+        return config.get("card", {}).get("default_model", DEFAULT_MODEL)
 
-    return "deepseek/deepseek-chat"
+    return DEFAULT_MODEL
 
 
 def get_specs_dir(config: dict) -> str:

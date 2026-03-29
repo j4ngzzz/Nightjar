@@ -213,9 +213,9 @@ class RichStreamingDisplay:
         table.add_column("Status", justify="center", width=12)
         table.add_column("Duration", justify="right", width=10)
 
-        for stage_num in range(5):
+        for stage_num in range(_STAGE_COUNT):
             status = self.stage_status.get(stage_num)
-            name = self.stage_names.get(stage_num, f"stage{stage_num}")
+            name = self.stage_names.get(stage_num, _STAGE_NAMES.get(stage_num, f"stage{stage_num}"))
             ms = self.stage_durations.get(stage_num)
             duration_str = _format_duration_ms(ms) if ms is not None else "—"
 
@@ -274,9 +274,9 @@ class RichStreamingDisplay:
     def _build_plain(self) -> str:
         """Plain-text fallback when Rich is not installed."""
         lines = ["=== Nightjar Verify ==="]
-        for stage_num in range(5):
+        for stage_num in range(_STAGE_COUNT):
             status = self.stage_status.get(stage_num, "waiting")
-            name = self.stage_names.get(stage_num, f"stage{stage_num}")
+            name = self.stage_names.get(stage_num, _STAGE_NAMES.get(stage_num, f"stage{stage_num}"))
             status_str = status.value if hasattr(status, "value") else status
             lines.append(f"  Stage {stage_num} ({name}): {status_str}")
         if self.pipeline_done:
@@ -297,6 +297,22 @@ class RichStreamingDisplay:
         return "\n".join(lines)
 
 
+# ── Stage count constant ─────────────────────────────────────────────────
+
+# Pipeline stages 0-4 plus stage 5 (negation-proof / Stage 2.5).
+# Stage 5 (STAGE_NEGPROOF) is inserted between stages 3 and 4 in the
+# execution order but uses ID=5 to avoid renumbering the formal stage.
+_STAGE_COUNT = 6  # stages 0, 1, 2, 3, 4, 5 (negation-proof)
+
+_STAGE_NAMES: dict[int, str] = {
+    0: "preflight",
+    1: "deps",
+    2: "schema",
+    3: "pbt",
+    4: "formal",
+    5: "neg-proof",
+}
+
 # ── Module-level console ──────────────────────────────────────────────────
 
 # Module-level console; force_terminal=True so Rich always emits ANSI
@@ -304,8 +320,10 @@ class RichStreamingDisplay:
 _console: Optional["Console"] = None
 
 
-def _get_console() -> "Console":
+def _get_console() -> "Console | None":
     """Return (and lazily create) the module-level Rich Console.
+
+    Returns None when Rich is not installed.
 
     References:
     - [REF-T17] Click CLI framework -- shared console for all output

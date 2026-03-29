@@ -20,20 +20,8 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from nightjar.lock import IMPORT_TO_PACKAGE
 from nightjar.types import StageResult, VerifyStatus
-
-# Known import-name → package-name mappings where they differ
-_IMPORT_TO_PACKAGE = {
-    "yaml": "pyyaml",
-    "cv2": "opencv-python",
-    "PIL": "pillow",
-    "sklearn": "scikit-learn",
-    "bs4": "beautifulsoup4",
-    "attr": "attrs",
-    "dateutil": "python-dateutil",
-    "gi": "pygobject",
-    "Crypto": "pycryptodome",
-}
 
 # deps.lock line format: package==version --hash=sha256:HASH
 _DEPS_LINE_RE = re.compile(
@@ -299,7 +287,7 @@ def _is_allowed(import_name: str, allowed: dict[str, dict]) -> bool:
         return True
 
     # Check known import→package mappings
-    mapped = _IMPORT_TO_PACKAGE.get(import_name)
+    mapped = IMPORT_TO_PACKAGE.get(import_name)
     if mapped and mapped.lower() in allowed:
         return True
 
