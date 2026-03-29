@@ -7,7 +7,7 @@
 <div align="center">
 
 [![PyPI version](https://img.shields.io/pypi/v/nightjar-verify.svg?style=for-the-badge&labelColor=0d0b09&color=D4920A)](https://pypi.org/project/nightjar-verify/)
-[![Tests](https://img.shields.io/badge/tests-1841_passed-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1841_passed-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](LICENSE)
 [![Verified with Dafny](https://img.shields.io/badge/verified_with-Dafny_4.x-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](https://github.com/dafny-lang/dafny)
 [![CI Verify](https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml/badge.svg?style=for-the-badge)](https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml)
@@ -18,6 +18,9 @@
 </div>
 
 ---
+
+> [!WARNING]
+> Nightjar is alpha software (v0.1.0). The bug findings are independently reproducible. The verification pipeline is functional but not yet battle-tested at scale.
 
 > **"The seatbelt Claude forgot to ship."**
 
@@ -55,11 +58,17 @@ nightjar verify --spec .card/mymodule.card.md
 
 Python 3.11+. Dafny 4.x is optional — without it, Nightjar falls back to CrossHair and Hypothesis and still gives you a confidence score.
 
+> [!TIP]
+> **No Dafny?** Use `nightjar verify --fast` to skip formal proofs — you still get schema validation + property-based testing with confidence scores.
+
+> [!NOTE]
+> **Existing codebase?** Run `nightjar scan app.py` to bootstrap specs from your code. No manual spec writing needed to start.
+
 ---
 
 ## What it found
 
-74 confirmed bugs across 34 codebases. 62 hours. 196 commits. Every finding runs in one script.
+74 confirmed bugs across 34 codebases. 62 hours. 199 commits. Every finding runs in one script.
 
 ---
 
@@ -151,7 +160,7 @@ On any server running longer than the budget window, every new budget is immedia
 
 ---
 
-**pydantic v2 — `model_copy(update={...})` bypasses field validators**
+**pydantic v2 — `model_copy(update={...})` bypasses field validators — documented footgun with real consequences**
 
 `pydantic/main.py` — `model_copy()`
 
@@ -170,7 +179,7 @@ bad = u.model_copy(update={'age': -1})
 # bad.age == -1  — validator never ran
 ```
 
-`model_copy` skips validation by design, but `update={}` callers frequently assume field validators fire. Any downstream code trusting `model_copy` output as validated is wrong. [Details →](scan-lab/bug-verification.md)
+`model_copy(update=)` bypasses all field validators — by design, but frequently misused. Pydantic documents this as expected, but callers who assume validation runs on updated fields get silent data corruption. Any downstream code trusting `model_copy` output as validated is wrong. [Details →](scan-lab/bug-verification.md)
 
 ---
 
@@ -279,6 +288,21 @@ graph LR
 
 When Dafny fails, the CEGIS loop extracts the concrete counterexample and puts it in the next prompt. Simple functions skip Dafny and route to CrossHair (about 70% faster) — routing is automatic based on cyclomatic complexity.
 
+### Pipeline Status
+
+- [x] Stage 0 — Preflight (syntax, dead constraints)
+- [x] Stage 1 — Dependency audit (CVE scanning via pip-audit)
+- [x] Stage 2 — Schema validation (Pydantic v2)
+- [x] Stage 2.5 — Negation proof (CrossHair)
+- [x] Stage 3 — Property-based testing (Hypothesis, 1000+ examples)
+- [x] Stage 4 — Formal proof (Dafny 4.x / CrossHair)
+- [x] CEGIS retry loop with structured error feedback
+- [x] Graduated confidence display with mathematical bounds
+- [x] Zero-friction entry: `scan`, `infer`, `audit`
+- [ ] VSCode extension (LSP diagnostics)
+- [ ] Benchmark scores (vericoding POPL 2026)
+- [ ] Docker image published to ghcr.io
+
 ---
 
 ## CLI Commands
@@ -356,6 +380,17 @@ nightjar badge  # prints the shields.io URL for your last verification run
 ## Sponsors
 
 No sponsors yet. If Nightjar saves your team time, consider [sponsoring development](https://github.com/sponsors/j4ngzzz). Every sponsor gets listed here and a direct line for support.
+
+---
+
+## Recent Milestones
+
+- **2026-03-29** — v0.1.0: 16 CLI commands, 1841 tests, Docker image, OpenClaw skill
+- **2026-03-29** — 74 confirmed bugs across 34 packages (Wave 4 hunt complete)
+- **2026-03-28** — Phase 6 Verification Canvas live at nightjarcode.dev
+- **2026-03-28** — AlphaEvolve: MAP-Elites, invariant refinement, strategy DB
+- **2026-03-27** — nightjar scan + infer: zero-friction spec generation
+- **2026-03-26** — Project started. First commit.
 
 ---
 

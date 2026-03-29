@@ -14,7 +14,13 @@ import os
 from typing import Any
 
 import litellm
-from mcp.server.fastmcp import FastMCP
+
+try:
+    from mcp.server.fastmcp import FastMCP
+    HAS_MCP = True
+except ImportError:
+    HAS_MCP = False
+    FastMCP = None  # type: ignore
 
 from .types import VerifyResult, StageResult, VerifyStatus
 
@@ -267,7 +273,7 @@ async def handle_suggest_fix(
 # -- MCP Server factory --
 
 
-def create_mcp_server() -> FastMCP:
+def create_mcp_server() -> "FastMCP":
     """Create and configure the Nightjar MCP server with 3 tools.
 
     Tools follow the schemas defined in ARCHITECTURE.md Section 7 [REF-T18].
@@ -275,6 +281,11 @@ def create_mcp_server() -> FastMCP:
     Returns:
         Configured FastMCP server instance ready to run.
     """
+    if not HAS_MCP:
+        raise ImportError(
+            "MCP SDK not installed. Install with: pip install nightjar-verify[mcp] "
+            "or pip install mcp"
+        )
     mcp = FastMCP("nightjar")
 
     @mcp.tool()

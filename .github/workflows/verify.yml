@@ -5,34 +5,36 @@ on:
     branches: [master]
     paths: ['src/**', '*.toml', '.card/**']
   schedule:
-    - cron: '0 9 * * 1'  # Weekly Monday 9 AM UTC
+    - cron: '0 9 * * 1'
   workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -e ".[dev]" --no-cache-dir
-      - name: Diagnose import
-        run: python -c "import nightjar; print('nightjar import ok:', nightjar.__version__)"
+          cache: 'pip'
+      - name: Install dependencies
+        run: pip install -e ".[dev]" --no-cache-dir
+      - name: Verify nightjar imports
+        run: python -c "import nightjar.cli; print('nightjar import OK')"
       - name: Run unit tests
-        run: >-
-          python -m pytest tests/unit/
-          --import-mode=importlib
-          -p no:logfire
-          -p no:randomly
-          -p no:sugar
-          -m "not integration"
-          --tb=short
-          -q
+        run: |
+          python -m pytest tests/unit/ \
+            -m "not integration" \
+            -p no:logfire \
+            -p no:randomly \
+            -p no:sugar \
+            --import-mode=importlib \
+            --tb=short -q
         timeout-minutes: 10
-      - name: Verify Nightjar specs (dogfooding)
+      - name: Verify specs (dogfooding)
         run: |
           python -c "
           from nightjar.parser import parse_card_spec
