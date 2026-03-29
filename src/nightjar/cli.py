@@ -24,9 +24,11 @@ Exit Codes:
     5  Max retries exceeded (human escalation required)
 """
 
+import io
 import json
 import os
 import re
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
@@ -399,6 +401,17 @@ def main(ctx: click.Context) -> None:
       nightjar verify --fast           # verify all specs
       nightjar audit requests          # audit any PyPI package
     """
+    # ── Windows cp1252 safety net ────────────────────────────────────────────
+    # Reconfigure stdout/stderr to UTF-8 with replacement so Unicode box-drawing
+    # characters (used by Rich / report cards) never raise UnicodeEncodeError on
+    # cp1252 / other narrow-codepage Windows terminals.  Falls back silently if
+    # the stream is not reconfigurable (piped binary, IDE capture, etc.).
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, io.UnsupportedOperation):
+            pass
     ctx.ensure_object(dict)
     ctx.obj["config"] = _load_config()
     if ctx.invoked_subcommand is None:
@@ -1571,7 +1584,13 @@ def audit(
     if as_json:
         click.echo(render_json(result))
     else:
-        click.echo(render_report_card(result))
+        card_text = render_report_card(result)
+        try:
+            click.echo(card_text)
+        except UnicodeEncodeError:
+            # Fallback: replace non-ASCII characters so cp1252 terminals never
+            # crash even if the stdout.reconfigure() in main() was not effective.
+            click.echo(card_text.encode("ascii", errors="replace").decode("ascii"))
 
     # Write candidates to .card.md if requested
     if output:

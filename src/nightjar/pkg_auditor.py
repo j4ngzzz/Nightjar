@@ -98,7 +98,13 @@ def parse_package_spec(spec: str) -> tuple[str, Optional[str], bool]:
 
     Returns:
         Tuple of (name, version, is_local).
+
+    Raises:
+        ValueError: If spec is empty or whitespace-only.
     """
+    if not spec or not spec.strip():
+        raise ValueError("Package specification cannot be empty")
+
     # Local path: starts with ./ or / or points to an existing directory
     if spec.startswith("./") or spec.startswith("/") or spec.startswith(".\\"):
         name = Path(spec).name or spec.lstrip("./")
@@ -691,19 +697,34 @@ def render_report_card(result: PackageAuditResult) -> str:
     from rich.table import Table
     from rich.text import Text
 
+    # ── Encoding-safe character constants ────────────────────────────────────
+    # On Windows terminals with cp1252 (or other narrow codepages), Unicode
+    # box-drawing / block characters raise UnicodeEncodeError.  We detect the
+    # current stdout encoding once and choose ASCII fallbacks when needed.
+    # StringIO always accepts Unicode, but the caller (click.echo) will write
+    # the returned string to stdout which may be cp1252.
+    _stdout_enc = (sys.stdout.encoding or "").lower()
+    _utf8_out = "utf" in _stdout_enc
+    _BAR_FULL  = "\u2588" if _utf8_out else "#"   # █
+    _BAR_EMPTY = "\u2591" if _utf8_out else "."   # ░
+    _SEP_D     = "\u2550" if _utf8_out else "="   # ═
+    _SEP_L     = "\u2500" if _utf8_out else "-"   # ─
+    _CHECK     = "\u2713" if _utf8_out else "+"   # ✓
+    _CROSS     = "\u2717" if _utf8_out else "x"   # ✗
+
     buf = StringIO()
     console = Console(file=buf, force_terminal=False, highlight=False, width=72)
 
     def bar(score: float, width: int = 16) -> str:
         filled = int((score / 100) * width)
         empty = width - filled
-        return "█" * filled + "░" * empty
+        return _BAR_FULL * filled + _BAR_EMPTY * empty
 
     # Title
     title_text = f"NIGHTJAR AUDIT — {result.name} {result.version}"
-    console.print(f"\n{'═' * 68}")
+    console.print(f"\n{_SEP_D * 68}")
     console.print(f"  {title_text}")
-    console.print(f"{'═' * 68}")
+    console.print(f"{_SEP_D * 68}")
 
     # Score rows
     s = result.scores
@@ -718,13 +739,13 @@ def render_report_card(result: PackageAuditResult) -> str:
         b = bar(score)
         console.print(f"  {label}  {b}  {score:5.1f}%   {grade}")
 
-    console.print(f"{'─' * 68}")
+    console.print(f"{_SEP_L * 68}")
     overall_bar = bar(s.overall)
     console.print(
         f"  OVERALL SCORE         "
         f"  {overall_bar}  {s.overall:5.1f}/100   {s.letter_grade}"
     )
-    console.print(f"{'═' * 68}")
+    console.print(f"{_SEP_D * 68}")
 
     # Stats row
     cve_count = len(result.cves)
@@ -743,16 +764,16 @@ def render_report_card(result: PackageAuditResult) -> str:
     )
     if meta_str:
         console.print(f"  {meta_str}")
-    console.print(f"{'═' * 68}\n")
+    console.print(f"{_SEP_D * 68}\n")
 
     # Findings
     if result.findings:
         console.print("  Findings:")
         for finding in result.findings:
             if "CVE:" in finding or "missing" in finding.lower():
-                console.print(f"  ✗  {finding}")
+                console.print(f"  {_CROSS}  {finding}")
             else:
-                console.print(f"  ✓  {finding}")
+                console.print(f"  {_CHECK}  {finding}")
         console.print()
 
     return buf.getvalue()

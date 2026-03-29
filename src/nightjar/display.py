@@ -143,7 +143,7 @@ class RichStreamingDisplay:
     def __enter__(self) -> "RichStreamingDisplay":
         if HAS_RICH:
             con = self._injected_console or Console(
-                force_terminal=True, highlight=False
+                force_terminal=True, highlight=False, safe_box=True
             )
             self._live = Live(
                 self._build_renderable(),
@@ -235,11 +235,18 @@ class RichStreamingDisplay:
             table.add_row(str(stage_num), name, status_cell, duration_str)
 
         if self.pipeline_done:
+            # Use ASCII fallbacks on cp1252 / narrow-codepage terminals to avoid
+            # UnicodeEncodeError when Rich tries to render the banner.
+            import sys as _sys
+            _enc = (_sys.stdout.encoding or "").lower()
+            _utf8 = "utf" in _enc
+            _verified_char = "\u2713" if _utf8 else "+"  # ✓
+            _fail_char = "\u2717" if _utf8 else "x"      # ✗
             if self.pipeline_verified:
-                banner_text = Text(" ✓ VERIFIED ", style="bold white on green", justify="center")
+                banner_text = Text(f" {_verified_char} VERIFIED ", style="bold white on green", justify="center")
                 border = "green"
             else:
-                banner_text = Text(" ✗ FAIL ", style="bold white on red", justify="center")
+                banner_text = Text(f" {_fail_char} FAIL ", style="bold white on red", justify="center")
                 border = "red"
 
             if self.pipeline_trust_level is not None:
@@ -331,7 +338,7 @@ def _get_console() -> "Console | None":
     global _console
     if _console is None:
         if HAS_RICH:
-            _console = Console(force_terminal=True, highlight=False)
+            _console = Console(force_terminal=True, highlight=False, safe_box=True)
         else:
             _console = None
     return _console

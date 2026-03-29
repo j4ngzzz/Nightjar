@@ -44,8 +44,16 @@ def _import_error(package: str, extra: str = "") -> str:
     )
 
 
+def _is_utf8_stdout() -> bool:
+    """Return True when the current stdout encoding supports UTF-8 characters."""
+    enc = (getattr(sys.stdout, "encoding", None) or "").lower()
+    return "utf" in enc
+
+
 def _fmt_separator() -> str:
-    return "━" * 54
+    # Use Unicode heavy horizontal bar on UTF-8 terminals; plain dashes on
+    # cp1252 / other narrow-codepage Windows terminals to avoid UnicodeEncodeError.
+    return ("\u2501" if _is_utf8_stdout() else "-") * 54  # ━
 
 
 def _fmt_tier_row(label: str, count: int, detail: str = "") -> str:
@@ -424,7 +432,8 @@ def immune_status(db_path: str) -> None:
     }
     for table, label in label_map.items():
         count = trace_counts.get(table, 0)
-        marker = click.style("✓", fg="green") if count > 0 else " "
+        _check = "\u2713" if _is_utf8_stdout() else "+"  # ✓
+        marker = click.style(_check, fg="green") if count > 0 else " "
         click.echo(f"    {marker} {label:<32} {count:>6,}")
     click.echo(f"    {'':>2} {'TOTAL':<32} {total_traces:>6,}")
 
