@@ -13,6 +13,7 @@ Commands:
     explain     Show last verification failure in human-readable form
     scan        Scan a Python file and generate a .card.md spec
     infer       Infer contracts for a Python function via LLM + CrossHair
+    spec        Smart router — auto-routes to scan / infer / auto
 
 Exit Codes:
     0  All stages PASS
@@ -26,6 +27,7 @@ Exit Codes:
 import json
 import os
 import re
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -342,16 +344,60 @@ def _load_verify_report(contract_path: str) -> Optional[dict]:
 
 # ── CLI Group and Commands ───────────────────────────────
 
+COMMAND_TIERS: dict[str, tuple[int, str]] = {
+    "spec": (1, "Start here"),
+    "verify": (1, "Start here"),
+    "audit": (1, "Start here"),
+    "build": (2, "Build pipeline"),
+    "ship": (2, "Build pipeline"),
+    "retry": (2, "Build pipeline"),
+    "watch": (3, "Development"),
+    "explain": (3, "Development"),
+    "optimize": (3, "Development"),
+    "badge": (3, "Development"),
+    "lock": (3, "Development"),
+    "serve": (4, "Integration"),
+    "shadow-ci": (4, "Integration"),
+    "hook": (4, "Integration"),
+    "mcp": (4, "Integration"),
+    "benchmark": (4, "Integration"),
+    "immune": (5, "Advanced"),
+    "init": (5, "Advanced"),
+    "generate": (5, "Advanced"),
+    "scan": (5, "Advanced (use 'spec')"),
+    "infer": (5, "Advanced (use 'spec')"),
+    "auto": (5, "Advanced (use 'spec')"),
+}
 
-@click.group(invoke_without_command=True)
+
+class NightjarGroup(click.Group):
+    """Click Group subclass that renders commands grouped by tier."""
+
+    def format_commands(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
+        sections: dict[tuple[int, str], list[tuple[str, str]]] = defaultdict(list)
+        for name in self.list_commands(ctx):
+            cmd = self.commands.get(name)
+            if cmd is None or cmd.hidden:
+                continue
+            tier, section = COMMAND_TIERS.get(name, (99, "Other"))
+            help_str = cmd.get_short_help_str(limit=formatter.width or 80)
+            sections[(tier, section)].append((name, help_str))
+        for key in sorted(sections.keys()):
+            _, section_name = key
+            with formatter.section(section_name):
+                formatter.write_dl(sections[key])
+
+
+@click.group(cls=NightjarGroup, invoke_without_command=True)
 @click.version_option(version=__version__, prog_name="nightjar")
 @click.pass_context
 def main(ctx: click.Context) -> None:
-    """nightjar -- formal verification CLI for AI-generated code.
+    """nightjar — vericoding CLI for Python.
 
-    Verification layer for AI-generated code. Parse .card.md specs,
-    generate verified code via LLM + Dafny, and run a 5-stage
-    verification pipeline.
+    Quick start:
+      nightjar spec src/mymodule.py    # generate spec from code
+      nightjar verify --fast           # verify all specs
+      nightjar audit requests          # audit any PyPI package
     """
     ctx.ensure_object(dict)
     ctx.obj["config"] = _load_config()
@@ -1826,6 +1872,212 @@ def mcp_cmd(transport: str) -> None:
     except Exception as e:  # noqa: BLE001
         click.echo(f"MCP server error: {e}", err=True)
         raise SystemExit(EXIT_CONFIG_ERROR)
+
+
+# ── spec smart-router command ────────────────────────────────────────────────
+
+
+def _route_spec_input(input_target: str, mode: Optional[str], model_available: bool) -> str:
+    """Route 'nightjar spec' to the correct sub-mode.
+
+    Returns one of: "scan_file" | "scan_dir" | "infer" | "auto"
+
+    Priority:
+      1. --mode flag is authoritative (if provided)
+      2. Path exists as directory                → scan_dir
+      3. Path exists as file + model available   → infer
+      4. Path exists as file + no model          → scan_file
+      5. Looks like a .py path (non-existent)    → scan_file (will error clearly)
+      6. Anything else                           → auto (NL intent)
+    """
+    p = Path(input_target)
+
+    # Priority 1: explicit --mode flag overrides everything
+    if mode is not None:
+        if mode == "scan":
+            return "scan_dir" if p.is_dir() else "scan_file"
+        if mode == "infer":
+            return "infer"
+        if mode == "auto":
+            return "auto"
+
+    # Priority 2: existing directory
+    if p.is_dir():
+        return "scan_dir"
+
+    # Priority 3 & 4: existing file
+    if p.is_file():
+        return "infer" if model_available else "scan_file"
+
+    # Priority 5: looks like a Python file path (non-existent) → scan will report clearly
+    if input_target.endswith(".py"):
+        return "scan_file"
+
+    # Priority 6: treat as natural-language intent
+    return "auto"
+
+
+def _announce_routing(route: str, model: str, *, err: bool = True) -> None:
+    """Print the auto-detected routing decision to stderr.
+
+    Args:
+        route:  The resolved route string (scan_file | scan_dir | infer | auto).
+        model:  The resolved model name (used for infer hint).
+        err:    Write to stderr when True (default).
+    """
+    _hints = {
+        "scan_file": "use --mode infer for LLM-enhanced contracts",
+        "scan_dir":  "use --mode infer for LLM-enhanced contracts",
+        "infer":     "use --mode scan for pure AST extraction",
+        "auto":      "use --mode scan with a file path for AST extraction",
+    }
+    _labels = {
+        "scan_file": "scan (file)",
+        "scan_dir":  "scan (dir)",
+        "infer":     f"infer (model: {model})" if model else "infer",
+        "auto":      "auto (natural language)",
+    }
+    label = _labels.get(route, route)
+    hint = _hints.get(route, "")
+    msg = f"spec: routing to {label}"
+    if hint:
+        msg = f"{msg} — {hint}"
+    click.echo(msg, err=err)
+
+
+@main.command()
+@click.argument("input_target")
+@click.option(
+    "--mode",
+    type=click.Choice(["scan", "infer", "auto"]),
+    default=None,
+    help="Force routing mode (default: auto-detect from input).",
+)
+@click.option("--approve-all", is_flag=True, default=False,
+              help="Auto-approve all candidates without prompting.")
+@click.option("--output", "-o", default=None,
+              help="Output path / directory for the generated .card.md.")
+@click.option("--model", default=None,
+              help="LLM model (default: NIGHTJAR_MODEL env or config).")
+@click.option("--verify", "run_verify", is_flag=True, default=False,
+              help="Run verification pipeline after generating spec.")
+@click.option("--llm", is_flag=True, default=False,
+              help="Enhance scan results with LLM suggestions (scan mode only).")
+@click.option("--function", "function_name", default=None,
+              help="Target a specific function by name (infer mode only).")
+@click.option("--no-verify", "skip_verify", is_flag=True, default=False,
+              help="Skip CrossHair symbolic verification (infer mode only).")
+@click.option("--append-to-card", is_flag=True, default=False,
+              help="Append inferred contracts to existing .card.md (infer mode only).")
+@click.option("--max-iterations", default=5, show_default=True,
+              help="Maximum CrossHair repair iterations (infer mode only).")
+@click.option("--workers", default=None, type=int,
+              help="Parallel workers for directory scan (scan dir mode only).")
+@click.option(
+    "--min-signal",
+    default="low",
+    type=click.Choice(["low", "medium", "high"]),
+    help="Minimum signal level to include (scan dir mode only).",
+)
+@click.option("--smart-sort", is_flag=True, default=False,
+              help="Sort files by security criticality (scan dir mode only).")
+@click.pass_context
+def spec(
+    ctx: click.Context,
+    input_target: str,
+    mode: Optional[str],
+    approve_all: bool,
+    output: Optional[str],
+    model: Optional[str],
+    run_verify: bool,
+    llm: bool,
+    function_name: Optional[str],
+    skip_verify: bool,
+    append_to_card: bool,
+    max_iterations: int,
+    workers: Optional[int],
+    min_signal: str,
+    smart_sort: bool,
+) -> None:
+    """Generate a .card.md spec — smart routes to scan, infer, or auto.
+
+    INPUT_TARGET can be:
+      - a Python file    → scans AST (or infers with LLM if model is set)
+      - a directory      → scans all .py files recursively
+      - a quoted string  → generates spec from natural language intent
+
+    Examples:
+        nightjar spec src/payment.py
+        nightjar spec src/payment.py --mode infer
+        nightjar spec src/
+        nightjar spec "payment processing with refund support"
+    """
+    config = ctx.obj["config"]
+    resolved_model = _get_model(model, config)
+    model_available = bool(resolved_model)
+
+    route = _route_spec_input(input_target, mode, model_available)
+
+    # Announce routing decision to stderr only when mode was auto-detected
+    if mode is None:
+        _announce_routing(route, resolved_model, err=True)
+
+    if route in ("scan_file", "scan_dir"):
+        ctx.invoke(
+            scan,
+            path=input_target,
+            llm=llm,
+            output=output,
+            run_verify=run_verify,
+            approve_all=approve_all,
+            workers=workers,
+            min_signal=min_signal,
+            smart_sort=smart_sort,
+        )
+    elif route == "infer":
+        # Pass model=model (the raw CLI value, not resolved_model) so infer
+        # can call _get_model() itself with its own config context, preserving
+        # its existing resolution order (flag → env → config).
+        ctx.invoke(
+            infer,
+            file_path=input_target,
+            function_name=function_name,
+            skip_verify=skip_verify,
+            append_to_card=append_to_card,
+            model=model,
+            max_iterations=max_iterations,
+        )
+    elif route == "auto":
+        # Call run_auto directly to avoid Click's exception propagation issue
+        # when ctx.invoke() is used with commands that call ctx.exit() inside
+        # a bare `except Exception` block.
+        try:
+            from nightjar.auto import run_auto
+            result = run_auto(
+                nl_intent=input_target,
+                output_path=output or ".card",
+                model=resolved_model,
+                yes=approve_all,
+            )
+            if result.card_path:
+                click.echo(f"Created spec: {result.card_path}")
+                total = result.approved_count + result.skipped_count
+                click.echo(
+                    f"Rules: {total} suggested, {result.approved_count} added, "
+                    f"{result.skipped_count} skipped"
+                )
+                ctx.exit(EXIT_PASS)
+            else:
+                click.echo("No spec generated (all invariants rejected or error).")
+                ctx.exit(EXIT_FAIL)
+        except click.exceptions.Exit:
+            raise  # re-raise Exit so Click can handle exit codes correctly
+        except ImportError as e:
+            click.echo(f"Error: auto module not available ({e})", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+        except Exception as e:  # noqa: BLE001
+            click.echo(f"Auto error: {e}", err=True)
+            ctx.exit(EXIT_LLM_ERROR)
 
 
 @main.command()

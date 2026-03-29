@@ -7,7 +7,7 @@
 <div align="center">
 
 [![PyPI version](https://img.shields.io/pypi/v/nightjar-verify.svg?style=for-the-badge&labelColor=0d0b09&color=D4920A)](https://pypi.org/project/nightjar-verify/)
-[![Tests](https://img.shields.io/badge/tests-1841_passed-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml)
+[![Tests](https://img.shields.io/badge/tests-1958_passed-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](LICENSE)
 [![Verified with Dafny](https://img.shields.io/badge/verified_with-Dafny_4.x-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](https://github.com/dafny-lang/dafny)
 [![CI Verify](https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml/badge.svg?style=for-the-badge)](https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml)
@@ -286,6 +286,8 @@ Nightjar dogfoods its own pipeline: CI runs `nightjar verify` on the specs in `.
 - [x] TUI dashboard (`--tui` flag on verify)
 - [x] Immune system CLI (`immune run|collect|status`)
 - [x] Ship provenance (SHA-256 hash chain)
+- [x] Hook installer (`nightjar hook install`) — agent hooks for Claude Code, Cursor, Windsurf, Kiro
+- [x] MCP CLI (`nightjar mcp`) — launch MCP server directly from CLI
 - [ ] VSCode extension (LSP diagnostics)
 - [ ] Benchmark scores (vericoding POPL 2026)
 - [ ] Docker image published to ghcr.io (Dockerfile ready, not yet published)
@@ -335,6 +337,13 @@ Nightjar dogfoods its own pipeline: CI runs `nightjar verify` on the specs in `.
 | `nightjar badge` | Print shields.io badge URL |
 | `nightjar immune run\|collect\|status` | Runtime trace mining and immune system |
 
+**Integration & tooling**
+
+| Command | What it does |
+|---------|-------------|
+| `nightjar hook install\|remove\|list` | Install/manage agent hooks (Claude Code, Cursor, Windsurf, Kiro) |
+| `nightjar mcp` | Launch the MCP server (stdio or SSE transport) |
+
 Full reference: [docs/cli-reference.md](docs/cli-reference.md)
 
 ---
@@ -349,7 +358,8 @@ Full reference: [docs/cli-reference.md](docs/cli-reference.md)
 | **VS Code** | `nightjar verify --format=vscode` | Squiggles in Problems panel |
 | **Claude Code** | `nightjar-verify` skill | Auto-verify after AI generates code |
 | **OpenClaw** | `skills/openclaw/nightjar-verify/` | Formal proof for AI agents |
-| **MCP Server** | 3 tools: verify_contract, get_violations, suggest_fix | Use from any MCP client |
+| **MCP Server** | `nightjar mcp` (or add to IDE MCP config) | Use from Cursor, Windsurf, Claude Code, Kiro |
+| **Hook CLI** | `nightjar hook install` | Install pre/post hooks for Claude Code, Cursor, Windsurf, Kiro |
 | **Canvas UI** | `nightjar serve` | Local web verification dashboard |
 | **Docker** | `docker build -t nightjar .` | Dafny bundled, zero install |
 | **EU CRA Compliance** | `nightjar ship` generates compliance cert | September 2026 deadline |
@@ -376,7 +386,7 @@ That's the point. AI-generated code is probabilistically correct. Formal methods
 ## Links
 
 - [Spec format](docs/spec-format.md) — `.card.md` reference, all fields, invariant tiers
-- [CLI reference](docs/cli-reference.md) — all 19 commands with flags and examples
+- [CLI reference](docs/cli-reference.md) — all 25 commands with flags and examples
 - [FAQ](docs/faq.md) — getting started, integrations, licensing
 - [Configuration](docs/configuration.md) — `nightjar.toml` and all environment variables
 - [Architecture](docs/ARCHITECTURE.md) — how the pipeline works internally

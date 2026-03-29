@@ -375,6 +375,23 @@ nightjar immune run|collect|status
       run     — full mine + enrich + debate + append cycle
       collect — start trace collection for a running process
       status  — show last immune run report and pending candidates
+
+nightjar hook install|remove|list [--target TARGET] [--project-dir DIR]
+    Manage coding-agent integration hooks (Claude Code, Cursor, Windsurf, Kiro)
+      install — install pre-tool and post-tool hooks
+      remove  — remove installed hooks
+      list    — show installed hooks and their status
+    Targets: claude-code | cursor | windsurf | kiro | all (default)
+
+nightjar mcp [--transport stdio|sse]
+    Launch the Nightjar MCP server
+    Compatible with Cursor, Windsurf, Claude Code, Kiro, and any MCP client
+    Default transport: stdio
+
+nightjar shadow-ci [--mode shadow|strict] [--spec PATH]
+    Run verification in shadow (non-blocking) or strict mode
+    shadow — runs verification, reports results, never fails the build
+    strict — fails the build if verification fails
 ```
 
 ### Flags
@@ -557,7 +574,7 @@ To configure in Claude Code:
 ```
 src/
 ├── nightjar/              Main CLI and verification pipeline
-│   ├── cli.py             Click commands — 17 commands + immune group
+│   ├── cli.py             Click commands — 25 commands (incl. subcommands)
 │   ├── parser.py          .card.md parser (YAML + Markdown)
 │   ├── generator.py       Analyst → Formalizer → Coder pipeline
 │   ├── verifier.py        Pipeline orchestrator (asyncio)
