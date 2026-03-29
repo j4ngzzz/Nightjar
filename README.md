@@ -7,7 +7,7 @@
 <div align="center">
 
 [![PyPI version](https://img.shields.io/pypi/v/nightjar-verify.svg?style=for-the-badge&labelColor=0d0b09&color=D4920A)](https://pypi.org/project/nightjar-verify/)
-[![Tests](https://img.shields.io/badge/tests-1267_passed-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1841_passed-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](tests/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](LICENSE)
 [![Verified with Dafny](https://img.shields.io/badge/verified_with-Dafny_4.x-informational?style=for-the-badge&labelColor=0d0b09&color=D4920A)](https://github.com/dafny-lang/dafny)
 [![CI Verify](https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml/badge.svg?style=for-the-badge)](https://github.com/j4ngzzz/Nightjar/actions/workflows/verify.yml)
@@ -59,7 +59,7 @@ Python 3.11+. Dafny 4.x is optional — without it, Nightjar falls back to Cross
 
 ## What it found
 
-74 confirmed bugs across 34 codebases. 62 hours. 175 commits. Every finding runs in one script.
+74 confirmed bugs across 34 codebases. 62 hours. 196 commits. Every finding runs in one script.
 
 ---
 
@@ -239,7 +239,23 @@ Nightjar doesn't replace any of these. It checks whether the code satisfies the 
 
 ## How it works
 
-You write a `.card.md` spec. An LLM generates the implementation. Nightjar runs five stages cheapest-first and short-circuits on the first failure.
+**Already have code?** Point Nightjar at it — no spec required to start:
+
+```bash
+nightjar scan app.py          # extracts invariants from your code → .card.md
+nightjar infer app.py         # LLM generates contracts, CrossHair verifies them
+nightjar audit requests       # scan any PyPI package for contract coverage
+```
+
+**Building from scratch?** Write a `.card.md` spec. An LLM generates the implementation. Nightjar proves it's correct.
+
+```bash
+nightjar init payment
+nightjar generate
+nightjar verify
+```
+
+Either way, the pipeline runs six stages cheapest-first and short-circuits on the first failure:
 
 ```mermaid
 graph LR
@@ -275,7 +291,7 @@ nightjar generate             LLM generates code from .card.md
 nightjar verify               Run full verification pipeline
 nightjar verify --fast        Stages 0-3 only (skip Stage 2.5 + Dafny)
 nightjar build                generate + verify + compile to target
-nightjar ship                 build + sign artifact
+nightjar ship                 build + package artifact
 nightjar retry                Force retry with LLM repair loop
 nightjar lock                 Freeze deps into deps.lock with hashes
 nightjar explain              Show last failure with LP dual diagnosis
@@ -307,6 +323,23 @@ nightjar verify --output-sarif results.sarif  # SARIF 2.1.0 for GitHub Code Scan
 docker pull ghcr.io/j4ngzzz/nightjar  # ~300MB, Dafny 4.8.0 bundled
 docker run ghcr.io/j4ngzzz/nightjar verify --spec .card/payment.card.md
 ```
+
+---
+
+## Integrations
+
+| Integration | Setup | What you get |
+|-------------|-------|-------------|
+| **GitHub Actions** | Add `j4ngzzz/Nightjar@v1` to workflow | SARIF annotations on PRs |
+| **Pre-commit** | `nightjar-verify` + `nightjar-scan` hooks | Block unverified commits |
+| **pytest** | `pytest --nightjar` flag | Verification as test phase |
+| **VS Code** | `nightjar verify --format=vscode` | Squiggles in Problems panel |
+| **Claude Code** | `nightjar-verify` skill | Auto-verify after AI generates code |
+| **OpenClaw** | `skills/openclaw/nightjar-verify/` | Formal proof for AI agents |
+| **MCP Server** | 3 tools: verify_contract, get_violations, suggest_fix | Use from any MCP client |
+| **Docker** | `ghcr.io/j4ngzzz/nightjar` | Dafny bundled, zero install |
+
+Guides: [CI setup](docs/tutorials/ci-one-commit.md) · [Quickstart](docs/tutorials/quickstart-5min.md) · [MCP listing](docs/mcp-listing.md) · [OpenClaw skill](skills/openclaw/nightjar-verify/)
 
 ---
 

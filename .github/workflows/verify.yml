@@ -16,9 +16,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -e ".[dev]"
+      - run: pip install -e ".[dev]" --no-cache-dir
       - name: Run unit tests
-        run: python -m pytest tests/unit/ -m "not integration" --tb=short -v
+        run: python -m pytest tests/unit/ -p no:logfire -m "not integration" --tb=short -q
+        timeout-minutes: 10
       - name: Verify Nightjar specs (dogfooding)
         run: |
           python -c "
