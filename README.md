@@ -42,6 +42,40 @@ Under the hood, Nightjar coordinates Hypothesis (property-based testing), CrossH
 
 **For existing code:** `nightjar scan` extracts specs from your codebase automatically. No manual spec writing needed to start.
 
+Nightjar implements **contractual computing** — the principle that the contract (spec) is the only permanent artifact. Code is disposable and regenerated from scratch every build. Contracts are discoverable, transferable, and compounding. The more you specify, the more Nightjar can prove.
+
+---
+
+## The spec format
+
+Nightjar specs are `.card.md` files — Markdown with YAML frontmatter. Here's what one looks like:
+
+```yaml
+# .card/payment.card.md
+card-version: "1.0"
+id: payment
+title: Payment Processing
+module:
+  path: src/payment.py
+contract:
+  invariants:
+    - id: INV-001
+      tier: property        # Hypothesis PBT
+      statement: "amount > 0"
+      rationale: "Charges must be positive"
+    - id: INV-002
+      tier: formal           # Dafny proof
+      statement: "refund <= original_charge"
+      rationale: "Cannot refund more than was charged"
+```
+
+Three tiers: `example` (unit tests), `property` (Hypothesis PBT), `formal` (Dafny/CrossHair proof). Each tier is progressively more expensive and more thorough.
+
+**Don't want to write specs?** Three zero-friction paths:
+- `nightjar scan app.py` — extracts specs from existing code via AST analysis
+- `nightjar infer app.py` — LLM generates specs, CrossHair verifies them
+- `nightjar auto "payment processing with refunds"` — natural language → spec via interactive Q&A
+
 ---
 
 ## The Origin
@@ -73,6 +107,9 @@ Python 3.11+. Dafny 4.x is optional — without it, Nightjar falls back to Cross
 
 > [!NOTE]
 > **Existing codebase?** Run `nightjar scan app.py` to bootstrap specs from your code. No manual spec writing needed to start.
+
+> [!TIP]
+> **Dafny errors confusing?** Nightjar translates all 20 common Dafny verification errors into Python-developer-friendly explanations with fix hints. You never need to learn Dafny syntax.
 
 ---
 
@@ -304,6 +341,8 @@ graph LR
 
 When Dafny fails, the CEGIS loop extracts the concrete counterexample and puts it in the next prompt. Simple functions skip Dafny and route to CrossHair (about 70% faster) — routing is automatic based on cyclomatic complexity.
 
+A behavioral safety gate prevents code regeneration from silently dropping invariants — if new code loses properties the old code had, Nightjar blocks the build.
+
 ### Pipeline Status
 
 - [x] Stage 0 — Preflight (syntax, dead constraints)
@@ -391,6 +430,8 @@ docker run ghcr.io/j4ngzzz/nightjar verify --spec .card/payment.card.md
 | **MCP Server** | 3 tools: verify_contract, get_violations, suggest_fix | Use from any MCP client |
 | **Canvas UI** | `nightjar serve` | Local web verification dashboard |
 | **Docker** | `ghcr.io/j4ngzzz/nightjar` | Dafny bundled, zero install |
+| **EU CRA Compliance** | `nightjar ship` generates compliance cert | September 2026 deadline |
+| **Shadow CI** | `nightjar shadow-ci --mode shadow` | Non-blocking verification in CI |
 
 Guides: [CI setup](docs/tutorials/ci-one-commit.md) · [Quickstart](docs/tutorials/quickstart-5min.md) · [MCP listing](docs/mcp-listing.md) · [OpenClaw skill](skills/openclaw/nightjar-verify/)
 

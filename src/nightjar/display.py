@@ -459,6 +459,15 @@ def format_verify_result(result: VerifyResult) -> None:
                 line = err.get("line", "")
                 line_str = f" (line {line})" if line else ""
                 error_lines.append(f"  - {msg}{line_str}")
+                # Dafny error translation — Python-friendly explanation
+                try:
+                    from nightjar.stages.formal import translate_dafny_error
+                    translation = translate_dafny_error(msg)
+                    if translation["category"] != "other":
+                        error_lines.append(f"    Python meaning: {translation['summary']}")
+                        error_lines.append(f"    Fix hint: {translation['fix_hint']}")
+                except Exception:
+                    pass
 
             error_text = "\n".join(error_lines)
 
@@ -511,6 +520,15 @@ def _format_verify_result_plain(result: VerifyResult) -> None:
             for err in stage.errors:
                 msg = err.get("message", "unknown error")
                 print(f"  - {msg}")
+                # Dafny error translation — Python-friendly explanation
+                try:
+                    from nightjar.stages.formal import translate_dafny_error
+                    translation = translate_dafny_error(msg)
+                    if translation["category"] != "other":
+                        print(f"    Python meaning: {translation['summary']}")
+                        print(f"    Fix hint: {translation['fix_hint']}")
+                except Exception:
+                    pass
             if stage.counterexample:
                 print(f"  Counterexample: {stage.counterexample}")
 

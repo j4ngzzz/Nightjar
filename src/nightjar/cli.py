@@ -662,6 +662,33 @@ def ship(
     except Exception as e:  # noqa: BLE001
         click.echo(f"Warning: provenance tracking failed: {e}", err=True)
 
+    # ── EU CRA Compliance Certificate ───────────────────────────────────────
+    try:
+        from nightjar.compliance import generate_compliance_cert, export_compliance_cert
+        _verify_report: dict = result.__dict__ if hasattr(result, "__dict__") else {}
+        # Build a plain dict from the VerifyResult for the compliance module
+        _report_dict = {
+            "verified": result.verified,
+            "confidence_score": int(result.confidence.total) if result.confidence is not None else 0,
+            "module": Path(contract).stem,
+            "stages": [
+                {
+                    "name": s.name,
+                    "status": s.status.value if hasattr(s.status, "value") else str(s.status),
+                    "errors": s.errors or [],
+                }
+                for s in result.stages
+            ],
+        }
+        cert = generate_compliance_cert(_report_dict)
+        cert_path = Path(".card") / "compliance_cert.json"
+        export_compliance_cert(cert, str(cert_path))
+        click.echo(f"Compliance cert: {cert_path}")
+    except ImportError:
+        pass  # compliance module not critical
+    except Exception as e:
+        click.echo(f"Warning: compliance cert failed: {e}", err=True)
+
     click.echo(f"SHIP COMPLETE -- verified artifact ready (target: {resolved_target})")
     ctx.exit(EXIT_PASS)
 
@@ -1513,6 +1540,34 @@ def benchmark(
         ctx.exit(EXIT_PASS)
     else:
         ctx.exit(EXIT_FAIL)
+
+
+@main.command("shadow-ci")
+@click.option("--mode", default="shadow", type=click.Choice(["shadow", "strict"]))
+@click.option("--spec", required=True, type=click.Path(exists=True),
+              help="Path to verify.json report from a nightjar verify run.")
+def shadow_ci(mode: str, spec: str) -> None:
+    """Run verification in CI mode — shadow (non-blocking) or strict.
+
+    In shadow mode the command always exits 0 regardless of outcome,
+    so it never blocks a PR. In strict mode it exits 1 on failure.
+
+    References:
+        Scout 7 Feature 2 — Shadow CI mode.
+    """
+    try:
+        from nightjar.shadow_ci import run_shadow_ci
+        result = run_shadow_ci(report_path=spec, mode=mode)
+        if result.pr_comment:
+            click.echo(result.pr_comment)
+        else:
+            import json as _json
+            click.echo(_json.dumps(result.report, indent=2))
+        if mode == "strict" and not result.report.get("verified", False):
+            raise SystemExit(1)
+    except ImportError:
+        click.echo("Shadow CI module not available.", err=True)
+        raise SystemExit(2)
 
 
 # ── Immune system commands ──────────────────────────────────────────────
