@@ -319,7 +319,7 @@ nightjar ship                 build + package artifact
 nightjar retry                Force retry with LLM repair loop
 nightjar lock                 Freeze deps into deps.lock with hashes
 nightjar explain              Show last failure with LP dual diagnosis
-nightjar optimize             Run DSPy SIMBA prompt optimization
+nightjar optimize             Run LLM prompt optimization (hill-climbing)
 nightjar auto                 Generate .card.md specs from natural language intent
 nightjar watch                File-watching daemon with tiered verification
 nightjar badge                Print shields.io badge URL for last verification run

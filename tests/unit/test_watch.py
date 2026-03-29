@@ -17,6 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytest.importorskip("watchdog", reason="watchdog not installed — skip watch tests")
+
 from nightjar.watch import (
     CardChangeHandler,
     run_tiered_verification,

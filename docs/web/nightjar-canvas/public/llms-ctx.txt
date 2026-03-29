@@ -348,7 +348,7 @@ nightjar explain
     Display last verification failure with LP dual root-cause diagnosis
 
 nightjar optimize
-    Run DSPy SIMBA prompt optimization on the generation pipeline
+    Run LLM prompt optimization (hill-climbing) on the generation pipeline
 ```
 
 ### Flags

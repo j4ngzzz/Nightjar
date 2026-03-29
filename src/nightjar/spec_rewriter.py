@@ -1,8 +1,8 @@
 """Spec Preprocessing Rewrite Rules — U1.1.
 
-19 deterministic rewrite rules applied to .card.md specs BEFORE LLM generation.
-Based on Proven (github.com/melek/proven, MIT) which demonstrates these rules
-double Dafny success rates: 19%→41% on local models, 65%→78% on Claude Sonnet.
+5 rule groups covering 19 normalization patterns applied to .card.md specs BEFORE
+LLM generation. Based on Proven (github.com/melek/proven, MIT) which demonstrates
+these rules double Dafny success rates: 19%→41% on local models, 65%→78% on Claude Sonnet.
 
 Pipeline insertion: .card.md → spec_rewriter.py → rewritten spec → LLM generation
 
@@ -262,7 +262,7 @@ def _apply_dedup_and_ordering(
 # ─── Public API ──────────────────────────────────────────────────────────────
 
 def rewrite_spec(spec: CardSpec) -> RewriteResult:
-    """Apply all 19 Proven rewrite rules to a CardSpec before LLM generation.
+    """Apply all 5 Proven rule groups (19 normalization patterns) to a CardSpec before LLM generation.
 
     Rules transform specs into forms Z3/Dafny handles more efficiently:
       Group 1 (rules 1-3):  Quantifier normalization

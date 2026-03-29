@@ -1,11 +1,11 @@
 """Analyst prompt template v1.
 
 Extracted from generator.py run_analyst() — the original prompt used in
-Swarm #1. This is the baseline for DSPy SIMBA optimization [REF-T26].
+Swarm #1. This is the baseline for LLM prompt optimization (hill-climbing).
 
 References:
 - [REF-C03] Analyst stage from [REF-P07] ReDeFo
-- [REF-T26] DSPy SIMBA will create v2, v3, etc.
+- [REF-T26] DSPy — hill-climbing optimization creates v2, v3, etc.
 """
 
 SYSTEM_PROMPT = (

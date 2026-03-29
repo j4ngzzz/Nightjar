@@ -6,7 +6,7 @@ Measures verification pass rate. Keeps if improved, discards if not.
 
 References:
 - [REF-P04] AlphaVerus — self-improving loop
-- [REF-T26] DSPy — prompt variation strategies
+- [REF-T26] DSPy — prompt variation strategies (inspiration)
 """
 
 import os

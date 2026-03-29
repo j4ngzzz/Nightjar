@@ -350,7 +350,7 @@ On FAIL from any stage:
 
 Before regenerating code, the Proven rewrite rules [REF-NEW-01] are applied to the spec itself:
 
-- 19 proven rewrite rules transform ambiguous or underspecified invariants
+- 5 rule groups covering 19 normalization patterns transform ambiguous or underspecified invariants
 - `spec_rewriter.py` runs as a pre-processing step before each generation attempt
 - Catches common spec patterns that lead to Dafny proof failures
 
@@ -385,7 +385,7 @@ counterexample:
 .card.md spec
      ↓
 SPEC REWRITER (pre-processing)
-  Applies 19 Proven rewrite rules [REF-NEW-01]
+  Applies 5 Proven rule groups (19 normalization patterns) [REF-NEW-01]
   Normalizes ambiguous invariants before generation
      ↓
 ANALYST AGENT (LLM call 1)
@@ -438,7 +438,7 @@ For Dafny-specific repair calls, Re:Form fine-tuned models [REF-P32] can be used
 STAGE 1: SIGNAL COLLECTION
   OpenTelemetry [REF-T15] → API-level spans (auto-instrumented)
   MonkeyType [REF-T12] → function-level type traces
-  Sentry error capture → semantic fingerprinting [Section 11]
+  Sentry webhook payloads → semantic fingerprinting [Section 11]
 
 STAGE 2: INVARIANT CANDIDATE GENERATION
   Reimplemented DynamicInvariants algorithm → value invariants
@@ -612,7 +612,7 @@ COMMANDS:
   nightjar retry [--max N]        Force retry with LLM repair loop
   nightjar lock                   Freeze deps into deps.lock with hashes
   nightjar explain                Show last failure with LP dual diagnosis
-  nightjar optimize               Run DSPy SIMBA prompt optimization [REF-T26]
+  nightjar optimize               Run LLM prompt optimization (hill-climbing) [REF-T26]
   nightjar auto                   Generate .card.md specs from natural language intent
   nightjar watch                  File-watching daemon with tiered verification
   nightjar badge                  Print shields.io badge URL for last verification run
@@ -655,7 +655,7 @@ DEVELOPER writes .card.md
         ↓
 nightjar build
         ↓
-SPEC REWRITER applies 19 Proven rules
+SPEC REWRITER applies 5 Proven rule groups (19 patterns)
         ↓
 PARSE .card.md → extract contract + invariants + acceptance criteria
         ↓
@@ -678,7 +678,7 @@ OUTPUT
   .card/verify.json → verification report
         ↓
 IMMUNE SYSTEM monitors production [Section 6]
-  Sentry errors → candidate invariants [Section 11]
+  Sentry webhook payloads → candidate invariants [Section 11]
   Failures → Wonda quality scoring → adversarial debate → .card.md updated
   Next build is safer
 ```
@@ -687,9 +687,9 @@ IMMUNE SYSTEM monitors production [Section 6]
 
 ## 11. Observability
 
-### Sentry Integration
+### Sentry Webhook Payload Parser
 
-`sentry_integration.py` feeds Sentry error events into the immune system pipeline:
+`sentry_integration.py` parses Sentry-format JSON payloads into immune system invariant candidates. It does not use the sentry_sdk and does not connect to Sentry directly — it only processes webhook payloads your server receives.
 
 ```python
 sentry_event_to_candidate(event)  # extract invariant candidate from error
@@ -698,7 +698,7 @@ process_webhook_payload(payload)   # handle Sentry webhook callbacks
 get_sentry_dsn()                   # DSN management
 ```
 
-Sentry errors become invariant candidates. The immune system verifies them, scores them with Wonda, and — if they pass adversarial debate — commits them to the spec. Production failures directly improve future verification coverage.
+Sentry error payloads become invariant candidates. The immune system verifies them, scores them with Wonda, and — if they pass adversarial debate — commits them to the spec. Production failures directly improve future verification coverage.
 
 ### GitNexus Blast Radius Hooks
 
@@ -791,14 +791,14 @@ project/
 │   │   ├── parser.py               # .card.md parser
 │   │   ├── generator.py            # LLM generation pipeline [REF-C03]
 │   │   ├── verifier.py             # Verification pipeline orchestrator
-│   │   ├── spec_rewriter.py        # 19 Proven rewrite rules [REF-NEW-01]
+│   │   ├── spec_rewriter.py        # 5 rule groups / 19 normalization patterns [REF-NEW-01]
 │   │   ├── retry.py                # CEGIS retry loop [REF-NEW-02, REF-C02]
 │   │   ├── diagnosis.py            # LP dual root-cause diagnosis [REF-NEW-03]
 │   │   ├── negation_proof.py       # Negation-proof validation [REF-NEW-07]
 │   │   ├── oracle_lifter.py        # Test oracle lifting [REF-NEW-06]
 │   │   ├── tui.py                  # Textual TUI dashboard
 │   │   ├── display.py              # Rich streaming DisplayCallback
-│   │   ├── sentry_integration.py   # Sentry → immune feed [Section 11]
+│   │   ├── sentry_integration.py   # Sentry webhook payload parser [Section 11]
 │   │   ├── gitnexus_hooks.py       # Blast radius warnings [Section 11]
 │   │   ├── mcp_server.py           # MCP server [REF-T18]
 │   │   └── stages/
@@ -834,7 +834,7 @@ project/
 | IDE integration | MCP server | Universal bus for all vibe coding tools | [REF-T18] |
 | Retry pattern | Clover + CEGIS | 87% correct acceptance, counterexample-guided repair | [REF-P03, REF-NEW-02] |
 | Error format | DafnyPro structured | Enables targeted LLM repair | [REF-P06] |
-| Spec preprocessing | 19 Proven rewrite rules | Normalises ambiguous specs before generation | [REF-NEW-01] |
+| Spec preprocessing | 5 rule groups (19 normalization patterns) | Normalises ambiguous specs before generation | [REF-NEW-01] |
 | Negation validation | Stage 2.5 CrossHair | Catches degenerate specs before expensive Dafny | [REF-NEW-07] |
 | Complexity routing | SafePilot cyclomatic | ~70% wall-time savings on typical codebases | [REF-NEW-08] |
 | Root-cause diagnosis | LP duality shadow prices | Replaces "5 retries failed" with actionable root cause | [REF-NEW-03] |
@@ -848,7 +848,7 @@ project/
 | Immune system enforcement | icontract decorators | Runtime DBC for Python | [REF-T10] |
 | TUI framework | Textual | Reactive widgets, thread-safe, terminal-native | [REF-T27] |
 | Streaming output | Rich DisplayCallback | Protocol-based, NullDisplay default for library use | [REF-T28] |
-| Error observability | Sentry → immune feed | Production errors become invariant candidates automatically | |
+| Error observability | Sentry webhook payload parser | Parses Sentry-format payloads into invariant candidates (no sentry_sdk) | |
 | Impact analysis | GitNexus blast radius | Warns before regenerating high-impact modules | |
 | Output formats | SARIF 2.1.0 + VS Code | GitHub Code Scanning integration; IDE inline errors | |
 | Docker image | Multi-stage, Dafny bundled | Hermetic CI environment, ~300MB | |

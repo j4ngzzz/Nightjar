@@ -62,7 +62,7 @@ invariants:
 
 ## Intent
 
-Record every verification run to a SQLite database for self-evolution analysis. Each run captures the spec, model, outcome, per-stage results, retry count, and cost. The database feeds three downstream systems: experience replay (retrieve similar past successes), DSPy SIMBA optimization (pass rate as evaluation metric), and AutoResearch hill climbing. The schema is append-only to preserve a tamper-evident audit trail.
+Record every verification run to a SQLite database for self-evolution analysis. Each run captures the spec, model, outcome, per-stage results, retry count, and cost. The database feeds three downstream systems: experience replay (retrieve similar past successes), LLM prompt optimization (pass rate as evaluation metric), and AutoResearch hill climbing. The schema is append-only to preserve a tamper-evident audit trail.
 
 ## Acceptance Criteria
 

@@ -7,7 +7,7 @@ latest best-performing version.
 References:
 - [REF-C03] Analyst → Formalizer → Coder pipeline
 - [REF-P07] ReDeFo multi-agent architecture
-- [REF-T26] DSPy — prompt optimization framework
+- [REF-T26] DSPy — prompt optimization framework (inspiration)
 """
 
 import json

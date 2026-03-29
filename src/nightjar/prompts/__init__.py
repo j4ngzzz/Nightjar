@@ -2,8 +2,8 @@
 
 Externalizes all LLM prompts into versioned, file-backed templates with
 performance metadata (version, pass_rate, last_optimized). The generator
-loads the latest best-performing version. DSPy SIMBA and AutoResearch
-hill climbing create new versions with improved prompts.
+loads the latest best-performing version. The LLM prompt optimizer and
+AutoResearch hill climbing create new versions with improved prompts.
 
 References:
 - [REF-C03] Analyst → Formalizer → Coder pipeline
@@ -27,7 +27,7 @@ class PromptTemplate:
 
     References:
     - [REF-C03] Pipeline stage prompts
-    - [REF-T26] DSPy optimization creates new versions
+    - [REF-T26] DSPy — hill-climbing optimization creates new versions
     """
 
     name: str
@@ -62,7 +62,7 @@ class PromptRegistry:
 
     References:
     - [REF-C03] Pipeline prompts are externalized here
-    - [REF-T26] DSPy SIMBA writes new versions
+    - [REF-T26] DSPy — hill-climbing optimizer writes new versions
     """
 
     def __init__(self, registry_path: str) -> None:

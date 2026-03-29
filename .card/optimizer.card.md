@@ -1,7 +1,7 @@
 ---
 card-version: "1.0"
 id: optimizer
-title: DSPy SIMBA Prompt Optimizer
+title: LLM Prompt Optimizer (Hill-Climbing)
 status: draft
 module:
   owns: [PromptOptimizer, OptimizationConfig, OptimizationResult, run_optimization, evaluate_prompt]
@@ -49,7 +49,7 @@ invariants:
 
 ## Intent
 
-Implement a SIMBA-inspired ([REF-T26] DSPy) prompt self-improvement loop. For each iteration: fetch the current best prompt, ask the LLM to generate a variation, evaluate the variation using the tracking DB pass rate as proxy metric, and register the candidate only if it clears the improvement threshold. Over multiple runs this produces a self-improving prompt registry grounded in real verification outcomes.
+Implement a hill-climbing prompt self-improvement loop (inspired by the SIMBA pattern from [REF-T26]). For each iteration: fetch the current best prompt, ask the LLM to generate a variation, evaluate the variation using the tracking DB pass rate as proxy metric, and register the candidate only if it clears the improvement threshold. Over multiple runs this produces a self-improving prompt registry grounded in real verification outcomes.
 
 ## Acceptance Criteria
 

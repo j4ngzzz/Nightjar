@@ -35,8 +35,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from watchdog.events import FileSystemEvent, FileSystemEventHandler
-from watchdog.observers import Observer
+try:
+    from watchdog.events import FileSystemEvent, FileSystemEventHandler
+    from watchdog.observers import Observer
+    HAS_WATCHDOG = True
+except ImportError:
+    HAS_WATCHDOG = False
+    FileSystemEvent = None  # type: ignore
+    FileSystemEventHandler = object  # type: ignore — allows class definition
+    Observer = None  # type: ignore
 
 
 # Debounce delay matching Dafny LSP idle delay [Scout 5 F2]
@@ -320,6 +327,11 @@ def start_watch(
         ... finally:
         ...     observer.stop(); observer.join()
     """
+    if not HAS_WATCHDOG:
+        raise ImportError(
+            "watchdog is required for 'nightjar watch'. "
+            "Install with: pip install nightjar-verify[fast]"
+        )
     handler = CardChangeHandler(callback=callback)
     observer = Observer()
     observer.schedule(handler, card_dir, recursive=True)

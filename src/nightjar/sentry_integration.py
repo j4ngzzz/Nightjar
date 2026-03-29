@@ -1,4 +1,5 @@
-"""Sentry error tracking → immune system feed.
+"""Sentry webhook payload parser — processes Sentry-format JSON payloads into
+invariant candidates. Does not connect to Sentry directly (no sentry_sdk dependency).
 
 Pipeline:
     Sentry production error

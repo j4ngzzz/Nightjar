@@ -181,7 +181,7 @@ nightjar explain
     Identifies which invariant constraint is structurally infeasible
 
 nightjar optimize
-    Run DSPy SIMBA prompt optimization on the generation pipeline
+    Run LLM prompt optimization (hill-climbing) on the generation pipeline
     Optimizes Analyst/Formalizer/Coder prompts for higher pass rates
 ```
 

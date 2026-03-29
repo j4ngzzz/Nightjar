@@ -4,7 +4,7 @@ Records every verification run in SQLite for self-evolution analysis.
 Schema: runs(id, spec_id, model, timestamp, verified, stage_results_json,
 retry_count, total_cost). Computes rolling pass rate per model, per spec.
 
-This data powers the experience replay (C2), DSPy SIMBA optimization (C3),
+This data powers the experience replay (C2), LLM prompt optimization (C3),
 and AutoResearch hill climbing (C4) systems.
 
 References:

@@ -1,15 +1,17 @@
-"""DSPy SIMBA-inspired prompt optimization for the Nightjar pipeline.
+"""LLM prompt optimization (hill-climbing) for the Nightjar pipeline.
 
 Optimizes Analyst/Formalizer/Coder prompts by generating variations
 and evaluating them against the verification pass rate metric from
 the tracking database. Creates new prompt versions with improved
 performance.
 
-The SIMBA pattern: generate prompt variation → evaluate on held-out
-specs → keep if pass rate improves → register as new version.
+The hill-climbing pattern (inspired by the SIMBA approach from [REF-T26]):
+generate prompt variation → evaluate on held-out specs → keep if pass
+rate improves → register as new version. Implemented using litellm
+directly — DSPy is not imported or used.
 
 References:
-- [REF-T26] DSPy — SIMBA optimizer for prompt optimization
+- [REF-T26] DSPy — inspiration for the SIMBA hill-climbing pattern
 - [REF-C03] Analyst → Formalizer → Coder pipeline prompts
 - [REF-P04] AlphaVerus — self-improving loop architecture
 - [REF-T16] litellm — all LLM calls go through litellm
@@ -30,7 +32,7 @@ class OptimizationConfig:
     """Configuration for a prompt optimization run.
 
     References:
-    - [REF-T26] DSPy SIMBA configuration pattern
+    - [REF-T26] DSPy — hill-climbing configuration pattern
     """
 
     tracking_db_path: str
@@ -45,7 +47,7 @@ class OptimizationResult:
     """Result from a prompt optimization run.
 
     References:
-    - [REF-T26] DSPy — optimization result tracking
+    - [REF-T26] DSPy — optimization result tracking pattern
     """
 
     target_prompt: str
@@ -62,11 +64,11 @@ def _call_llm_for_variation(
 ) -> str:
     """Ask the LLM to generate an improved prompt variation.
 
-    This is the core SIMBA step: given the current prompt and its
+    This is the core hill-climbing step: given the current prompt and its
     performance, generate a variation that might perform better.
 
     References:
-    - [REF-T26] DSPy SIMBA — meta-prompt optimization
+    - [REF-T26] DSPy — meta-prompt optimization inspiration
     - [REF-T16] litellm — model-agnostic LLM calls
     """
     resolved_model = model or os.environ.get("NIGHTJAR_MODEL", "claude-sonnet-4-6")
@@ -96,13 +98,14 @@ def _call_llm_for_variation(
 
 
 class PromptOptimizer:
-    """SIMBA-inspired prompt optimizer.
+    """LLM prompt optimizer using hill-climbing.
 
-    Generates prompt variations, evaluates them against the tracking DB
-    pass rate, and registers improved versions.
+    Generates prompt variations via litellm, evaluates them against the
+    tracking DB pass rate, and registers improved versions. Inspired by
+    the SIMBA pattern from [REF-T26] but implemented directly without DSPy.
 
     References:
-    - [REF-T26] DSPy SIMBA optimizer
+    - [REF-T26] DSPy — SIMBA hill-climbing pattern (inspiration only)
     - [REF-P04] AlphaVerus self-improving loop
     """
 
@@ -114,7 +117,7 @@ class PromptOptimizer:
     def evaluate_prompt(self, template: PromptTemplate) -> float:
         """Evaluate a prompt template using the tracking DB pass rate.
 
-        Uses the overall pass rate as a proxy metric. In a full SIMBA
+        Uses the overall pass rate as a proxy metric. In a more complete
         implementation, this would run the prompt on a held-out eval set.
 
         Returns a score between 0.0 and 1.0.

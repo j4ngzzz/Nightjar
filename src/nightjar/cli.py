@@ -636,7 +636,7 @@ def lock(ctx: click.Context, output: str) -> None:
 @click.option("--iterations", default=10, type=int, help="Max optimization iterations.")
 @click.pass_context
 def optimize(ctx: click.Context, target: str, iterations: int) -> None:
-    """Run DSPy SIMBA prompt optimization [REF-T26].
+    """Run LLM prompt optimization (hill-climbing) [REF-T26].
 
     Optimizes the Analyst/Formalizer/Coder prompts based on
     verification pass rate as the metric.

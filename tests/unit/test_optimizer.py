@@ -1,10 +1,11 @@
-"""Tests for DSPy SIMBA prompt optimization.
+"""Tests for LLM prompt optimization (hill-climbing).
 
-Uses DSPy SIMBA to optimize the Analyst/Formalizer/Coder prompts.
+Uses a custom hill-climbing optimizer via litellm to improve the
+Analyst/Formalizer/Coder prompts. Inspired by the SIMBA pattern [REF-T26].
 Metric: verification pass rate on a held-out set of specs.
 
 References:
-- [REF-T26] DSPy — SIMBA optimizer for prompt optimization
+- [REF-T26] DSPy — SIMBA hill-climbing inspiration
 - [REF-C03] Analyst → Formalizer → Coder pipeline prompts
 - [REF-P04] AlphaVerus — self-improving loop
 """

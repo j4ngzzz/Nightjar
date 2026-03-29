@@ -55,7 +55,7 @@ class HillClimbConfig:
     """Configuration for hill climbing.
 
     References:
-    - [REF-T26] DSPy SIMBA optimization config
+    - [REF-T26] DSPy — hill-climbing optimization config
     """
 
     tracking_db_path: str
@@ -89,7 +89,7 @@ class HillClimber:
 
     References:
     - [REF-P04] AlphaVerus self-improving loop
-    - [REF-T26] DSPy — optimization patterns
+    - [REF-T26] DSPy — hill-climbing optimization patterns
     """
 
     def __init__(self, config: HillClimbConfig) -> None:
