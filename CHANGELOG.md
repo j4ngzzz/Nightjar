@@ -4,6 +4,35 @@ All notable changes to Nightjar are documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.2] - 2026-03-29
+
+### Added
+- `nightjar spec` — unified entry point (smart routes to scan/infer/auto)
+- `nightjar hook install|remove|list` — coding agent integration (Claude Code, Cursor, Windsurf, Kiro)
+- `nightjar mcp` — start MCP server from CLI
+- `nightjar badge --svg|--shields-json|--readme` — enhanced badge generation
+- `nightjar verify --security-pack owasp` — OWASP invariant injection
+- NightjarGroup tiered `--help` output with Quick Start
+- hook_installer.py (291 lines, 62 tests)
+- smithery.yaml + npm shim for MCP registry
+- Vericoding page on nightjarcode.dev with FAQPage JSON-LD
+- 7 SEO comparison pages, 5 community specs, 5 CI configs
+- docs/bugs.md — structured 74-finding page
+- Badge CI workflow (.github/workflows/nightjar-badge.yml)
+- src/nightjar/py.typed (PEP 561)
+- .python-version
+
+### Changed
+- scan-lab/ → research/ (professional naming)
+- Removed deprecated-nightjarzzz/ from repo
+- Internal strategy docs removed from public repo
+
+### Fixed
+- .gitignore: 37 patterns, untracked files 104→22
+- bugs.md package count 32→34
+
+---
+
 ## [0.1.1] - 2026-03-29
 
 ### Added

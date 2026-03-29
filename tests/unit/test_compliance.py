@@ -188,7 +188,7 @@ class TestComplianceReviewerFixes:
         cert = generate_compliance_cert(report)
         # Must match package version — NOT the old hardcoded "0.3.0"
         assert cert["tool"]["version"] == nightjar.__version__
-        assert cert["tool"]["version"] == "0.1.1"
+        assert cert["tool"]["version"] == "0.1.2"
         assert cert["tool"]["version"] != "0.3.0"
 
     def test_owasp_results_integrated_when_provided(self):
