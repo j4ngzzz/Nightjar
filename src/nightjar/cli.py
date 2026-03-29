@@ -401,6 +401,11 @@ def init(ctx: click.Context, module_name: str, output: str) -> None:
 @click.option("--fast", is_flag=True, default=False, help="Stages 0-3 only (skip Dafny).")
 @click.option("--stage", type=int, default=None, help="Run only stage N (0-4).")
 @click.option("--ci", is_flag=True, default=False, help="CI mode: strict, no prompts.")
+@click.option("--format", "output_format", default=None,
+              type=click.Choice(["text", "vscode", "json"]),
+              help="Output format.")
+@click.option("--output-sarif", default=None, type=click.Path(),
+              help="Write SARIF 2.1.0 results to file.")
 @click.pass_context
 def verify(
     ctx: click.Context,
@@ -408,6 +413,8 @@ def verify(
     fast: bool,
     stage: Optional[int],
     ci: bool,
+    output_format: Optional[str],
+    output_sarif: Optional[str],
 ) -> None:
     """Run the 5-stage verification pipeline.
 
@@ -415,6 +422,7 @@ def verify(
     Architecture: docs/ARCHITECTURE.md Section 3.
     """
     config = ctx.obj["config"]
+    spec_path = contract
     try:
         result = _run_verify(
             contract, fast=fast, stage=stage, config=config, ci=ci
@@ -425,6 +433,27 @@ def verify(
         click.echo(f"Verification error: {e}", err=True)
         ctx.exit(EXIT_CONFIG_ERROR)
         return
+
+    # ── SARIF output (write to file, print summary; does NOT short-circuit) ──
+    if output_sarif:
+        try:
+            from nightjar.sarif_writer import write_sarif, sarif_summary
+            from nightjar.verifier import to_sarif
+            written = write_sarif(result, output_sarif, spec_path=spec_path)
+            sarif_dict = to_sarif(result, spec_path)
+            click.echo(sarif_summary(sarif_dict, filename=str(written)))
+        except Exception as e:
+            click.echo(f"SARIF write error: {e}", err=True)
+
+    # ── VS Code problem-matcher format ────────────────────────────────────────
+    if output_format == "vscode":
+        try:
+            from nightjar.formatters.vscode import format_vscode_output
+            click.echo(format_vscode_output(result, spec_path=spec_path))
+        except Exception as e:
+            click.echo(f"Format error: {e}", err=True)
+        import sys as _sys
+        _sys.exit(EXIT_PASS if result.verified else EXIT_FAIL)
 
     if result.verified:
         click.echo("VERIFIED -- all stages passed")
@@ -824,23 +853,74 @@ def badge(ctx: click.Context, fmt: str, report: str) -> None:
 
 
 @main.command()
-@click.argument("file_path", type=click.Path(exists=True))
+@click.argument("path", type=click.Path(exists=True))
 @click.option("--llm", is_flag=True, default=False, help="Enhance with LLM suggestions.")
 @click.option("--output", "-o", default=None, help="Output path for .card.md (default: .card/<module>.card.md)")
 @click.option("--verify", "run_verify", is_flag=True, default=False, help="Run verification after generating spec.")
 @click.option("--approve-all", is_flag=True, default=False, help="Auto-approve all candidates without prompting.")
+@click.option("--workers", default=None, type=int, help="Number of parallel workers for directory scan.")
+@click.option("--min-signal", default="low", type=click.Choice(["low", "medium", "high"]),
+              help="Minimum signal level to include in directory scan results.")
+@click.option("--smart-sort", is_flag=True, default=False,
+              help="Sort files by security criticality before scanning.")
 @click.pass_context
-def scan(ctx: click.Context, file_path: str, llm: bool, output: Optional[str], run_verify: bool, approve_all: bool) -> None:
-    """Scan a Python file and generate a .card.md spec from its structure.
+def scan(
+    ctx: click.Context,
+    path: str,
+    llm: bool,
+    output: Optional[str],
+    run_verify: bool,
+    approve_all: bool,
+    workers: Optional[int],
+    min_signal: str,
+    smart_sort: bool,
+) -> None:
+    """Scan a Python file or directory and generate .card.md spec(s).
 
     Extracts invariants from type hints, guard clauses, docstrings, and
     assertions. No LLM needed by default. Add --llm for enhanced suggestions.
+    When PATH is a directory, scans all .py files recursively.
 
     Examples:
         nightjar scan src/payment.py
         nightjar scan src/payment.py --llm --verify
+        nightjar scan src/ --workers 4 --smart-sort
     """
     config = ctx.obj["config"]
+
+    # ── Directory mode ────────────────────────────────────────────────────────
+    from pathlib import Path as PathLib
+    target = PathLib(path)
+    if target.is_dir():
+        try:
+            from nightjar.scanner import scan_directory
+        except ImportError as e:
+            click.echo(f"Error: scanner module not available ({e})", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
+        try:
+            results = scan_directory(
+                target,
+                workers=workers,
+                min_signal=min_signal,
+                smart_sort=smart_sort,
+            )
+        except Exception as e:
+            click.echo(f"Scan error: {e}", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
+        for r in results:
+            if r.candidates:
+                click.echo(
+                    f"  {r.module_id:40s} — {len(r.candidates)} candidates [{r.signal_strength}]"
+                )
+        total_candidates = sum(len(r.candidates) for r in results)
+        click.echo(f"\nScan complete: {len(results)} files, {total_candidates} candidates")
+        ctx.exit(EXIT_PASS)
+        return
+
+    # ── Single-file mode (original behaviour) ─────────────────────────────────
+    file_path = path
 
     # Import scanner lazily (Agent 2 module)
     try:
@@ -1196,3 +1276,172 @@ def _run_scan_approval_loop(candidates: list) -> list:
             approved.append(candidate)
 
     return approved
+
+
+# ── audit command ────────────────────────────────────────────────────────────
+
+
+@main.command()
+@click.argument("package_spec")
+@click.option("--with-deps", is_flag=True, default=False, help="Also scan declared dependencies.")
+@click.option("--no-cve", is_flag=True, default=False, help="Skip CVE lookup (offline mode).")
+@click.option("--output", "-o", default=None, help="Write .card.md spec to this path.")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Output results as JSON.")
+@click.option("--no-cache", is_flag=True, default=False, help="Bypass cache, force fresh scan.")
+@click.pass_context
+def audit(
+    ctx: click.Context,
+    package_spec: str,
+    with_deps: bool,
+    no_cve: bool,
+    output: Optional[str],
+    as_json: bool,
+    no_cache: bool,
+) -> None:
+    """Scan any PyPI package for contract coverage and known CVEs.
+
+    Downloads the package, scans every .py file for invariant candidates,
+    checks CVEs via OSV, and renders a terminal report card with letter
+    grades (A+ through F). Think 'Lighthouse score for Python packages.'
+
+    Examples:
+        nightjar audit requests
+        nightjar audit flask==3.0.0 --with-deps
+        nightjar audit requests --output requests.card.md
+        nightjar audit requests --json
+    """
+    try:
+        from nightjar.pkg_auditor import audit_package, render_report_card, render_json
+    except ImportError as e:
+        click.echo(f"Error: pkg_auditor module not available ({e})", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
+    try:
+        result = audit_package(
+            package_spec,
+            with_deps=with_deps,
+            check_cves=not no_cve,
+            use_cache=not no_cache,
+        )
+    except Exception as e:
+        click.echo(f"Audit error: {e}", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)  # exit code 2
+        return
+
+    # Render output
+    if as_json:
+        click.echo(render_json(result))
+    else:
+        click.echo(render_report_card(result))
+
+    # Write candidates to .card.md if requested
+    if output:
+        try:
+            card_lines = [
+                f"---\ncard-version: '1.0'\nid: {result.name}\n"
+                f"title: {result.name.title()} (audit)\nstatus: draft\n---\n\n"
+                "## Invariant Candidates\n\n"
+            ]
+            for c in result.candidates:
+                card_lines.append(f"- {c.statement}\n")
+            Path(output).write_text("".join(card_lines), encoding="utf-8")
+            click.echo(f"Spec written: {output}")
+        except Exception as e:
+            click.echo(f"Error writing spec: {e}", err=True)
+
+    # Exit code: 0 if score >= 70 and no CVEs, 1 otherwise
+    if result.scores.overall >= 70 and not result.cves:
+        ctx.exit(EXIT_PASS)
+    else:
+        ctx.exit(EXIT_FAIL)
+
+
+# ── benchmark command ─────────────────────────────────────────────────────────
+
+
+@main.command()
+@click.argument("benchmark_path", type=click.Path(exists=True))
+@click.option("--source", default="auto",
+              type=click.Choice(["auto", "vericoding", "dafnybench"]),
+              help="Benchmark format (default: auto-detect).")
+@click.option("--max-attempts", default=5, type=int,
+              help="Maximum verification attempts per task (default: 5).")
+@click.option("--timeout", default=120, type=int,
+              help="Per-task timeout in seconds (default: 120).")
+@click.option("--workers", default=1, type=int,
+              help="Number of parallel worker threads (default: 1).")
+@click.option("--json", "as_json", is_flag=True, default=False,
+              help="Output results as JSON.")
+@click.pass_context
+def benchmark(
+    ctx: click.Context,
+    benchmark_path: str,
+    source: str,
+    max_attempts: int,
+    timeout: int,
+    workers: int,
+    as_json: bool,
+) -> None:
+    """Run Nightjar against an academic verification benchmark.
+
+    Supports vericoding (POPL 2026) and DafnyBench task files.
+    Produces pass@1 and pass@k metrics comparable to published baselines.
+
+    Examples:
+        nightjar benchmark tasks/vericoding_tasks.jsonl
+        nightjar benchmark tasks/dafnybench/ --source dafnybench
+        nightjar benchmark tasks.jsonl --max-attempts 3 --workers 4 --json
+    """
+    try:
+        from nightjar.benchmark_adapter import load_benchmark_suite
+        from nightjar.benchmark_runner import (
+            run_benchmark,
+            format_benchmark_report,
+            format_benchmark_json,
+        )
+    except ImportError as e:
+        click.echo(f"Error: benchmark modules not available ({e})", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
+    # Load tasks from the benchmark file/directory
+    try:
+        tasks = load_benchmark_suite(Path(benchmark_path), source=source)
+    except Exception as e:
+        click.echo(f"Error loading benchmark: {e}", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
+    if not tasks:
+        click.echo("No benchmark tasks found.")
+        ctx.exit(EXIT_FAIL)
+        return
+
+    click.echo(
+        f"Running benchmark: {len(tasks)} task(s) "
+        f"[max-attempts: {max_attempts}, timeout: {timeout}s, workers: {workers}]"
+    )
+
+    try:
+        report = run_benchmark(
+            tasks,
+            max_attempts=max_attempts,
+            timeout_per_task=float(timeout),
+            workers=workers,
+        )
+    except Exception as e:
+        click.echo(f"Benchmark error: {e}", err=True)
+        ctx.exit(EXIT_CONFIG_ERROR)
+        return
+
+    if as_json:
+        click.echo(format_benchmark_json(report))
+    else:
+        click.echo(format_benchmark_report(report))
+
+    # Exit 0 if at least one task passed, 1 otherwise
+    if report.passed_tasks > 0:
+        ctx.exit(EXIT_PASS)
+    else:
+        ctx.exit(EXIT_FAIL)

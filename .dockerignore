@@ -1,0 +1,70 @@
+# Version control
+.git
+
+# Python virtualenvs and bytecode
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+
+# Nightjar generated/cached artifacts (not needed to build the image)
+.card/cache
+.card/audit
+.card/verify.json
+
+# Node
+node_modules
+
+# Frontend (not shipped in CLI image)
+docs/web
+
+# Playwright / browser automation artifacts
+.playwright-mcp
+
+# Image and screenshot artifacts
+*.png
+*.jpg
+*.jpeg
+
+# Build and distribution outputs
+build/
+dist/
+
+# GitHub Actions (not needed inside image)
+.github
+
+# Internal swarm / bridge tooling
+.bridgespace
+
+# Scan-lab experiment outputs
+scan-lab
+
+# Demo screenshots
+demo/*.png
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Secrets — should never end up in image context
+.env
+.env.local
+.mcp.json
+
+# GitNexus index (large, not needed)
+.gitnexus
+
+# Hypothesis cache
+.hypothesis
+
+# Pytest cache
+.pytest_cache
+
+# Mutation testing sandbox
+mutation-lab

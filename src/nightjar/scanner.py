@@ -11,6 +11,8 @@ References:
 from __future__ import annotations
 
 import ast
+import concurrent.futures
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -738,3 +740,220 @@ def _parse_llm_suggestions(raw: str) -> list[str]:
         return []
     except (json.JSONDecodeError, ValueError):
         return []
+
+
+# ── Directory scanning ─────────────────────────────────────────────────────────
+
+# Directories never scanned — mirrors ruff's default exclusion list plus
+# Nightjar-specific paths (.card holds generated audit code).
+EXCLUDE_DIRS: set[str] = {
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".git",
+    "dist",
+    "build",
+    "node_modules",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".tox",
+    "site-packages",
+    ".card",
+    ".eggs",
+    "egg-info",
+}
+
+# Stem keywords that indicate security-critical files.
+HIGH_RISK_STEMS: set[str] = {
+    # Auth / identity
+    "auth", "authentication", "login", "logout", "session", "token",
+    "jwt", "oauth", "sso", "password", "credential", "secret",
+    # Payments / finance
+    "payment", "billing", "invoice", "checkout", "stripe", "charge",
+    "subscription", "wallet", "refund", "transaction",
+    # Data access
+    "database", "db", "query", "model", "repository", "dao",
+    "migration", "schema",
+    # Admin / permissions
+    "admin", "permission", "role", "acl", "rbac", "policy", "user",
+    "account", "profile",
+    # Crypto / security
+    "crypto", "encrypt", "decrypt", "hash", "sign", "verify",
+    "certificate", "key", "vault",
+    # API surface
+    "api", "route", "endpoint", "handler", "view", "controller",
+    "middleware", "webhook",
+}
+
+# Imports that indicate security-sensitive code.
+HIGH_RISK_IMPORTS: set[str] = {
+    "hashlib", "hmac", "cryptography", "jwt", "bcrypt", "passlib",
+    "stripe", "braintree", "sqlalchemy", "psycopg2",
+    "pymongo", "redis", "boto3", "oauth2",
+}
+
+_HIGH_RISK_PATTERNS = re.compile(
+    r"(password|secret|api_key|private_key|token|Bearer|Basic\s+\w)",
+    re.IGNORECASE,
+)
+
+# Mapping from human-readable signal level to the numeric rank used
+# for threshold comparisons.  Mirrors the order in ScanResult.signal_strength.
+_SIGNAL_RANK: dict[str, int] = {"low": 0, "medium": 1, "high": 2}
+
+
+def _collect_python_files(root: Path) -> list[Path]:
+    """Recursively collect all .py files under *root*, skipping excluded dirs.
+
+    A file is excluded if any component of its path (relative to *root*)
+    matches an entry in EXCLUDE_DIRS.  This mirrors the ruff pattern of
+    walking the tree and filtering by directory name.
+
+    Args:
+        root: Root directory to walk.
+
+    Returns:
+        Sorted list of Path objects pointing to collected .py files.
+    """
+    files: list[Path] = []
+    for p in root.rglob("*.py"):
+        # Check every path component (not just direct parent) so that
+        # deeply nested excluded dirs (e.g. a/b/__pycache__/x.py) are caught.
+        if not any(part in EXCLUDE_DIRS for part in p.parts):
+            files.append(p)
+    return sorted(files)
+
+
+def _priority_score(path: Path) -> int:
+    """Score a file path based on its stem against HIGH_RISK_STEMS.
+
+    Scoring:
+    - Exact stem match → 100
+    - Stem *contains* a risk keyword → 60
+    - No match → 0
+
+    Args:
+        path: Path to the Python file (only the stem is examined).
+
+    Returns:
+        Integer priority score (0, 60, or 100).
+    """
+    stem = path.stem.lower()
+    if stem in HIGH_RISK_STEMS:
+        return 100
+    if any(kw in stem for kw in HIGH_RISK_STEMS):
+        return 60
+    return 0
+
+
+def _content_score(path: Path) -> int:
+    """Score a file by sniffing its first 50 lines for security indicators.
+
+    Checks the first 50 lines (fast I/O) for:
+    - High-risk import names (+20 per match)
+    - Security-sensitive patterns like 'password', 'api_key', 'Bearer' (+30 flat)
+
+    Score is capped at 90 so it never exceeds a filename exact-match (100).
+
+    Args:
+        path: Path to the Python file.
+
+    Returns:
+        Integer content score in range [0, 90].
+    """
+    try:
+        raw = path.read_text(encoding="utf-8", errors="ignore")
+        text = "\n".join(raw.split("\n")[:50])
+    except OSError:
+        return 0
+
+    score = 0
+    for imp in HIGH_RISK_IMPORTS:
+        if imp in text:
+            score += 20
+    if _HIGH_RISK_PATTERNS.search(text):
+        score += 30
+    return min(score, 90)
+
+
+def _smart_sort(files: list[Path]) -> list[Path]:
+    """Sort files by combined filename + content security score, descending.
+
+    Highest-scoring files (most likely security-critical) come first.
+    Files with equal scores retain their original relative order (stable sort).
+
+    Args:
+        files: List of Path objects to sort.
+
+    Returns:
+        New list sorted by descending security score.
+    """
+    def _score(p: Path) -> int:
+        return _priority_score(p) + _content_score(p)
+
+    return sorted(files, key=_score, reverse=True)
+
+
+def scan_directory(
+    root: Path,
+    *,
+    workers: int | None = None,
+    min_signal: str = "low",
+    smart_sort: bool = False,
+) -> list[ScanResult]:
+    """Recursively scan all .py files in *root* and return ScanResults.
+
+    Files are collected via _collect_python_files (excluded dirs are skipped),
+    optionally prioritised by security criticality (smart_sort=True), then
+    scanned in parallel using a ThreadPoolExecutor.
+
+    All results are returned so the caller can report statistics like
+    "12 files scanned, 8 with candidates".  Use *min_signal* to filter
+    results below a threshold before acting on them.
+
+    Args:
+        root: Root directory to scan.
+        workers: Number of parallel workers.  Default: min(8, cpu_count or 4).
+        min_signal: Minimum signal level to include in results.
+                    One of "low" (default), "medium", or "high".
+        smart_sort: If True, sort files by security criticality before scanning
+                    so that the most critical files are processed first.
+
+    Returns:
+        List of ScanResult, one per collected file, filtered by *min_signal*.
+        Returns an empty list if no .py files are found.
+
+    Raises:
+        ValueError: If *min_signal* is not one of "low", "medium", "high".
+    """
+    if min_signal not in _SIGNAL_RANK:
+        raise ValueError(
+            f"min_signal must be one of {list(_SIGNAL_RANK)}, got {min_signal!r}"
+        )
+
+    files = _collect_python_files(root)
+    if not files:
+        return []
+
+    if smart_sort:
+        files = _smart_sort(files)
+
+    effective_workers = workers if workers is not None else min(8, os.cpu_count() or 4)
+
+    results: list[ScanResult] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=effective_workers) as executor:
+        future_to_path = {
+            executor.submit(scan_file, str(f)): f for f in files
+        }
+        for future in concurrent.futures.as_completed(future_to_path):
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as exc:  # noqa: BLE001
+                # Silently skip files that fail to parse — scan continues.
+                _ = exc
+
+    # Apply min_signal filter
+    threshold = _SIGNAL_RANK[min_signal]
+    filtered = [r for r in results if _SIGNAL_RANK.get(r.signal_strength, 0) >= threshold]
+    return filtered

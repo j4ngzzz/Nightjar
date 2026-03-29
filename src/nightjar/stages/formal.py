@@ -238,26 +238,379 @@ def parse_dafny_output(output: str) -> list[dict]:
 def _classify_dafny_error(message: str) -> str:
     """Classify a Dafny error message into a category.
 
-    Categories per [REF-P06] DafnyPro structured error format:
+    Categories per [REF-P06] DafnyPro structured error format (original 6):
     - postcondition_failure: ensures clause not satisfied
     - precondition_failure: requires clause not met at call site
     - assertion_failure: explicit assert statement failed
     - loop_invariant_failure: loop invariant not maintained
     - decreases_failure: termination measure not decreasing
     - other: unclassified
+
+    Extended categories (research-benchmark-dafny-errors.md Part 3):
+    - loop_invariant_entry_failure: invariant not satisfied on entry
+    - array_bounds_failure: sequence/array index out of range
+    - null_dereference_failure: null object dereference
+    - reads_frame_failure: insufficient reads clause
+    - modifies_frame_failure: modifies clause violation
+    - termination_failure: cannot prove loop/recursion terminates
+    - fuel_failure: fuel annotation exceeds limit
+    - quantifier_trigger_failure: SMT trigger not found for quantifier
+    - subset_type_failure: value violates subset type constraint
+    - exhaustiveness_failure: match expression not exhaustive
+    - ghost_variable_failure: ghost variable used in compiled code
+    - function_precondition_failure: function precondition not satisfied
+    - wellformed_failure: ill-formed quantifier or expression
     """
     lower = message.lower()
+
+    # ── Original 6 categories (must remain first — backward compatibility) ──
     if "postcondition" in lower:
         return "postcondition_failure"
     if "precondition" in lower:
         return "precondition_failure"
     if "assertion" in lower or "assert" in lower:
         return "assertion_failure"
+    # Loop invariant entry check before general invariant check
+    if "invariant" in lower and ("entry" in lower or "on entry" in lower):
+        return "loop_invariant_entry_failure"
     if "invariant" in lower and "loop" in lower:
         return "loop_invariant_failure"
+    # Termination check BEFORE decreases: "cannot prove termination; try supplying a decreases clause"
+    # contains "decreases" but the root cause is termination, not a bad decreases clause.
+    # The canonical "decreases clause might not decrease" message does NOT contain "termination".
+    if "cannot prove termination" in lower or "termination" in lower or (
+        "terminat" in lower and "decreases" not in lower
+    ):
+        return "termination_failure"
     if "decreases" in lower:
         return "decreases_failure"
+
+    # ── Extended categories ─────────────────────────────────────────────────
+    # Array/sequence bounds
+    if "index out of range" in lower:
+        return "array_bounds_failure"
+    # Null dereference — "null" alone is broad; also match "target object"
+    if "null" in lower or "target object" in lower:
+        return "null_dereference_failure"
+    # Frame conditions
+    if "reads" in lower and "insufficient" in lower:
+        return "reads_frame_failure"
+    if "modifies" in lower:
+        return "modifies_frame_failure"
+    # Fuel annotation
+    if "fuel" in lower:
+        return "fuel_failure"
+    # Quantifier trigger (SMT trigger not found)
+    if "trigger" in lower and "quantifier" in lower:
+        return "quantifier_trigger_failure"
+    if "trigger" in lower:
+        return "quantifier_trigger_failure"
+    # Subset type constraint violation
+    if "subset" in lower and "constraint" in lower:
+        return "subset_type_failure"
+    if "subset" in lower:
+        return "subset_type_failure"
+    # Match exhaustiveness
+    if "not exhaustive" in lower:
+        return "exhaustiveness_failure"
+    # Ghost variable leakage into compiled code
+    if "ghost" in lower:
+        return "ghost_variable_failure"
+    # Function-level precondition (distinct from method precondition)
+    if "function precondition" in lower:
+        return "function_precondition_failure"
+    # Ill-formed quantifier / well-foundedness
+    if "well-founded" in lower or "not well-founded" in lower:
+        return "wellformed_failure"
+
     return "other"
+
+
+# ── Dafny → Python-developer translation layer ────────────────────────────────
+# Each entry maps an error category to three human-friendly fields:
+#   summary       — one-line description in plain English
+#   python_analogy — equivalent Python concept / analogy
+#   fix_hint      — actionable first step to resolve the error
+#
+# Source: research-benchmark-dafny-errors.md Part 3 — "Top 20 Dafny Errors
+# with Python-Developer Translations" (2026-03-29).
+# Nobody else provides a Dafny → Python translation layer; this is Nightjar's
+# unique contribution per the research notes.
+
+DAFNY_ERROR_TRANSLATIONS: dict[str, dict[str, str]] = {
+    "postcondition_failure": {
+        "summary": "Function return guarantee (ensures clause) cannot be proven",
+        "python_analogy": (
+            "Like an assert on the return value that might fail — "
+            "e.g. assert result > 0 that Dafny can't confirm is always true"
+        ),
+        "fix_hint": (
+            "Add loop invariants that accumulate the postcondition; "
+            "use assert statements to pinpoint which step breaks the ensures clause"
+        ),
+    },
+    "precondition_failure": {
+        "summary": "A function call's input contract (requires clause) cannot be proven at the call site",
+        "python_analogy": (
+            "Like calling a function that requires x > 0 when x might be 0 — "
+            "Python would raise ValueError at runtime, Dafny rejects it statically"
+        ),
+        "fix_hint": (
+            "Add a requires clause to the calling method, "
+            "or add a guard/assert before the call to prove the precondition holds"
+        ),
+    },
+    "assertion_failure": {
+        "summary": "An explicit assert statement cannot be proven true",
+        "python_analogy": (
+            "Like assert x >= 0 in Python that might fail — "
+            "except Dafny catches it at compile time, not at runtime"
+        ),
+        "fix_hint": (
+            "Add intermediate assertions to narrow down where the reasoning breaks; "
+            "try a calc block to walk through the proof step by step"
+        ),
+    },
+    "loop_invariant_failure": {
+        "summary": "Loop invariant breaks after one or more iterations",
+        "python_analogy": (
+            "Like a comment saying 'x stays positive' but the loop body can make x negative — "
+            "the invariant is true before the loop but not preserved by each step"
+        ),
+        "fix_hint": (
+            "Weaken or correct the invariant; "
+            "add an intermediate assert inside the loop body to find which assignment breaks it"
+        ),
+    },
+    "loop_invariant_entry_failure": {
+        "summary": "Loop invariant is not true before the loop starts",
+        "python_analogy": (
+            "Like requiring x == 0 before a loop that starts with x = 5 — "
+            "the initial state doesn't satisfy the invariant you declared"
+        ),
+        "fix_hint": (
+            "Initialize variables before the loop so the invariant holds on entry; "
+            "or weaken the invariant so it's satisfied by the initial values"
+        ),
+    },
+    "decreases_failure": {
+        "summary": "The termination measure (decreases clause) does not strictly decrease",
+        "python_analogy": (
+            "Like providing a loop counter that doesn't actually count down — "
+            "Dafny requires a value that gets strictly smaller each iteration"
+        ),
+        "fix_hint": (
+            "Find a value that truly decreases monotonically each loop iteration; "
+            "common choices: n - i, |remaining|, depth of recursion"
+        ),
+    },
+    "termination_failure": {
+        "summary": "Dafny cannot prove the loop or recursive function terminates",
+        "python_analogy": (
+            "Like a potentially infinite loop or infinite recursion Dafny can't rule out — "
+            "Python would hang at runtime; Dafny refuses to verify it"
+        ),
+        "fix_hint": (
+            "Add a 'decreases expr' clause where expr gets smaller each iteration "
+            "(e.g. decreases n - i); ensure the bound is paired with an invariant proving the expr >= 0"
+        ),
+    },
+    "array_bounds_failure": {
+        "summary": "Array or sequence access a[i] cannot be proven in-bounds",
+        "python_analogy": (
+            "Like a Python IndexError that Dafny caught statically — "
+            "it can't confirm 0 <= i < len(a) holds at that access point"
+        ),
+        "fix_hint": (
+            "Add a loop invariant: 'invariant 0 <= i <= a.Length'; "
+            "ensure the loop guard and invariant together imply valid index bounds"
+        ),
+    },
+    "null_dereference_failure": {
+        "summary": "A method or field is accessed on a reference that might be null",
+        "python_analogy": (
+            "Like Python obj.method() where obj could be None — "
+            "Dafny catches potential NoneType AttributeError statically"
+        ),
+        "fix_hint": (
+            "Add 'requires obj != null' to your method, "
+            "or add a null check guard before the dereference; "
+            "also consider adding 'requires obj.Valid()' if a class invariant applies"
+        ),
+    },
+    "reads_frame_failure": {
+        "summary": "A function reads an object field not listed in its reads clause",
+        "python_analogy": (
+            "Like accessing global state without declaring it as a dependency — "
+            "Dafny requires functions to explicitly list everything they read"
+        ),
+        "fix_hint": (
+            "Add 'reads obj' or 'reads obj.field' to your function's specification; "
+            "for reading a full object add 'reads obj`'  to include all fields"
+        ),
+    },
+    "modifies_frame_failure": {
+        "summary": "A method modifies an object not listed in its modifies clause",
+        "python_analogy": (
+            "Like mutating state you're not supposed to touch — "
+            "Python has no enforcement; Dafny enforces mutation permissions statically"
+        ),
+        "fix_hint": (
+            "Add 'modifies obj' to your method specification; "
+            "if modifying heap-allocated data structures add modifies clauses for all reachable objects"
+        ),
+    },
+    "fuel_failure": {
+        "summary": "A fuel annotation asks Dafny to unroll a recursive function more times than allowed",
+        "python_analogy": (
+            "Like manually inlining a recursive function N times hoping the compiler figures it out — "
+            "there is a hard cap on how deep Dafny will expand"
+        ),
+        "fix_hint": (
+            "Reduce the {:fuel} value; "
+            "the better approach is to add helper lemmas that prove intermediate steps "
+            "so the main proof doesn't need deep unrolling"
+        ),
+    },
+    "quantifier_trigger_failure": {
+        "summary": "The SMT solver cannot find a pattern (trigger) to decide when to instantiate a quantifier",
+        "python_analogy": (
+            "Like a lambda with a type that Python's type checker can't infer — "
+            "Dafny's Z3 backend needs a concrete expression to match against"
+        ),
+        "fix_hint": (
+            "Add a manual trigger with {:trigger expr} annotation, "
+            "or restructure the quantifier so a sub-expression naturally serves as a trigger; "
+            "also add an explicit type annotation on the bound variable: forall x: int ::"
+        ),
+    },
+    "subset_type_failure": {
+        "summary": "A value being assigned to a constrained type might violate its constraint",
+        "python_analogy": (
+            "Like assigning a possibly-negative integer to a variable annotated as Natural — "
+            "Dafny's nat type requires >= 0 and will reject unproven assignments"
+        ),
+        "fix_hint": (
+            "Either use 'int' instead of 'nat' and carry the constraint as an invariant, "
+            "or add a proof that the value is always non-negative before the assignment"
+        ),
+    },
+    "exhaustiveness_failure": {
+        "summary": "A match expression does not cover all possible cases",
+        "python_analogy": (
+            "Like a Python match/case block that doesn't handle all cases — "
+            "Dafny requires structural pattern matches to be total"
+        ),
+        "fix_hint": (
+            "Add the missing case arm(s) to the match expression; "
+            "add a default 'case _ =>' branch if a catch-all is semantically correct"
+        ),
+    },
+    "ghost_variable_failure": {
+        "summary": "A ghost (proof-only) variable is being used in compiled runtime code",
+        "python_analogy": (
+            "Like using a type annotation as a runtime value — "
+            "ghost variables exist only for verification and cannot appear in executed code"
+        ),
+        "fix_hint": (
+            "Remove the ghost variable from compiled code paths; "
+            "keep ghost usage inside ghost methods, lemmas, or 'ghost if' blocks; "
+            "if the value is needed at runtime, make it a regular (non-ghost) variable"
+        ),
+    },
+    "function_precondition_failure": {
+        "summary": "A function's precondition cannot be proven at the call site",
+        "python_analogy": (
+            "Similar to method precondition failure but for pure functions — "
+            "like calling len(x) without proving x is not None"
+        ),
+        "fix_hint": (
+            "Add a requires clause to the calling function, "
+            "or add a guard expression before the function call to establish the precondition"
+        ),
+    },
+    "wellformed_failure": {
+        "summary": "A quantified expression is not well-founded (circular or self-referential)",
+        "python_analogy": (
+            "Like a recursive lambda that references itself in a way Python can't evaluate — "
+            "Dafny requires quantifiers to range over finite, well-ordered domains"
+        ),
+        "fix_hint": (
+            "Check that all quantified variables have finite domains; "
+            "avoid circular definitions where P(x) references P(y) with no base case; "
+            "use 'decreases' to prove well-foundedness of recursive predicates"
+        ),
+    },
+    "timeout": {
+        "summary": "The Z3 SMT solver ran out of time before completing the proof",
+        "python_analogy": (
+            "Like a database query that hits a timeout — "
+            "the proof is not wrong, just too expensive for the time budget"
+        ),
+        "fix_hint": (
+            "Increase --verification-time-limit; "
+            "split the method into smaller lemmas; "
+            "add intermediate assertions to guide Z3 toward the proof faster"
+        ),
+    },
+    "other": {
+        "summary": "Unclassified Dafny verification error",
+        "python_analogy": (
+            "An unexpected runtime error without a known category — "
+            "read the raw Dafny message for details"
+        ),
+        "fix_hint": (
+            "Check the raw Dafny message for the specific error; "
+            "consult dafny.org/latest/HowToFAQ/Errors for the full error catalog; "
+            "add intermediate assertions to narrow down the failing proof step"
+        ),
+    },
+}
+
+
+def translate_dafny_error(dafny_message: str) -> dict[str, str]:
+    """Translate a raw Dafny error message to a Python-developer-friendly explanation.
+
+    Classifies the message using _classify_dafny_error(), then looks up the
+    matching entry in DAFNY_ERROR_TRANSLATIONS. Falls back to the "other"
+    entry if no pattern matches.
+
+    This is Nightjar's unique "Dafny → human" translation layer. No other
+    tool (VS Code extension, dafny-annotator, DafnyPro, DafnyComp) provides
+    Python-developer analogies for Dafny verification failures.
+
+    Args:
+        dafny_message: Raw error message string from Dafny CLI output
+                       (e.g. "A postcondition might not hold on this return path").
+
+    Returns:
+        dict with keys:
+          - category (str): error classification key
+          - summary (str): one-line plain-English description
+          - python_analogy (str): equivalent Python concept / analogy
+          - fix_hint (str): actionable first step to resolve the error
+          - raw_message (str): the original Dafny message, preserved verbatim
+
+    Example:
+        >>> result = translate_dafny_error("index out of range")
+        >>> result["category"]
+        'array_bounds_failure'
+        >>> result["python_analogy"]
+        'Like a Python IndexError that Dafny caught statically ...'
+    """
+    category = _classify_dafny_error(dafny_message)
+    # Use "other" as the guaranteed fallback — it is always present in the dict
+    translation = DAFNY_ERROR_TRANSLATIONS.get(
+        category,
+        DAFNY_ERROR_TRANSLATIONS["other"],
+    )
+    return {
+        "category": category,
+        "summary": translation["summary"],
+        "python_analogy": translation["python_analogy"],
+        "fix_hint": translation["fix_hint"],
+        "raw_message": dafny_message,
+    }
 
 
 def run_formal(spec: CardSpec, dfy_code: str) -> StageResult:
