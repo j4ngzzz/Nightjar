@@ -349,6 +349,32 @@ nightjar explain
 
 nightjar optimize
     Run LLM prompt optimization (hill-climbing) on the generation pipeline
+
+nightjar scan <file|dir>
+    Extract invariants from existing Python code via AST analysis
+    Outputs candidate invariants for review or direct append to .card.md
+
+nightjar infer <file>
+    LLM + CrossHair contract inference for an existing Python file
+    Generates invariant candidates backed by symbolic validation
+
+nightjar audit <package>
+    PyPI package scanner: fetch, analyze, and assign letter grades (A–F)
+    Checks for CVEs, hallucinated names, and quality signals
+
+nightjar benchmark <path>
+    Run the DafnyPro academic benchmark suite against a spec directory
+    Reports pass@k rates per stage
+
+nightjar serve
+    Launch the Nightjar Canvas web UI (local Next.js dashboard)
+    Provides visual pipeline status, replay, and invariant explorer
+
+nightjar immune run|collect|status
+    Manage the immune system
+      run     — full mine + enrich + debate + append cycle
+      collect — start trace collection for a running process
+      status  — show last immune run report and pending candidates
 ```
 
 ### Flags
@@ -531,7 +557,7 @@ To configure in Claude Code:
 ```
 src/
 ├── nightjar/              Main CLI and verification pipeline
-│   ├── cli.py             Click commands — 8 commands
+│   ├── cli.py             Click commands — 17 commands + immune group
 │   ├── parser.py          .card.md parser (YAML + Markdown)
 │   ├── generator.py       Analyst → Formalizer → Coder pipeline
 │   ├── verifier.py        Pipeline orchestrator (asyncio)
@@ -626,7 +652,8 @@ itself (Stages 0–4) requires no LLM — only `generate` and `retry` call the L
 **Q: Can I write specs for existing code?**
 A: Yes. Use `nightjar init [module]` to scaffold a spec, then fill it in describing the
 existing behavior. Use `nightjar verify` to check the existing code against the spec. Use
-the oracle lifter (`nightjar optimize`) to extract invariants from your existing tests.
+the oracle lifter. Use `nightjar scan <file|dir>` to extract invariants via AST analysis, or
+`nightjar infer <file>` for LLM + CrossHair contract inference.
 
 **Q: How does Nightjar handle multi-file modules?**
 A: One `.card.md` per logical module. The `module.owns` field lists all functions and classes

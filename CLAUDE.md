@@ -110,6 +110,18 @@ project/
 │   │   ├── sentry_integration.py   # Sentry → immune feed
 │   │   ├── gitnexus_hooks.py       # Blast radius warnings
 │   │   ├── mcp_server.py           # MCP server [REF-T18]
+│   │   ├── scanner.py              # `nightjar scan` — invariant extraction from existing code
+│   │   ├── inferrer.py             # `nightjar infer` — LLM + CrossHair contract inference
+│   │   ├── pkg_auditor.py          # `nightjar audit` — PyPI package security audit
+│   │   ├── benchmark_adapter.py    # Benchmark harness adapter
+│   │   ├── benchmark_runner.py     # `nightjar benchmark` — performance benchmarking
+│   │   ├── sarif_writer.py         # SARIF output for IDE/CI integration
+│   │   ├── immune_commands.py      # `nightjar immune` subcommand group
+│   │   ├── watch.py                # `nightjar watch` — file-change re-verify daemon
+│   │   ├── web_server.py           # `nightjar serve` — web UI server
+│   │   ├── auto.py                 # `nightjar auto` — fully autonomous verify+fix loop
+│   │   ├── badge.py                # `nightjar badge` — shield.io badge generation
+│   │   ├── formatters/             # Output formatters (JSON, SARIF, text, etc.)
 │   │   ├── invariant_generators/   # Per-tier code generators
 │   │   ├── security/               # OWASP security checks
 │   │   └── stages/
@@ -138,11 +150,11 @@ project/
 
 ## What's Built vs What's Next
 
-**Built (Phase 1 + 2):**
+**Built (Phases 1-6):**
 - Full 6-stage verification pipeline (Stage 0–4 + Stage 2.5 negation-proof)
 - CEGIS retry loop with structured Dafny error format
 - Analyst → Formalizer → Coder generation pipeline
-- 8 CLI commands (`init`, `generate`, `verify`, `build`, `ship`, `retry`, `lock`, `explain`)
+- 17 CLI commands (`init`, `generate`, `verify`, `build`, `ship`, `retry`, `lock`, `explain`, `optimize`, `auto`, `watch`, `badge`, `scan`, `infer`, `audit`, `benchmark`, `serve`) + immune group (`immune run`, `immune collect`, `immune status`)
 - MCP server with 3 tools (`verify_contract`, `get_violations`, `suggest_fix`)
 - Immune system: trace collection, Daikon reimplementation, LLM enrichment, Wonda quality scoring, adversarial debate, temporal supersession
 - Textual TUI dashboard with `--tui` flag
@@ -187,6 +199,24 @@ pytest tests/ -v -m "not integration"
 
 # Launch with TUI dashboard
 nightjar verify --tui
+
+# Scan existing code for invariants
+nightjar scan src/
+
+# Infer contracts via LLM + CrossHair
+nightjar infer app.py
+
+# Audit a PyPI package
+nightjar audit requests
+
+# Run immune system mining
+nightjar immune run src/payment.py
+
+# Watch for file changes and re-verify
+nightjar watch
+
+# Launch web UI
+nightjar serve
 ```
 
 ---
@@ -231,7 +261,7 @@ Skills are invoked via the Skill tool. Use them when the task matches:
 
 ## Code Intelligence (GitNexus)
 
-GitNexus indexes this repo as **Oracle** (3619 symbols, 10035 relationships). It's available but not mandatory for every edit. Use it when it helps:
+GitNexus indexes this repo as **Oracle** (see `gitnexus://repo/Oracle/context` for current count). It's available but not mandatory for every edit. Use it when it helps:
 
 ```
 # Find code by concept

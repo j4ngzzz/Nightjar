@@ -625,6 +625,9 @@ COMMANDS:
                                     Letter grades A-F; CVE check via OSV API
   nightjar benchmark <path>       Academic benchmark runner (vericoding POPL 2026, DafnyBench)
                                     Reports pass@k scoring
+  nightjar serve                  Launch Canvas web UI locally (FastAPI + uvicorn)
+                                    Requires nightjar[canvas] extras
+  nightjar immune run|collect|status  Immune system: invariant mining, trace collection, status
 
 FLAGS:
   --contract PATH       Path to .card.md (default: ./.card/*.card.md)
@@ -855,7 +858,76 @@ project/
 
 ---
 
-## 15. Phase 6 Extensions
+## 15. Cache Architecture
+
+`verifier.py` includes a Salsa-style monolithic verification cache that avoids re-running expensive stages when nothing has changed.
+
+### Cache Key
+
+```
+cache_key = sha256(spec_content + sorted(invariant_statements))
+```
+
+The key covers the full spec content and every invariant statement. Any edit to the spec or its invariants produces a new cache key and forces a fresh pipeline run.
+
+### Cache Semantics
+
+- Only `verified=True` results are stored — failures are never cached. A failing spec always re-runs the full pipeline on the next invocation.
+- Cache entries are stored in `.card/cache/` as `<cache_key>.json`.
+- The cache is consulted before Stage 0. A hit skips all six stages and returns the stored result immediately.
+
+### Bypassing the Cache
+
+```bash
+NIGHTJAR_DISABLE_CACHE=1 nightjar verify
+```
+
+Set this env var in tests and CI jobs that must always exercise the full pipeline.
+
+### Location
+
+```
+.card/cache/
+  <sha256-hex>.json    # one file per (spec, invariants) combination
+```
+
+---
+
+## 16. Ship Provenance
+
+`nightjar ship` extends `nightjar build` with a provenance record that ties the shipped artifact back to the spec and verification run.
+
+### What Gets Recorded
+
+After a successful build, `ship.py` computes a SHA-256 hash of the compiled artifact and writes `.card/provenance.json`:
+
+```json
+{
+  "spec_path": ".card/payment.card.md",
+  "artifact_hash": "sha256:<hex>",
+  "target": "py",
+  "model": "claude-sonnet-4-6",
+  "stages_passed": ["preflight", "deps", "schema", "pbt", "negation_proof", "formal"],
+  "timestamp": "2026-03-29T00:00:00Z"
+}
+```
+
+### Fields
+
+| Field | Description |
+|-------|-------------|
+| `spec_path` | Path to the `.card.md` that governed generation |
+| `artifact_hash` | `sha256:<hex>` of the compiled output file |
+| `target` | Compile target language (`py`, `js`, `go`, `java`, `cs`) |
+| `model` | LLM model used for generation (from `NIGHTJAR_MODEL`) |
+| `stages_passed` | Ordered list of stages that returned PASS |
+| `timestamp` | ISO-8601 UTC timestamp of the ship run |
+
+The provenance file is git-tracked alongside the artifact, giving auditors a machine-readable chain from source spec to deployed binary.
+
+---
+
+## 17. Phase 6 Extensions
 
 ### Verification Canvas
 

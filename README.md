@@ -68,7 +68,7 @@ Python 3.11+. Dafny 4.x is optional — without it, Nightjar falls back to Cross
 
 ## What it found
 
-74 confirmed bugs across 34 codebases. 62 hours. 199 commits. Every finding runs in one script.
+74 confirmed bugs across 34 codebases. 62 hours. 204 commits. Every finding runs in one script.
 
 ---
 
@@ -299,21 +299,26 @@ When Dafny fails, the CEGIS loop extracts the concrete counterexample and puts i
 - [x] CEGIS retry loop with structured error feedback
 - [x] Graduated confidence display with mathematical bounds
 - [x] Zero-friction entry: `scan`, `infer`, `audit`
+- [x] Verification result cache (Salsa-style, sub-second re-runs)
+- [x] TUI dashboard (`--tui` flag on verify)
+- [x] Immune system CLI (`immune run|collect|status`)
+- [x] Ship provenance (SHA-256 hash chain)
 - [ ] VSCode extension (LSP diagnostics)
 - [ ] Benchmark scores (vericoding POPL 2026)
-- [ ] Docker image published to ghcr.io
+- [ ] Docker image published to ghcr.io (Dockerfile ready, not yet published)
 
 ---
 
 ## CLI Commands
 
-All 16 commands:
+All 19 commands:
 
 ```
 nightjar init <module>        Scaffold .card.md + deps.lock + tests/
 nightjar generate             LLM generates code from .card.md
 nightjar verify               Run full verification pipeline
 nightjar verify --fast        Stages 0-3 only (skip Stage 2.5 + Dafny)
+nightjar verify --tui         Launch Textual TUI dashboard during verification
 nightjar build                generate + verify + compile to target
 nightjar ship                 build + package artifact
 nightjar retry                Force retry with LLM repair loop
@@ -323,6 +328,10 @@ nightjar optimize             Run LLM prompt optimization (hill-climbing)
 nightjar auto                 Generate .card.md specs from natural language intent
 nightjar watch                File-watching daemon with tiered verification
 nightjar badge                Print shields.io badge URL for last verification run
+nightjar serve                Launch Canvas web UI locally (requires [canvas] extras)
+nightjar immune run <file>    Mine invariants from runtime traces (self-improving loop)
+nightjar immune collect       Collect runtime type traces for mining
+nightjar immune status        Show immune system trace/invariant counts
 nightjar scan <file|dir>      Extract invariants from existing Python code.
                               Supports directory scanning with --smart-sort for
                               security-critical file prioritization.
@@ -343,6 +352,9 @@ nightjar verify --output-sarif results.sarif  # SARIF 2.1.0 for GitHub Code Scan
 
 ### Docker
 
+> [!NOTE]
+> Docker image is not yet published to ghcr.io. The Dockerfile is ready — publish will happen with the next tagged release. For now, build locally: `docker build -t nightjar .`
+
 ```bash
 docker pull ghcr.io/j4ngzzz/nightjar  # ~300MB, Dafny 4.8.0 bundled
 docker run ghcr.io/j4ngzzz/nightjar verify --spec .card/payment.card.md
@@ -361,6 +373,7 @@ docker run ghcr.io/j4ngzzz/nightjar verify --spec .card/payment.card.md
 | **Claude Code** | `nightjar-verify` skill | Auto-verify after AI generates code |
 | **OpenClaw** | `skills/openclaw/nightjar-verify/` | Formal proof for AI agents |
 | **MCP Server** | 3 tools: verify_contract, get_violations, suggest_fix | Use from any MCP client |
+| **Canvas UI** | `nightjar serve` | Local web verification dashboard |
 | **Docker** | `ghcr.io/j4ngzzz/nightjar` | Dafny bundled, zero install |
 
 Guides: [CI setup](docs/tutorials/ci-one-commit.md) · [Quickstart](docs/tutorials/quickstart-5min.md) · [MCP listing](docs/mcp-listing.md) · [OpenClaw skill](skills/openclaw/nightjar-verify/)
@@ -385,7 +398,7 @@ No sponsors yet. If Nightjar saves your team time, consider [sponsoring developm
 
 ## Recent Milestones
 
-- **2026-03-29** — v0.1.0: 16 CLI commands, 1841 tests, Docker image, OpenClaw skill
+- **2026-03-29** — v0.1.0: 19 CLI commands, 1841 tests, Docker image, OpenClaw skill
 - **2026-03-29** — 74 confirmed bugs across 34 packages (Wave 4 hunt complete)
 - **2026-03-28** — Phase 6 Verification Canvas live at nightjarcode.dev
 - **2026-03-28** — AlphaEvolve: MAP-Elites, invariant refinement, strategy DB

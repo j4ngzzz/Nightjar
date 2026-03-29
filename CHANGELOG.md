@@ -8,6 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `nightjar immune run|collect|status` — immune system CLI commands wiring the 8K-line mining pipeline
+- `nightjar serve` — launches Nightjar Canvas web UI locally (requires [canvas] extras)
+- `nightjar verify --tui` — Textual TUI dashboard during verification
+- `build --target` now calls compiler.py for cross-language compilation (js/ts/go/java/cs)
+- `ship` command generates SHA-256 provenance hash via ship.py
+- Salsa-style verification cache in verifier.py (NIGHTJAR_DISABLE_CACHE=1 to bypass)
+- tui.py and web_server.py import guards (graceful when Textual/FastAPI absent)
 - `nightjar scan <dir>` — directory scanning with smart sort, parallel workers, security-critical file prioritization
 - `nightjar infer` — LLM + CrossHair contract inference with generate→verify→repair loop
 - `nightjar audit` — PyPI package scanner with terminal report card, letter grades A-F, CVE check via OSV
@@ -24,6 +31,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- DSPy SIMBA renamed to "LLM prompt optimization (hill-climbing)" — DSPy not used
+- Sentry integration clarified as "Sentry webhook payload parser" — no sentry_sdk dependency
+- `nightjar watch` gives actionable error message instead of ImportError traceback
+- optimizer crash on fresh install (missing JSON seed files now created on first run)
 - Default model fallback changed from deepseek to `claude-sonnet-4-6`
 - Stage 2.5 (negation proof) now visible in display output
 - `generate` command no longer dumps full dataclass repr
