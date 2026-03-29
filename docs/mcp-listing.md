@@ -200,10 +200,10 @@ Nightjar uses [litellm](https://github.com/BerriAI/litellm) for LLM calls, so an
 
 ## Links
 
-- Homepage: https://nightjar.dev
-- GitHub: https://github.com/nightjar-dev/nightjar
+- Homepage: https://nightjarcode.dev
+- GitHub: https://github.com/j4ngzzz/Nightjar
 - PyPI: https://pypi.org/project/nightjar-verify/
-- Issues: https://github.com/nightjar-dev/nightjar/issues
+- Issues: https://github.com/j4ngzzz/Nightjar/issues
 
 ---
 

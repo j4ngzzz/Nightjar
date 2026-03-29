@@ -20,7 +20,7 @@ pip install nightjar-verify
 ## Key Facts
 - Found 74 confirmed bugs across 34 popular Python packages, 14 verified clean
 - Built in 62 hours by a 19yo CS student using 100% Claude Code
-- 5-stage cheapest-first pipeline: preflight → deps → schema → PBT → formal proof
+- 6-stage cheapest-first pipeline: preflight → deps → schema → negation-proof → PBT → formal proof
 - CEGIS retry loop repairs failing code using counterexamples
 - AGPL-3.0 open source, commercial licenses available
 - Works without Dafny (falls back to CrossHair + Hypothesis)

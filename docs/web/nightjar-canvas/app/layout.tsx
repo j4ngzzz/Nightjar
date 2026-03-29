@@ -44,7 +44,7 @@ const jsonLd = {
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Linux, macOS, Windows",
   "programmingLanguage": "Python",
-  "softwareVersion": "0.1.0",
+  "softwareVersion": "0.1.1",
   "license": "https://spdx.org/licenses/AGPL-3.0.html",
   "downloadUrl": "https://pypi.org/project/nightjar-verify/",
   "codeRepository": "https://github.com/j4ngzzz/Nightjar",

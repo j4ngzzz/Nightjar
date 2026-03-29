@@ -28,7 +28,7 @@ const steps: Step[] = [
     title: "Install Nightjar",
     description:
       "Nightjar requires Python 3.11+ and Dafny 4.x for formal verification. Install the package with pip, then verify the CLI is available.",
-    code: `pip install nightjar
+    code: `pip install nightjar-verify
 
 # Verify the install
 nightjar --version`,
