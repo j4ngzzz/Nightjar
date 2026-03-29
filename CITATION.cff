@@ -6,7 +6,7 @@ authors:
   - name: "Nightjar Contributors"
 license: AGPL-3.0-only
 repository-code: "https://github.com/j4ngzzz/Nightjar"
-version: "0.1.2"
+version: "0.1.3"
 date-released: "2026-03-28"
 abstract: >
   Nightjar is a contract-anchored verification layer for AI-generated code.

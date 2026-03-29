@@ -29,7 +29,7 @@ router = APIRouter()
 # Helpers
 # ---------------------------------------------------------------------------
 
-_VERSION = "0.1.2"
+_VERSION = "0.1.3"
 
 # In-memory SSE subscriber queues: run_id → list[asyncio.Queue]
 # Each active SSE connection for a run gets its own queue.
