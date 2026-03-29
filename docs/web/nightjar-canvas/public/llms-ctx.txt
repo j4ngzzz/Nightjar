@@ -30,7 +30,7 @@ Code is regenerated from scratch on every build and is never manually edited.
 ## Key Facts
 
 - Built in 62 hours by a 19yo CS student using Claude Code
-- Found 48 confirmed bugs across 20 popular Python packages using Stage 1 dependency scanning
+- Found 74 confirmed bugs across 34 popular Python packages, 14 verified clean
 - 86% pass@10 success rate with Claude 3.5 Sonnet on the DafnyPro benchmark
 - Cheapest-first pipeline: fails fast at Stage 0 before spending on LLM calls
 - CEGIS (Counterexample-Guided Inductive Synthesis) repair loop auto-fixes failing code
@@ -384,10 +384,10 @@ NIGHTJAR_MODEL      LLM model (e.g. claude-sonnet-4-6, openai/o3, deepseek/deeps
 
 ---
 
-## 48 Confirmed Bugs — Summary
+## 74 Confirmed Bugs — Summary
 
-Nightjar's Stage 1 dependency scanner (pip-audit) was run across 20 popular Python packages.
-It found 48 confirmed bugs in the broader Python ecosystem dependency graph.
+Nightjar's verification pipeline (PBT + source reading) was run across 34 popular Python packages.
+It found 74 confirmed bugs with zero false positives. 14 packages verified clean.
 
 This is not a list of bugs in Nightjar itself — these are bugs in packages that AI models
 commonly generate as dependencies, now detectable at build time before any code ships.

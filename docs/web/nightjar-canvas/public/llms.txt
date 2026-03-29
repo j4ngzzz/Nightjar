@@ -6,7 +6,7 @@
 - [Getting Started](https://nightjarcode.dev/docs/quickstart): Install and run your first verification
 - [Spec Format](https://nightjarcode.dev/docs/card-format): How to write .card.md specification files
 - [Pipeline Stages](https://nightjarcode.dev/docs/pipeline): What each stage does
-- [Bug Reports](https://nightjarcode.dev/bugs/): 48 confirmed bugs found across 20 codebases
+- [Bug Reports](https://nightjarcode.dev/bugs/): 74 confirmed bugs found across 34 codebases
 - [Package Scans](https://nightjarcode.dev/scan/): Security scan results
 
 ## Comparisons
@@ -18,8 +18,8 @@
 pip install nightjar-verify
 
 ## Key Facts
-- Found 48 confirmed bugs across 20 popular Python packages
-- Built in 62 hours by a 19yo CS student; found 48 real bugs in 20 popular Python packages
+- Found 74 confirmed bugs across 34 popular Python packages, 14 verified clean
+- Built in 62 hours by a 19yo CS student using 100% Claude Code
 - 5-stage cheapest-first pipeline: preflight → deps → schema → PBT → formal proof
 - CEGIS retry loop repairs failing code using counterexamples
 - AGPL-3.0 open source, commercial licenses available
