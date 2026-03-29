@@ -1,0 +1,17 @@
+<svg width="200" height="48" viewBox="0 0 200 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Nightjar">
+  <!-- Hexagonal badge mark -->
+  <path d="M24 4 L40 13 L40 31 L24 40 L8 31 L8 13 Z" stroke="#D4920A" stroke-width="1.5" fill="none"/>
+  <path d="M24 12 L34 17.5 L34 28.5 L24 34 L14 28.5 L14 17.5 Z" stroke="#F5B93A" stroke-width="0.75" fill="none" opacity="0.5"/>
+  <circle cx="24" cy="22" r="5" fill="#D4920A"/>
+  <circle cx="24" cy="22" r="2.5" fill="#FFD060"/>
+  <!-- Wordmark -->
+  <text
+    x="52"
+    y="28"
+    font-family="Geist, system-ui, sans-serif"
+    font-size="20"
+    font-weight="600"
+    fill="#F0EBE3"
+    letter-spacing="-0.3"
+  >Nightjar</text>
+</svg>
