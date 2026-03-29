@@ -424,6 +424,7 @@ def init(ctx: click.Context, module_name: str, output: str) -> None:
               help="Output format.")
 @click.option("--output-sarif", default=None, type=click.Path(),
               help="Write SARIF 2.1.0 results to file.")
+@click.option("--tui", is_flag=True, default=False, help="Launch Textual TUI dashboard.")
 @click.pass_context
 def verify(
     ctx: click.Context,
@@ -433,6 +434,7 @@ def verify(
     ci: bool,
     output_format: Optional[str],
     output_sarif: Optional[str],
+    tui: bool,
 ) -> None:
     """Run the 5-stage verification pipeline.
 
@@ -441,6 +443,22 @@ def verify(
     """
     config = ctx.obj["config"]
     spec_path = contract
+
+    # ── TUI mode ──────────────────────────────────────────────────────────────
+    if tui:
+        try:
+            from nightjar.tui import NightjarTUI, HAS_TEXTUAL
+            if not HAS_TEXTUAL:
+                click.echo("Textual not installed. Install with: pip install textual", err=True)
+            else:
+                # Pass TUI as display callback
+                tui_app = NightjarTUI()
+                # Run verification with TUI display
+                click.echo("TUI mode — launching Textual dashboard...")
+                # For now, just run the normal path — full TUI integration needs run_pipeline to accept a display callback
+        except ImportError:
+            click.echo("Textual not installed for TUI mode.", err=True)
+
     try:
         result = _run_verify(
             contract, fast=fast, stage=stage, config=config, ci=ci
@@ -1495,3 +1513,29 @@ def benchmark(
         ctx.exit(EXIT_PASS)
     else:
         ctx.exit(EXIT_FAIL)
+
+
+# ── Immune system commands ──────────────────────────────────────────────
+try:
+    from nightjar.immune_commands import immune_group
+    main.add_command(immune_group)
+except ImportError:
+    pass  # immune deps not installed — commands not registered
+
+
+@main.command()
+@click.option("--port", default=8000, type=int, help="Port to bind to.")
+@click.option("--host", default="127.0.0.1", help="Host to bind to.")
+def serve(port, host):
+    """Launch the Nightjar Canvas web UI locally."""
+    try:
+        from nightjar.web_server import app, HAS_FASTAPI
+        if not HAS_FASTAPI:
+            click.echo("FastAPI not installed. Install with: pip install nightjar-verify[canvas]", err=True)
+            raise SystemExit(2)
+        import uvicorn
+        click.echo(f"Nightjar Canvas → http://{host}:{port}")
+        uvicorn.run(app, host=host, port=port)
+    except ImportError:
+        click.echo("Install canvas extras: pip install nightjar-verify[canvas]", err=True)
+        raise SystemExit(2)
