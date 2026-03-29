@@ -75,8 +75,10 @@ ref: implement CEGIS repair loop [REF-NEW-02, REF-P03]
 project/
 ├── CLAUDE.md                       # THIS FILE
 ├── nightjar.toml                   # CLI configuration
-├── pyproject.toml                  # Package metadata + entry point
+├── pyproject.toml                  # Package metadata + entry point (v0.1.1)
 ├── deps.lock                       # Sealed dependency manifest [REF-C08]
+├── smithery.yaml                   # Smithery MCP registry manifest
+├── npm/                            # npm wrapper package for MCP distribution
 ├── .card/
 │   ├── constitution.card.md        # Project-level invariants
 │   ├── auth.card.md                # Module specs (one per module)
@@ -107,23 +109,35 @@ project/
 │   │   ├── oracle_lifter.py        # Test oracle lifting [REF-NEW-06]
 │   │   ├── tui.py                  # Textual TUI dashboard
 │   │   ├── display.py              # Rich streaming DisplayCallback
-│   │   ├── sentry_integration.py   # Sentry → immune feed
+│   │   ├── sentry_integration.py   # Sentry webhook payload → immune candidates
 │   │   ├── gitnexus_hooks.py       # Blast radius warnings
 │   │   ├── mcp_server.py           # MCP server [REF-T18]
 │   │   ├── scanner.py              # `nightjar scan` — invariant extraction from existing code
 │   │   ├── inferrer.py             # `nightjar infer` — LLM + CrossHair contract inference
 │   │   ├── pkg_auditor.py          # `nightjar audit` — PyPI package security audit
-│   │   ├── benchmark_adapter.py    # Benchmark harness adapter
-│   │   ├── benchmark_runner.py     # `nightjar benchmark` — performance benchmarking
+│   │   ├── benchmark_adapter.py    # Benchmark harness adapter (vericoding/DafnyBench)
+│   │   ├── benchmark_runner.py     # `nightjar benchmark` — academic benchmark runner
 │   │   ├── sarif_writer.py         # SARIF output for IDE/CI integration
 │   │   ├── immune_commands.py      # `nightjar immune` subcommand group
+│   │   ├── hook_installer.py       # `nightjar hook` — coding agent config installer
+│   │   ├── shadow_ci.py            # `nightjar shadow-ci` — non-blocking CI mode
+│   │   ├── shadow_ci_runner.py     # Shadow CI execution helpers
 │   │   ├── watch.py                # `nightjar watch` — file-change re-verify daemon
 │   │   ├── web_server.py           # `nightjar serve` — web UI server
 │   │   ├── auto.py                 # `nightjar auto` — fully autonomous verify+fix loop
-│   │   ├── badge.py                # `nightjar badge` — shield.io badge generation
-│   │   ├── formatters/             # Output formatters (JSON, SARIF, text, etc.)
+│   │   ├── badge.py                # `nightjar badge` — SVG + shields.io badge generation
+│   │   ├── compliance.py           # CycloneDX SBOM / EU CRA compliance helpers
+│   │   ├── dafny_pro.py            # DafnyPro structured error parsing
+│   │   ├── dafny_setup.py          # Dafny binary auto-installer
+│   │   ├── optimizer.py            # LLM prompt optimization (hill-climbing)
+│   │   ├── strategy_db.py          # MAP-Elites strategy database
+│   │   ├── tracking.py             # Card tracking / ratchet loop
+│   │   ├── replay.py               # Verification run replay
+│   │   ├── safety_gate.py          # SafePilot complexity routing
+│   │   ├── intent_router.py        # Natural-language intent routing
+│   │   ├── formatters/             # Output formatters (JSON, SARIF, VS Code, etc.)
 │   │   ├── invariant_generators/   # Per-tier code generators
-│   │   ├── security/               # OWASP security checks
+│   │   ├── security/               # OWASP security checks (owasp_pack.py)
 │   │   └── stages/
 │   │       ├── preflight.py        # Stage 0
 │   │       ├── deps.py             # Stage 1 [REF-C08]
@@ -138,7 +152,10 @@ project/
 │       ├── enforcer.py             # Runtime enforcement + temporal supersession
 │       ├── quality_scorer.py       # Wonda quality scoring [REF-NEW-05]
 │       ├── debate.py               # Adversarial debate [REF-NEW-10]
-│       └── spec_updater.py         # Append invariants to .card.md
+│       ├── spec_updater.py         # Append invariants to .card.md
+│       ├── houdini.py              # Houdini invariant pruning
+│       ├── pipeline.py             # Immune pipeline orchestrator
+│       └── store.py                # Invariant persistence store
 └── docs/
     ├── REFERENCES.md               # Citation library — READ THIS FIRST
     ├── ARCHITECTURE.md             # Full system design
@@ -150,13 +167,18 @@ project/
 
 ## What's Built vs What's Next
 
-**Built (Phases 1-6):**
+**Built (Phases 1-6 + Waves 0-3):**
 - Full 6-stage verification pipeline (Stage 0–4 + Stage 2.5 negation-proof)
 - CEGIS retry loop with structured Dafny error format
 - Analyst → Formalizer → Coder generation pipeline
-- 17 CLI commands (`init`, `generate`, `verify`, `build`, `ship`, `retry`, `lock`, `explain`, `optimize`, `auto`, `watch`, `badge`, `scan`, `infer`, `audit`, `benchmark`, `serve`) + immune group (`immune run`, `immune collect`, `immune status`)
-- MCP server with 3 tools (`verify_contract`, `get_violations`, `suggest_fix`)
-- Immune system: trace collection, Daikon reimplementation, LLM enrichment, Wonda quality scoring, adversarial debate, temporal supersession
+- 19 top-level CLI commands (`init`, `generate`, `verify`, `build`, `ship`, `retry`, `lock`, `explain`, `optimize`, `auto`, `watch`, `badge`, `scan`, `infer`, `audit`, `benchmark`, `serve`, `mcp`, `shadow-ci`) + command groups: `hook` (`install`, `remove`, `list`) and `immune` (`run`, `collect`, `status`)
+- MCP server with 3 tools (`verify_contract`, `get_violations`, `suggest_fix`) + `nightjar mcp` CLI launcher
+- `nightjar hook install` — auto-installs verification hooks into Claude Code, Cursor, Windsurf, and Kiro agent configs
+- `nightjar shadow-ci` — non-blocking CI mode (shadow/strict); never breaks a PR in shadow mode
+- `nightjar badge --svg` — standalone SVG badge generation + shields.io JSON endpoint
+- `nightjar benchmark` — runs against vericoding (POPL 2026) and DafnyBench academic task files
+- OWASP security pack (`security/owasp_pack.py`) with `--owasp` flag on verify
+- Immune system: trace collection, Daikon reimplementation, LLM enrichment, Wonda quality scoring, adversarial debate, temporal supersession, Houdini pruning
 - Textual TUI dashboard with `--tui` flag
 - Sentry webhook payload parser (no sentry_sdk — parses Sentry-format JSON into invariant candidates)
 - LP dual root-cause diagnosis on retry exhaustion
@@ -165,6 +187,8 @@ project/
 - Test oracle lifter (existing tests → `.card.md` invariants)
 - GitNexus blast radius hooks
 - LLM prompt optimization (hill-climbing) (`nightjar optimize`)
+- Smithery registry manifest + npm wrapper for MCP distribution
+- CycloneDX SBOM / EU CRA compliance report generation (`compliance` extra)
 
 **Known gaps / Next tasks:** Check `docs/superpowers/plans/` for the active plan file.
 
@@ -217,6 +241,21 @@ nightjar watch
 
 # Launch web UI
 nightjar serve
+
+# Start the MCP server (stdio transport for coding agent integration)
+nightjar mcp
+
+# Install verification hooks into detected coding agents
+nightjar hook install
+
+# Remove hooks from a specific agent
+nightjar hook remove --target cursor
+
+# Run in non-blocking CI shadow mode
+nightjar shadow-ci --mode shadow --spec .card/verify.json
+
+# Run against an academic verification benchmark
+nightjar benchmark path/to/benchmark.json --source vericoding
 ```
 
 ---

@@ -425,6 +425,8 @@ def init(ctx: click.Context, module_name: str, output: str) -> None:
 @click.option("--output-sarif", default=None, type=click.Path(),
               help="Write SARIF 2.1.0 results to file.")
 @click.option("--tui", is_flag=True, default=False, help="Launch Textual TUI dashboard.")
+@click.option("--security-pack", default=None, type=click.Choice(["owasp"]),
+              help="Inject security invariants before running pipeline.")
 @click.pass_context
 def verify(
     ctx: click.Context,
@@ -435,6 +437,7 @@ def verify(
     output_format: Optional[str],
     output_sarif: Optional[str],
     tui: bool,
+    security_pack: Optional[str],
 ) -> None:
     """Run the 5-stage verification pipeline.
 
@@ -458,6 +461,22 @@ def verify(
                 # For now, just run the normal path — full TUI integration needs run_pipeline to accept a display callback
         except ImportError:
             click.echo("Textual not installed for TUI mode.", err=True)
+
+    # ── --security-pack: inject security invariants into spec before pipeline ──
+    if security_pack == "owasp":
+        try:
+            from nightjar.security.owasp_pack import generate_security_block
+            security_invariants = generate_security_block()
+            click.echo(
+                f"Security pack 'owasp': injected {len(security_invariants)} invariant(s)."
+            )
+        except ImportError:
+            click.echo(
+                "Warning: owasp_pack not available — continuing without security invariants.",
+                err=True,
+            )
+        except Exception as e:  # noqa: BLE001
+            click.echo(f"Warning: security pack error ({e}) — continuing.", err=True)
 
     try:
         result = _run_verify(
@@ -903,12 +922,90 @@ def watch(ctx: click.Context, debounce: int, card_dir: str) -> None:
 @main.command()
 @click.option("--format", "fmt", type=click.Choice(["url", "markdown", "html"]), default="markdown")
 @click.option("--report", default=".card/verify.json", help="Path to verify.json report.")
+@click.option("--svg", is_flag=True, default=False, help="Generate standalone SVG badge.")
+@click.option("--shields-json", "shields_json", is_flag=True, default=False,
+              help="Write shields.io JSON endpoint.")
+@click.option("--readme", is_flag=True, default=False,
+              help="Print README markdown embed line.")
+@click.option("--owner", default=None, help="GitHub repo owner (for --readme).")
+@click.option("--repo-name", default=None, help="GitHub repo name (for --readme).")
 @click.pass_context
-def badge(ctx: click.Context, fmt: str, report: str) -> None:
+def badge(
+    ctx: click.Context,
+    fmt: str,
+    report: str,
+    svg: bool,
+    shields_json: bool,
+    readme: bool,
+    owner: Optional[str],
+    repo_name: Optional[str],
+) -> None:
     """Generate a 'Nightjar Verified' badge from last verification result.
 
     Uses shields.io to create status + coverage badges. [Scout 7 N8]
+
+    Examples:
+        nightjar badge --format=url
+        nightjar badge --svg
+        nightjar badge --shields-json
+        nightjar badge --readme --owner myorg --repo-name myrepo
     """
+    # ── --svg: generate standalone SVG badge ─────────────────────────────────
+    if svg:
+        try:
+            from nightjar.badge import generate_badge_svg
+            click.echo(generate_badge_svg(report))
+        except ImportError as e:
+            click.echo(f"Error: badge module not available ({e})", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
+        except Exception as e:  # noqa: BLE001
+            click.echo(f"Badge SVG error: {e}", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
+        ctx.exit(EXIT_PASS)
+        return
+
+    # ── --shields-json: write shields.io endpoint JSON ────────────────────────
+    if shields_json:
+        try:
+            from nightjar.badge import write_shields_json
+            out_path = write_shields_json(report_path=report)
+            click.echo(f"shields.io JSON written to {out_path}")
+        except ImportError as e:
+            click.echo(f"Error: badge module not available ({e})", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
+        except Exception as e:  # noqa: BLE001
+            click.echo(f"Badge shields-json error: {e}", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
+        ctx.exit(EXIT_PASS)
+        return
+
+    # ── --readme: print README markdown embed line ────────────────────────────
+    if readme:
+        if not owner or not repo_name:
+            click.echo(
+                "Error: --readme requires --owner and --repo-name.", err=True
+            )
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
+        try:
+            from nightjar.badge import generate_readme_embed
+            click.echo(generate_readme_embed(owner, repo_name))
+        except ImportError as e:
+            click.echo(f"Error: badge module not available ({e})", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
+        except Exception as e:  # noqa: BLE001
+            click.echo(f"Badge readme error: {e}", err=True)
+            ctx.exit(EXIT_CONFIG_ERROR)
+            return
+        ctx.exit(EXIT_PASS)
+        return
+
+    # ── default: --format url / markdown / html ───────────────────────────────
     try:
         from nightjar.badge import generate_badge_url_from_report, generate_badge_markdown
 
@@ -1576,6 +1673,159 @@ try:
     main.add_command(immune_group)
 except ImportError:
     pass  # immune deps not installed — commands not registered
+
+
+# ── hook command group ───────────────────────────────────────────────────────
+
+
+@main.group()
+def hook() -> None:
+    """Manage coding agent integrations (Claude Code, Cursor, Windsurf, Kiro)."""
+
+
+@hook.command("install")
+@click.option(
+    "--target",
+    default="all",
+    type=click.Choice(["claude-code", "cursor", "windsurf", "kiro", "all"]),
+    help="Which agent to install for (default: all detected agents).",
+)
+@click.option("--force", is_flag=True, default=False,
+              help="Overwrite an existing Nightjar hook installation.")
+@click.option("--dir", "project_dir", default=".", type=click.Path(file_okay=False),
+              help="Project root directory (default: current directory).")
+def hook_install(target: str, force: bool, project_dir: str) -> None:
+    """Install Nightjar verification hooks into coding agent configs."""
+    try:
+        from pathlib import Path as _Path
+        from nightjar.hook_installer import (
+            install_hook,
+            detect_available_agents,
+        )
+    except ImportError as e:
+        click.echo(f"Error: hook_installer module not available ({e})", err=True)
+        raise SystemExit(EXIT_CONFIG_ERROR)
+
+    cwd = _Path(project_dir).resolve()
+
+    targets_to_install: list[str]
+    if target == "all":
+        targets_to_install = detect_available_agents(cwd)
+        if not targets_to_install:
+            click.echo(
+                "No coding agent directories detected in this project. "
+                "Use --target to specify one explicitly.",
+                err=True,
+            )
+            raise SystemExit(EXIT_CONFIG_ERROR)
+        click.echo(f"Detected agents: {', '.join(targets_to_install)}")
+    else:
+        targets_to_install = [target]
+
+    any_error = False
+    for t in targets_to_install:
+        try:
+            result = install_hook(t, cwd, force=force)
+            click.echo(result.message)
+        except Exception as e:  # noqa: BLE001
+            click.echo(f"Error installing hook for {t}: {e}", err=True)
+            any_error = True
+
+    raise SystemExit(EXIT_CONFIG_ERROR if any_error else EXIT_PASS)
+
+
+@hook.command("remove")
+@click.option(
+    "--target",
+    required=True,
+    type=click.Choice(["claude-code", "cursor", "windsurf", "kiro"]),
+    help="Which agent's hook to remove.",
+)
+@click.option("--dir", "project_dir", default=".",
+              help="Project root directory (default: current directory).")
+def hook_remove(target: str, project_dir: str) -> None:
+    """Remove Nightjar hooks from a coding agent config."""
+    try:
+        from pathlib import Path as _Path
+        from nightjar.hook_installer import remove_hook
+    except ImportError as e:
+        click.echo(f"Error: hook_installer module not available ({e})", err=True)
+        raise SystemExit(EXIT_CONFIG_ERROR)
+
+    cwd = _Path(project_dir).resolve()
+    try:
+        result = remove_hook(target, cwd)
+        click.echo(result.message)
+        raise SystemExit(EXIT_PASS)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        click.echo(f"Error removing hook for {target}: {e}", err=True)
+        raise SystemExit(EXIT_CONFIG_ERROR)
+
+
+@hook.command("list")
+@click.option("--dir", "project_dir", default=".",
+              help="Project root directory (default: current directory).")
+def hook_list(project_dir: str) -> None:
+    """Show installed Nightjar hooks."""
+    try:
+        from pathlib import Path as _Path
+        from nightjar.hook_installer import list_hooks
+    except ImportError as e:
+        click.echo(f"Error: hook_installer module not available ({e})", err=True)
+        raise SystemExit(EXIT_CONFIG_ERROR)
+
+    cwd = _Path(project_dir).resolve()
+    try:
+        statuses = list_hooks(cwd)
+        if not statuses:
+            click.echo("No supported agents found.")
+            raise SystemExit(EXIT_PASS)
+        for s in statuses:
+            installed_label = "installed" if s.installed else "not installed"
+            click.echo(f"  {s.target:15s} {installed_label:15s} ({s.config_path})")
+        raise SystemExit(EXIT_PASS)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        click.echo(f"Error listing hooks: {e}", err=True)
+        raise SystemExit(EXIT_CONFIG_ERROR)
+
+
+# ── mcp command ──────────────────────────────────────────────────────────────
+
+
+@main.command("mcp")
+@click.option(
+    "--transport",
+    default="stdio",
+    type=click.Choice(["stdio"]),
+    help="Transport protocol (default: stdio).",
+)
+def mcp_cmd(transport: str) -> None:
+    """Start the Nightjar MCP server (Model Context Protocol).
+
+    Exposes three tools to coding assistants:
+      verify_contract, get_violations, suggest_fix.
+
+    References: [REF-T18] MCP SDK.
+    """
+    try:
+        from nightjar.mcp_server import create_mcp_server, HAS_MCP
+        if not HAS_MCP:
+            click.echo("MCP SDK not installed. Install with: pip install mcp", err=True)
+            raise SystemExit(EXIT_CONFIG_ERROR)
+        server = create_mcp_server()
+        server.run(transport=transport)
+    except SystemExit:
+        raise
+    except ImportError:
+        click.echo("MCP SDK not installed. Install with: pip install mcp", err=True)
+        raise SystemExit(EXIT_CONFIG_ERROR)
+    except Exception as e:  # noqa: BLE001
+        click.echo(f"MCP server error: {e}", err=True)
+        raise SystemExit(EXIT_CONFIG_ERROR)
 
 
 @main.command()

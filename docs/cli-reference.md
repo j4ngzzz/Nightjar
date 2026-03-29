@@ -1,6 +1,6 @@
 # Nightjar CLI Reference
 
-Nightjar is a contract-anchored regenerative development tool. It parses `.card.md` specs, generates code via LLM, and proves the code correct through a 5-stage verification pipeline. Code is never manually edited — it is always regenerated from specs.
+Nightjar is a contract-anchored regenerative development tool with **25 CLI commands**. It parses `.card.md` specs, generates code via LLM, and proves the code correct through a 5-stage verification pipeline. Code is never manually edited — it is always regenerated from specs.
 
 **Entry point:** `nightjar` (`nightjar.cli:main`)
 **Config file:** `nightjar.toml`
@@ -33,6 +33,10 @@ Nightjar is a contract-anchored regenerative development tool. It parses `.card.
 | [`immune run`](#nightjar-immune-run) | Immune System | Full invariant mining cycle |
 | [`immune collect`](#nightjar-immune-collect) | Immune System | Runtime type trace collection |
 | [`immune status`](#nightjar-immune-status) | Immune System | Immune system health dashboard |
+| [`hook install`](#nightjar-hook-install) | Hook Management | Install verification hook for a coding agent |
+| [`hook remove`](#nightjar-hook-remove) | Hook Management | Remove Nightjar hook from agent config |
+| [`hook list`](#nightjar-hook-list) | Hook Management | Show hook installation status for all agents |
+| [`mcp`](#nightjar-mcp) | CI & Server | Start the Nightjar MCP server |
 
 ---
 
@@ -133,6 +137,14 @@ nightjar shadow-ci --spec .card/verify.json --mode strict
 nightjar immune collect src/payment.py
 nightjar immune run src/payment.py --card .card/payment.card.md
 nightjar immune status
+```
+
+**Wave 3 setup and verification workflow:**
+```bash
+nightjar hook install --target claude-code  # set up auto-verification
+nightjar spec src/                           # generate specs
+nightjar verify                              # verify
+nightjar badge --svg                         # generate badge
 ```
 
 ---
@@ -422,6 +434,7 @@ nightjar verify --spec <path> [options]
 | `--format` | choice | `None` | Output format. Choices: `text`, `vscode`, `json`. `vscode` emits VS Code problem-matcher format. |
 | `--output-sarif` | path | `None` | Write SARIF 2.1.0 results to the given file path. Can be combined with any `--format`. |
 | `--tui` | flag | `false` | Launch the Textual TUI dashboard (requires `pip install textual`). |
+| `--security-pack` | flag | `false` | Run OWASP security checks as an additional stage after stage 4. Requires the security module (`pip install nightjar[security]`). |
 | `--help` | flag | — | Show help and exit. |
 
 **Examples:**
@@ -446,6 +459,9 @@ nightjar verify --spec .card/payment.card.md --format json
 
 # TUI dashboard
 nightjar verify --spec .card/payment.card.md --tui
+
+# Full pipeline with OWASP security checks
+nightjar verify --spec .card/payment.card.md --security-pack
 ```
 
 **Exit codes:**
@@ -726,6 +742,11 @@ nightjar badge [options]
 |--------|------|---------|-------------|
 | `--format` | choice | `markdown` | Output format for the badge. Choices: `url`, `markdown`, `html`. |
 | `--report` | path | `.card/verify.json` | Path to the verification report JSON file. |
+| `--svg` | flag | `false` | Generate a self-contained SVG badge (no shields.io dependency). Reads `.card/verify.json` and writes `.card/badge.svg`. |
+| `--shields-json` | flag | `false` | Write a shields.io endpoint JSON payload to `.card/shields.json`. Useful for hosting a dynamic badge via the shields.io `/endpoint` spec. |
+| `--readme` | flag | `false` | Print a README.md embed line that points to the committed `.card/badge.svg`. Requires `--owner` and `--repo-name`. |
+| `--owner` | string | `None` | GitHub username or organisation name. Required when `--readme` is set. |
+| `--repo-name` | string | `None` | Repository name on GitHub. Required when `--readme` is set. |
 | `--help` | flag | — | Show help and exit. |
 
 **Examples:**
@@ -741,6 +762,15 @@ nightjar badge --format html
 
 # Badge from a non-default report location
 nightjar badge --report build/verify.json --format markdown
+
+# Self-contained SVG badge (no external requests, safe for air-gapped repos)
+nightjar badge --svg
+
+# shields.io endpoint JSON (host at a URL, then use shields.io /endpoint)
+nightjar badge --shields-json
+
+# README embed line pointing to the committed SVG
+nightjar badge --readme --owner myorg --repo-name myproject
 ```
 
 **Exit codes:**
@@ -840,6 +870,148 @@ nightjar watch --debounce 200 --card-dir specs/
 | `2` | Watch module unavailable or startup error |
 
 **Notes:** Each tier event is printed as `[Tier N] STATUS (Xms)`. The daemon runs until interrupted.
+
+---
+
+## Hook Management Commands
+
+The `hook` subcommands install, remove, and inspect Nightjar verification hooks in coding agent configuration files. No external service is required — all operations are local filesystem writes.
+
+**Supported targets:**
+
+| Target | Config file written |
+|--------|---------------------|
+| `claude-code` | `{project}/.claude/settings.json` (project-scoped PostToolUse hook) |
+| `cursor` | `{project}/.cursor/settings.json` (afterFileEdit hook) |
+| `windsurf` | `~/.codeium/windsurf/mcp_config.json` (global MCP server entry) |
+| `kiro` | `{project}/.kiro/settings/mcp.json` (MCP server entry) |
+
+**Safety invariants:** Nightjar never deletes config keys it did not write, never overwrites an existing installation without `--force`, and aborts (with a warning) if the target config contains invalid JSON.
+
+---
+
+### `nightjar hook install`
+
+**Description:** Install the Nightjar verification hook into a coding agent's config. Idempotent — running it twice without `--force` is a no-op.
+
+**Usage:**
+```bash
+nightjar hook install --target <agent> [options]
+```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--target` | choice | — | **Required.** Agent to configure. Choices: `claude-code`, `cursor`, `windsurf`, `kiro`. |
+| `--force` | flag | `false` | Overwrite an existing Nightjar hook installation. Without this flag, an already-installed hook is a no-op. |
+| `--dir` | path | `.` (cwd) | Project root directory. Config paths are resolved relative to this (except Windsurf, which is always global). |
+| `--help` | flag | — | Show help and exit. |
+
+**Examples:**
+```bash
+# Install for Claude Code (project-scoped PostToolUse hook)
+nightjar hook install --target claude-code
+
+# Install for Cursor in a different project directory
+nightjar hook install --target cursor --dir /projects/myapp
+
+# Force-reinstall (overwrite existing Nightjar entry)
+nightjar hook install --target windsurf --force
+
+# Install for Kiro
+nightjar hook install --target kiro
+```
+
+**What gets written:**
+
+- **claude-code** — Appends a `PostToolUse` hook entry to `.claude/settings.json` that runs `nightjar verify --fast --format=json` after every Write, Edit, or MultiEdit tool call.
+- **cursor** — Adds a `nightjar.afterFileEdit` key to `.cursor/settings.json` that runs `nightjar verify --fast --format=json` on every `.py` file save (60 s timeout).
+- **windsurf** — Adds `mcpServers.nightjar` to `~/.codeium/windsurf/mcp_config.json` (global config), pointing to `nightjar mcp`.
+- **kiro** — Adds `mcpServers.nightjar` to `.kiro/settings/mcp.json`, pointing to `nightjar mcp`.
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Hook installed, or was already present (idempotent) |
+| `2` | Invalid target, invalid JSON in existing config, or write error |
+
+---
+
+### `nightjar hook remove`
+
+**Description:** Remove only Nightjar's entries from the agent config. All other config content is preserved.
+
+**Usage:**
+```bash
+nightjar hook remove --target <agent> [options]
+```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--target` | choice | — | **Required.** Agent whose config to clean. Choices: `claude-code`, `cursor`, `windsurf`, `kiro`. |
+| `--dir` | path | `.` (cwd) | Project root directory. |
+| `--help` | flag | — | Show help and exit. |
+
+**Examples:**
+```bash
+# Remove from Claude Code
+nightjar hook remove --target claude-code
+
+# Remove from Windsurf global config
+nightjar hook remove --target windsurf
+```
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Hook removed, or was not present (no-op) |
+| `2` | Invalid JSON in existing config, or write error |
+
+---
+
+### `nightjar hook list`
+
+**Description:** Show the installation status of the Nightjar hook for all supported agents. Read-only — does not modify any file.
+
+**Usage:**
+```bash
+nightjar hook list [options]
+```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--dir` | path | `.` (cwd) | Project root directory to check. |
+| `--help` | flag | — | Show help and exit. |
+
+**Examples:**
+```bash
+# Check hook status for all agents in the current project
+nightjar hook list
+
+# Check in a different project directory
+nightjar hook list --dir /projects/myapp
+```
+
+**Sample output:**
+```
+claude-code    installed      .claude/settings.json
+cursor         not installed  .cursor/settings.json
+windsurf       installed      ~/.codeium/windsurf/mcp_config.json
+kiro           not installed  .kiro/settings/mcp.json
+```
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Status listed (always, even if no hooks are installed) |
 
 ---
 
@@ -977,6 +1149,52 @@ nightjar serve --host 0.0.0.0 --port 9000
 | `2` | FastAPI or uvicorn not installed |
 
 **Requires:** `pip install nightjar-verify[canvas]`
+
+---
+
+### `nightjar mcp`
+
+**Description:** Start the Nightjar MCP (Model Context Protocol) server. Exposes three tools to any MCP-compatible client: `verify_contract`, `get_violations`, and `suggest_fix`.
+
+**Usage:**
+```bash
+nightjar mcp [options]
+```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--transport` | choice | `stdio` | Transport layer. Choices: `stdio` (process-pipe — default, used by Claude Code and most MCP clients), `sse` (HTTP Server-Sent Events, for browser and remote clients). |
+| `--help` | flag | — | Show help and exit. |
+
+**MCP tools exposed:**
+
+| Tool | Description |
+|------|-------------|
+| `verify_contract` | Run the Nightjar verification pipeline on a `.card.md` spec and return structured results. |
+| `get_violations` | Return all unresolved violations from the last verification run. |
+| `suggest_fix` | Given a violation, return an LLM-generated repair suggestion. |
+
+**Examples:**
+```bash
+# Start in stdio mode (default — for Claude Code, Cursor, Windsurf, Kiro)
+nightjar mcp
+
+# Start with SSE transport (for browser-based or remote MCP clients)
+nightjar mcp --transport sse
+```
+
+**Integration:** The `nightjar mcp` server entry is installed automatically into Windsurf and Kiro configs by `nightjar hook install --target windsurf` and `nightjar hook install --target kiro`. For Claude Code and Cursor, PostToolUse / afterFileEdit hooks are used instead.
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Server stopped cleanly |
+| `2` | MCP module unavailable or transport configuration error |
+
+**Requires:** `pip install nightjar-verify[mcp]`
 
 ---
 
