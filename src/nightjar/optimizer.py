@@ -71,6 +71,9 @@ def _call_llm_for_variation(
     - [REF-T26] DSPy — meta-prompt optimization inspiration
     - [REF-T16] litellm — model-agnostic LLM calls
     """
+    from nightjar.config import require_llm_api_key
+    require_llm_api_key()
+
     resolved_model = model or os.environ.get("NIGHTJAR_MODEL", "claude-sonnet-4-6")
 
     meta_prompt = (

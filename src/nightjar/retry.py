@@ -274,6 +274,9 @@ def _call_llm_with_prompt(prompt: str) -> str:
     Returns:
         LLM response content string.
     """
+    from nightjar.config import require_llm_api_key
+    require_llm_api_key()
+
     model = os.environ.get("NIGHTJAR_MODEL", "claude-sonnet-4-6")
     response = litellm.completion(
         model=model,

@@ -216,6 +216,9 @@ def _generate_candidates(intent: NLIntent, model: str) -> list[dict]:
         List of dicts with 'statement', 'confidence', 'type' keys.
         Returns empty list on LLM failure (graceful degradation).
     """
+    from nightjar.config import require_llm_api_key
+    require_llm_api_key()
+
     user_prompt = (
         f"Component: {intent.subject}\n"
         f"Full intent: {intent.raw}\n"

@@ -107,3 +107,66 @@ def get_model(
 def get_specs_dir(config: dict) -> str:
     """Get the specs directory from config."""
     return config.get("paths", {}).get("specs", ".card/")
+
+
+# Ordered list of env vars that litellm accepts as provider API keys.
+# Checked in priority order: whichever is set first wins.
+# Source: litellm/utils.py get_api_key() + validate_environment().
+_KNOWN_API_KEY_VARS: tuple[str, ...] = (
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "COHERE_API_KEY",
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "MISTRAL_API_KEY",
+    "TOGETHER_API_KEY",
+    "FIREWORKS_API_KEY",
+    "REPLICATE_API_KEY",
+    "HUGGINGFACE_API_KEY",
+    "AZURE_API_KEY",
+    "AZURE_OPENAI_API_KEY",
+    "BEDROCK_ACCESS_KEY_ID",
+    "VERTEX_PROJECT",
+)
+
+
+def require_llm_api_key() -> None:
+    """Raise a clean error if no LLM provider API key is configured.
+
+    Must be called before the first litellm.completion() call in any
+    command that requires LLM access.  Prevents litellm from hanging
+    indefinitely when no key is present (observed on Python 3.14).
+
+    Raises:
+        SystemExit(4): EXIT_LLM_ERROR — with a human-readable message
+            listing the env vars that can be set to fix the problem.
+    """
+    # Also honour a .env file that load_config() may not have loaded yet
+    # (e.g. when called early from a module-level guard).
+    _maybe_load_dotenv()
+
+    for var in _KNOWN_API_KEY_VARS:
+        if os.environ.get(var, "").strip():
+            return  # At least one key is present — proceed.
+
+    import sys
+
+    print(
+        "Error: no LLM API key found.\n"
+        "Set one of the following environment variables before running:\n"
+        "  ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, "
+        "GEMINI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY, …\n"
+        "Or add it to a .env file in the project root.\n"
+        "See: https://nightjar.dev/docs/models",
+        file=sys.stderr,
+    )
+    sys.exit(4)  # EXIT_LLM_ERROR
+
+
+def _maybe_load_dotenv() -> None:
+    """Load .env from the current working directory if it exists."""
+    env_path = Path(".env")
+    if env_path.exists():
+        _load_dotenv_simple(env_path)

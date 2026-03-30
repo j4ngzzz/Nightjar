@@ -255,6 +255,9 @@ def run_analyst(spec: CardSpec, model: str | None = None) -> str:
     Raises:
         ValueError: If LLM returns empty content.
     """
+    from nightjar.config import require_llm_api_key
+    require_llm_api_key()
+
     resolved_model = get_model(model)
     spec_context = _build_spec_context(spec)
 

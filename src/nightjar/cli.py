@@ -1053,6 +1053,8 @@ def badge(
             click.echo(f"Error: badge module not available ({e})", err=True)
             ctx.exit(EXIT_CONFIG_ERROR)
             return
+        except click.exceptions.Exit:
+            raise
         except Exception as e:  # noqa: BLE001
             click.echo(f"Badge SVG error: {e}", err=True)
             ctx.exit(EXIT_CONFIG_ERROR)
@@ -1070,6 +1072,8 @@ def badge(
             click.echo(f"Error: badge module not available ({e})", err=True)
             ctx.exit(EXIT_CONFIG_ERROR)
             return
+        except click.exceptions.Exit:
+            raise
         except Exception as e:  # noqa: BLE001
             click.echo(f"Badge shields-json error: {e}", err=True)
             ctx.exit(EXIT_CONFIG_ERROR)
@@ -1092,6 +1096,8 @@ def badge(
             click.echo(f"Error: badge module not available ({e})", err=True)
             ctx.exit(EXIT_CONFIG_ERROR)
             return
+        except click.exceptions.Exit:
+            raise
         except Exception as e:  # noqa: BLE001
             click.echo(f"Badge readme error: {e}", err=True)
             ctx.exit(EXIT_CONFIG_ERROR)
@@ -1127,6 +1133,8 @@ def badge(
         elif fmt == "html":
             click.echo(f'<img src="{badge_url}" alt="Nightjar Verified">')
         ctx.exit(EXIT_PASS)
+    except click.exceptions.Exit:
+        raise
     except FileNotFoundError:
         click.echo("No verification report found. Run 'nightjar verify' first.", err=True)
         ctx.exit(EXIT_CONFIG_ERROR)
