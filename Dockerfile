@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /dafny-tmp
 RUN curl -fsSL \
-    "https://github.com/dafny-lang/dafny/releases/download/v${DAFNY_VERSION}/dafny-${DAFNY_VERSION}-x64-linux.zip" \
+    "https://github.com/dafny-lang/dafny/releases/download/v${DAFNY_VERSION}/dafny-${DAFNY_VERSION}-x64-ubuntu-20.04.zip" \
     -o dafny.zip \
   && unzip dafny.zip \
   && rm dafny.zip \

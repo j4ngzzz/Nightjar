@@ -79,9 +79,9 @@ runs:
       shell: bash
       run: |
         if [[ "${{ inputs.nightjar-version }}" == "latest" ]]; then
-          pip install nightjar
+          pip install nightjar-verify
         else
-          pip install "nightjar==${{ inputs.nightjar-version }}"
+          pip install "nightjar-verify==${{ inputs.nightjar-version }}"
         fi
 
     - name: Set up .NET (required for Dafny)
