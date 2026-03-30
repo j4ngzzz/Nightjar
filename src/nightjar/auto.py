@@ -583,8 +583,10 @@ def _write_card_md(
         invariant_list=invariant_list,
     )
 
-    # Write the file
+    # Write the file — if output_path is a directory, append the derived filename
     out_path = Path(output_path)
+    if out_path.is_dir() or not out_path.suffix:
+        out_path = out_path / f"{module_id or 'auto-generated'}.card.md"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(content, encoding="utf-8")
 
